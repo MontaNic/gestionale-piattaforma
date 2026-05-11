@@ -32,4 +32,21 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  // File CommonJS (.cjs): override per riconoscere module/require/__dirname
+  // come globals e usare sourceType 'commonjs'. Necessario per file di config
+  // come commitlint.config.cjs che richiedono CommonJS in un progetto con
+  // package.json "type": "module".
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
 );
