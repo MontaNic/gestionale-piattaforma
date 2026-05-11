@@ -17,7 +17,12 @@
     "prisma:migrate:status": "dotenv -e ../../.env -- prisma migrate status",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
     "prisma:format": "prisma format",
+    "smoke:soft-delete": "dotenv -e ../../.env -- tsx scripts/smoke-soft-delete.ts",
+    "db:seed": "dotenv -e ../../.env -- prisma db seed",
     "typecheck": "tsc --noEmit"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

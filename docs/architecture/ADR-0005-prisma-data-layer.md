@@ -193,3 +193,73 @@ Prisma `@@unique` non esprime UNIQUE parziali → gestiti come SQL raw aggiunto 
 - `uuidv7@1.2.1` libreria scelta: piccola (~1KB), no dependencies, output `String` UUID v7 compatibile RFC.
 - DATABASE_URL gestita via root `.env` + `dotenv-cli` wrapper sugli script `prisma:*` in `packages/db/package.json`. Pattern monorepo standard; evita un secondo `.env` in `packages/db/`.
 - Postgres porta esposta come `127.0.0.1:5432:5432` (localhost-only) per `prisma migrate dev` da host. L'API in container userà sempre `postgres:5432` via `gestionale_network`.
+
+## Macro-task B implementation (2026-05-12)
+
+Le 4 decisioni del macro-task A erano "scelte di disegno"; il macro-task B le ha tradotte in codice. Qui i dettagli per il futuro reviewer.
+
+### Soft-delete extension — implementazione finale (`packages/db/src/soft-delete.ts`)
+
+- **Auto-detect** dei modelli con campo `deletedAt` via `Prisma.dmmf.datamodel.models[].fields[].name`. Niente lista hardcoded — il modello aggiunto domani che ha `deletedAt` viene automaticamente incluso.
+- **Query intercept** su 6 operazioni (`findUnique`, `findFirst`, `findMany`, `count`, `aggregate`, `groupBy`) tramite `query.$allModels`. Helper `withSoftDeleteFilter()` con cast `as any` interno (necessario per il tipo union di `$allModels`, runtime-safe via guard `modelsWithDeletedAt.has(model)`).
+- **Escape semantics**: helper `explicitDeletedAt(where)` controlla `'deletedAt' in where`. Se il chiamante esplicita un check (anche `{ not: undefined }`), l'extension NON inietta. Permette query del cestino, history admin, audit.
+- **Delete intercept** (`delete`, `deleteMany`) trasforma in `update`/`updateMany` con `data: { deletedAt: new Date() }`. **Warning documentato in-file**: `deleteMany()` senza `where` diventa soft-delete dell'intero modello — intenzionale, ma pattern raro che può ferire in test/dev.
+- **`forceDelete(where: { id: string })`** come model extension via `Prisma.getExtensionContext(this).$name` + lookup `tableName` da `dmmf.datamodel.models[].dbName` (mappato `@@map`) + `$executeRawUnsafe('DELETE FROM "<table>" WHERE id = $1', id)`. Bypassa la query extension (no ricorsione) sfruttando il fatto che il raw SQL non passa per il delegate Prisma. ON DELETE CASCADE/SET NULL del DB sono rispettati naturalmente da PostgreSQL.
+
+### Helper `id()` + dual export (`packages/db/src/index.ts`)
+
+- `id()` → `string` ritornante UUID v7 fresh. Re-export `uuidv7` raw per chi preferisce.
+- `createPrismaClient()` factory: nuova istanza extended per **NestJS DI** e **test isolati**.
+- `prisma` singleton: istanza eager creata al primo import. Connessione TCP al DB resta lazy (Prisma 6 non connette prima del primo query). Costo memoria trascurabile. Pattern adottato per **script seed/smoke/utility**.
+
+### Permission catalog (32 voci, 8 namespace, `packages/db/prisma/seed.ts`)
+
+| Namespace      | Permissions | Note                                                                                                          |
+| -------------- | ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `sistema.*`    | 8           | tenant.gestisci, utente.\{crea,modifica,disabilita\}, ruolo.\{crea,assegna\}, sede.gestisci, audit.visualizza |
+| `anagrafica.*` | 4           | cliente.\{crea,modifica,visualizza\}, fornitore.gestisci                                                      |
+| `menu.*`       | 5           | categoria.gestisci, piatto.\{crea,modifica\}, prezzo.modifica, visualizza                                     |
+| `comande.*`    | 5           | crea, modifica, elimina, visualizza, stato.cambia                                                             |
+| `cassa.*`      | 4           | scontrino.emetti, storno.esegui, chiusura.giornaliera, visualizza                                             |
+| `magazzino.*`  | 2           | **`isPreF2: true`** — articolo.gestisci, movimento.crea                                                       |
+| `report.*`     | 3           | fatturato.visualizza, operativo.visualizza, export                                                            |
+| `ai.*`         | 1           | **`isPreF2: true`** — assistant.usa                                                                           |
+
+Schema `Permission.isPreF2` aggiunto in **migration intermedia** `20260511204441_add_permission_is_pre_f2` per supportare il flag. Le UI F1 escluderanno i permessi `isPreF2: true` dai picker di creazione ruolo custom; saranno re-abilitati con i feature flag F2.
+
+### 6 System role templates (mapping → 104 totali)
+
+`isDefault: true` per tutti: ogni nuovo tenant li eredita automaticamente al bootstrap (NestJS service da scrivere — clona `system_role_templates` con `isDefault: true` → `roles` con `is_system: true` e `tenant_id` valorizzato, poi copia mapping da `system_role_template_permissions` a `role_permissions`).
+
+| Template    | Permissions | Note                                                                                |
+| ----------- | ----------- | ----------------------------------------------------------------------------------- |
+| Super Admin | 32          | ALL                                                                                 |
+| Admin sede  | 31          | ALL meno `sistema.tenant.gestisci` (config tenant globale riservata a Super Admin)  |
+| Direzione   | 24          | report.\* + anagrafica + menu + cassa + comande (no stato.cambia) + audit + F2 stub |
+| Cassiere    | 10          | menu.visualizza + comande (escluso stato.cambia) + cassa + report.operativo         |
+| Cameriere   | 4           | menu.visualizza + comande (crea/modifica/visualizza, no elimina/stato)              |
+| Cucina/Bar  | 3           | menu.visualizza + comande.visualizza + comande.stato.cambia                         |
+
+### Smoke test (`packages/db/scripts/smoke-soft-delete.ts`)
+
+5 scenari, 9 assertion totali, tutti verdi:
+
+1. Create + `findUnique` trova (record fresh ha `deletedAt: null`)
+2. `delete` → `findUnique` ritorna `null` (soft-delete); escape `deletedAt: { not: null }` trova la riga still in DB
+3. `findMany` con escape esplicito ritorna i soft-deleted (query "cestino")
+4. `count` default = 0, `count` con escape = 1
+5. `forceDelete` → riga effettivamente sparita anche con escape
+
+Cleanup automatico: scenario 5 fa hard-delete del tenant `smoke-test`. Su fallimento intermedio, hard-delete manuale via psql: `DELETE FROM tenants WHERE slug='smoke-test';`.
+
+**Vitest framework rimandato** alla sessione NestJS auth, quando avremo il primo unit test reale di business logic e la pipeline test sarà giustificata.
+
+### Fix tsconfig packages/db
+
+`rootDir: ./src` impediva l'inclusione di `prisma/seed.ts` e `scripts/*.ts` nel typecheck. Rimosso (irrilevante con `noEmit: true`), aggiunto glob `scripts/**/*.ts` a `include`. Tutti i sorgenti TS del workspace ora sotto typecheck (verificato con `pnpm --filter @gestionale/db typecheck`).
+
+⚠️ **Issue parallelo (follow-up)**: il root `pnpm typecheck` (tsconfig solution-style `files: []`) non propaga ai workspace. CI attuale non rileva errori TS in `packages/db`. Tracciato in PROGRESS come "Strategia typecheck monorepo" da risolvere prima dello scaffold NestJS.
+
+### Deprecation warning Prisma 7 (osservato)
+
+`prisma db seed` emette warning: `package.json#prisma` deprecato in Prisma 7, sostituito da `prisma.config.ts`. Non blocca oggi (siamo su 6.19.3). Migration meccanica quando bumperemo Node a 20.19+ → Prisma 7. Tracciato in PROGRESS.

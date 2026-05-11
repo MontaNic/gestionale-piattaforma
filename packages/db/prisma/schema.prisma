@@ -120,10 +120,11 @@ model User {
 // Catalogo permessi atomici. Globale (no tenant_id), immutabile (no soft-delete).
 // Seedabile da prisma/seed.ts (macro-task successivo).
 model Permission {
-  id          String @id
-  code        String @unique // es. "comande.crea", "report.fatturato.visualizza"
+  id          String  @id
+  code        String  @unique // es. "comande.crea", "report.fatturato.visualizza"
   description String
   category    String // es. "comande", "report", "anagrafica", "sistema"
+  isPreF2     Boolean @default(false) @map("is_pre_f2") // true per feature [PRE F2] non attive in F1
 
   // Relations
   rolePermissions               RolePermission[]
