@@ -5,7 +5,7 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 12 maggio 2026
-**Fase corrente:** Monorepo + stack dev + CI/CD GitHub Actions + Husky (lint-staged, commitlint, pre-push anti-main) tutti attivi. Quality gates locali e safety net CI completi. Prossimo macro-task: da concordare nella prossima sessione (candidata principale: prime tabelle Prisma + scaffold NestJS verso F1).
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + **Prisma data layer multi-tenancy base** attivi. Schema F1 (11 entità) migrato su Postgres dev con RLS placeholder pronto per auth NestJS. Prossimo macro-task: da concordare (candidato A: seed `system_role_templates` + permission catalog + soft-delete extension; candidato B: NestJS scaffold + auth + sostituzione policy RLS reali).
 
 ---
 
@@ -264,6 +264,60 @@ pkill -u deploy -f vscode-server
 - **2026-05-12**: Branch protection lato server **non comprata** (GitHub Free privato non enforce, upgrade Team $4/mese non giustificato per single-dev) → mitigazione client-side via pre-push hook
 - **2026-05-12**: Disciplina "main never force-pushed" mantenuta anche dopo l'incident del commit empty `2151e4f` (vedi Incidents log) — precedente di disciplina > pulizia estetica
 
+### Setup Prisma data layer multi-tenancy base (2026-05-12)
+
+**Schema F1 (11 entità in `packages/db/prisma/schema.prisma`):**
+
+- [x] **Tenant root**: `tenants` (id, name, slug unique, is_active, timestamps, soft-delete)
+- [x] **Sede operativa**: `sedi` (tenant_id, name, address, city, postal_code, country IT, timezone Europe/Rome, currency EUR, soft-delete, FK tenant CASCADE)
+- [x] **Identity tenant-scoped**: `users` (tenantId+email UNIQUE, password_hash argon2, pin_hash F1 POS login, failed_login_attempts, soft-delete; `[PRE F2]` totp_secret/valid_until/badge_nfc_id)
+- [x] **Permission catalog globale**: `permissions` (code unique, description, category; no tenant_id, no timestamps — immutabile, seedable)
+- [x] **System role templates globali**: `system_role_templates` (name unique, isDefault flag) + `system_role_template_permissions` (M:N PK composta) — pattern bootstrap nuovi tenant via clone
+- [x] **Tenant-scoped roles**: `roles` (tenantId+name UNIQUE, isSystem flag, soft-delete) + `role_permissions` (M:N PK composta)
+- [x] **User↔Role per sede**: `user_roles` (sede_id NULLABLE per ruoli tenant-wide, assigned_at/by) + **2 UNIQUE INDEX PARZIALI** per gestire NULL semantics PostgreSQL (`*_per_sede_unique` WHERE sede_id IS NOT NULL + `*_tenant_wide_unique` WHERE sede_id IS NULL)
+- [x] **Session per device**: `sessions` (user_id CASCADE, sede_id SET NULL, device_type enum nativo `device_type`, refresh_token_hash, expires_at NOT NULL, is_active)
+- [x] **Audit log immutabile**: `audit_logs` (tenant_id CASCADE, sede_id/user_id SET NULL, action/entity_type/entity_id, before_value/after_value JSONB, timestamp default NOW(); no updated_at/deleted_at; indice DESC su (tenant_id, timestamp))
+
+**Convenzioni rispettate (§C1 brief):**
+
+- [x] UUID v7 generato app-side via libreria `uuidv7@1.2.1` (no `@default` Prisma → id obbligatorio in ogni create, errore esplicito)
+- [x] snake_case in DB / camelCase in TS via `@map` / `@@map`
+- [x] FK con `onDelete` esplicito (Cascade/Restrict/SetNull come da matrice — vedi ADR-0005)
+- [x] Indici su `tenant_id` ovunque, `(tenant_id, sede_id)` su operative, `refresh_token_hash` su sessions, `(tenant_id, timestamp DESC)` su audit_logs, `(entity_type, entity_id)` su audit_logs
+- [x] Timestamps `created_at` / `updated_at` (auto via Prisma `@default(now())` / `@updatedAt`) + `deleted_at?` su entità con soft-delete
+
+**Migration applicate (2 file, ~360 righe SQL):**
+
+- [x] `20260511201706_init_multitenancy_base` — 11 CREATE TABLE + 1 CREATE TYPE (enum device_type) + 16 indici + 15 FK + 2 UNIQUE INDEX PARZIALI per user_roles
+- [x] `20260511201927_enable_rls` — `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` + `CREATE POLICY ... USING (true)` su 7 tabelle target. TODO inline F1 auth con 3 pattern di policy reale (tenant_id diretto, EXISTS join, tenants con bypass Super Admin)
+
+**Setup ambiente:**
+
+- [x] Postgres esposto `127.0.0.1:5432:5432` (localhost-only, binding verificato no 0.0.0.0)
+- [x] `DATABASE_URL` in root `.env` + esempio in `.env.example`
+- [x] Script Prisma in `packages/db` wrappati da `dotenv-cli` per leggere root `.env`
+- [x] Prisma `6.19.3` + `@prisma/client` `6.19.3` + `uuidv7` `1.2.1` + devDeps `tsx`, `dotenv-cli`, `@types/node`
+- [x] `packages/db/src/index.ts` stub (re-export `PrismaClient`, `Prisma`); soft-delete extension + uuidv7 helper rimandati a macro-task successivo
+
+**Convenzioni di processo:**
+
+- [x] **ADR-0005** data layer: 4 decisioni (location packages/db, UUID v7 app-side, RLS placeholder, soft-delete extension), 3 pattern policy RLS reale identificati, sezione "RBAC e NULL semantics" su user_roles, alternative considerate tabellate, reversibility documentata
+
+### Decisioni prese durante setup Prisma (2026-05-12)
+
+- **2026-05-12**: Prisma in `packages/db` (divergenza consapevole da §A4 brief, ADR-0005). Riusabile da api/web/worker/script.
+- **2026-05-12**: Prisma 6.19.3 (non 7) perché Prisma 7 richiede Node 20.19+; abbiamo 20.18.1 in `.nvmrc`. Upgrade a 7 quando si bumperà Node, migrazione meccanica.
+- **2026-05-12**: UUID v7 app-side via `uuidv7` npm. No `pg_uuidv7` extension (overhead operativo), no UUID v4 (no sortability).
+- **2026-05-12**: ID `String @id` senza default → omettere id in create() è errore esplicito. Helper wrapper arriverà in macro-task successivo.
+- **2026-05-12**: RLS attivato subito con policy `USING (true)` placeholder. Ragione: dimenticarla dopo è anti-pattern; abilitarla su DB con dati e' costoso, ora è gratis.
+- **2026-05-12**: Schema separato in 2 migration (init + enable_rls) per facilitare rollback chirurgico dev.
+- **2026-05-12**: System role templates come tabella separata (opzione c rispetto a tenant "system" sentinel o tenant_id nullable). Pulizia semantica, bootstrap pattern chiaro.
+- **2026-05-12**: 2 UNIQUE INDEX parziali su `user_roles` via SQL raw in migration init (Prisma `@@unique` non esprime UNIQUE parziali). Commento esplicativo 18 righe in-file.
+- **2026-05-12**: `role_permissions` skip RLS — isolamento indiretto via FK→roles, defense-in-depth da valutare quando si scriveranno policy reali.
+- **2026-05-12**: Soft-delete via Prisma extension client-side (non middleware deprecato). Implementazione rimandata a macro-task successivo.
+- **2026-05-12**: `DATABASE_URL` nel root `.env` + `dotenv-cli` wrapper. No secondo `.env` in packages/db.
+- **2026-05-12**: Postgres dev esposto su `127.0.0.1:5432` (no 0.0.0.0) — UFW non serve modifica, binding localhost basta.
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -272,9 +326,10 @@ pkill -u deploy -f vscode-server
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **Prime tabelle Prisma + scaffold NestJS verso F1** — partire con codice di dominio F1: `apps/api` (NestJS), schema `Tenant`/`Sede`/`User`/`Role`/`Permission`/`AuditLog`, predisposizione RLS PostgreSQL. Macro-task più ampio, vedi sezione D del brief per criteri di accettazione F1.
-2. **Miglioramento pre-push hook** — parsing stdin formato git pre-push (`<local-ref> <local-sha> <remote-ref> <remote-sha>`) per distinguere push regolari da delete; permette `git push origin --delete <branch>` da `main` senza `--no-verify`. Stima: 15-20 min.
-3. **Dependabot / Renovate** — security updates automatici delle dipendenze (vedi §C5 brief "Dipendenze monitorate"). Stima: 20-30 min.
+1. **Macro-task B Prisma — seed + soft-delete extension + uuidv7 helper** — completare il data layer: `prisma/seed.ts` con catalog ~30 permessi atomici + 6 system role templates con mapping permessi; client extension che intercetta `findUnique/First/Many` per iniettare `deletedAt: null` e `delete*` per fare update soft; helper `id()` wrapper su `uuidv7` esportato dal barrel. Stima: 1-2h.
+2. **NestJS scaffold + auth + sostituzione policy RLS** — `apps/api`: scaffold NestJS, middleware tenant context che fa `SET app.tenant_id` su transaction Prisma, sostituzione policy `USING (true)` con i 3 pattern reali (vedi ADR-0005), endpoint login email+password (argon2) + refresh token, PIN login per POS. Macro-task ampio. Vedi §D brief criteri F1.
+3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -300,7 +355,12 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 - Cancellare a mano eventuali branch `revert-*` orfani via `git push origin --delete <branch>` se accidentali in futuro (UI GitHub "Revert" crea sempre la branch anche se non si conferma la PR di revert).
 
 ### Verso F1 (Core Operativo MVP)
-- [ ] Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL
+- [x] ~~Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL~~ — completato 2026-05-12 (vedi sezione Completato)
+- [ ] **Seed system_role_templates + permission catalog** (macro-task B prossimo)
+- [ ] **Soft-delete extension Prisma client** + helper `uuidv7` wrapper esportato (macro-task B)
+- [ ] **Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005) — richiede auth NestJS
+- [ ] **Bootstrap tenant logic**: clone `system_role_templates` → `roles` quando nasce un tenant
+- [ ] Valutare RLS su `role_permissions` con `EXISTS` join (defense-in-depth, vedi ADR-0005 follow-up)
 - [ ] Setup multi-tenancy nei middleware NestJS
 - [ ] Auth backend NestJS (email+pwd + PIN operator)
 - [ ] UI shell Next.js (layout, theme, i18n setup IT primary + EN secondary)
