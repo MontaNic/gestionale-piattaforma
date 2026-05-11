@@ -22,10 +22,8 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@gestionale/*": ["packages/*/src"],
-      "@gestionale/*/*": ["packages/*/src/*"],
-      "@apps/*": ["apps/*/src"],
-      "@apps/*/*": ["apps/*/src/*"]
+      "@gestionale/*": ["packages/*/src/index.ts"],
+      "@apps/*": ["apps/*/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist", "build", ".next", ".turbo"]

@@ -19,7 +19,7 @@ services:
     networks:
       - gestionale_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,13 +32,13 @@ services:
     image: redis:7-alpine
     container_name: gestionale_redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec']
     volumes:
       - redis_data:/data
     networks:
       - gestionale_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,7 +50,7 @@ services:
     container_name: gestionale_caddy
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - '8080:80'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

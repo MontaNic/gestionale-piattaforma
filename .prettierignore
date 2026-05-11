@@ -8,3 +8,9 @@ pnpm-lock.yaml
 *.min.js
 *.min.css
 .git
+
+# Documenti narrativi del progetto — strutturati a mano, fuori scope Prettier.
+# Vedi docs/architecture/ADR-0003-prettier-exclusions.md
+PROJECT_BRIEF.md
+PROGRESS.md
+STARTER_PROMPT.md
