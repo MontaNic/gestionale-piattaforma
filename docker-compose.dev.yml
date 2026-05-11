@@ -1,0 +1,72 @@
+# Dev stack: Postgres + Redis + Caddy placeholder.
+# Servizi applicativi (api, web, kds) e infrastruttura ulteriore (minio, meilisearch,
+# unleash) verranno aggiunti man mano che i workspace li richiedono.
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestionale_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gestionale_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Nessuna porta esposta sull'host in dev: l'accesso passa dalla network interna.
+    # Quando arriverà l'API NestJS che ha bisogno di connettersi, lo farà via service
+    # name "postgres:5432" su gestionale_network.
+
+  redis:
+    image: redis:7-alpine
+    container_name: gestionale_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - gestionale_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    # TODO[staging/prod]: aggiungere --requirepass ${REDIS_PASSWORD} (vedi .env.example).
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: gestionale_caddy
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - gestionale_network
+    # Placeholder: niente 443/Let's Encrypt finché non avremo dominio (vedi
+    # docs/architecture/ADR-0001-caddy-as-container.md → "Notes" su ADR-0002 futuro).
+
+networks:
+  gestionale_network:
+    name: gestionale_network
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

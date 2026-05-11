@@ -1,0 +1,6 @@
+# Placeholder dev Caddyfile.
+# Verrà sostituito quando le app (api, web, kds) saranno avviabili e
+# avremo configurato un dominio reale con auto-SSL.
+:80 {
+	respond "Gestionale - it works!" 200
+}

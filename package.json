@@ -1,0 +1,30 @@
+{
+  "name": "gestionale",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la ristorazione.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.18.0 <21",
+    "pnpm": ">=9.15.0 <10"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,yml,yaml}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^20.17.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}
