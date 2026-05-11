@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+protected_branch='main'
+current_branch=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+
+if [ "$current_branch" = "$protected_branch" ]; then
+    echo ""
+    echo "⛔ Push diretto su '$protected_branch' bloccato dal pre-push hook locale."
+    echo ""
+    echo "GitHub Rulesets non enforced su account Free privato. Hook compensa lato locale."
+    echo "Vedi docs/architecture/ADR-0004-local-git-hooks.md per il razionale completo."
+    echo ""
+    echo "Workflow corretto:"
+    echo "  1. git checkout -b feature/nome-task"
+    echo "  2. git commit ..."
+    echo "  3. git push origin feature/nome-task"
+    echo "  4. Apri PR su GitHub, attendi CI verde, squash and merge"
+    echo ""
+    echo "Bypass intenzionale (rarissimo, solo emergenze): git push --no-verify"
+    echo ""
+    exit 1
+fi
+
+exit 0

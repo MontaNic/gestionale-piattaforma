@@ -51,6 +51,7 @@ Tooling: **pnpm workspaces** + **Turborepo**.
 
 ```bash
 # 1. Installa le dipendenze del monorepo
+#    (lo script "prepare" attiva automaticamente gli hook Husky)
 pnpm install
 
 # 2. Crea il file ambiente locale (la prima volta)
@@ -63,6 +64,16 @@ docker compose -f docker-compose.dev.yml up -d
 # 4. Verifica che lo stack risponda
 curl http://localhost:8080/   # atteso: "Gestionale - it works!"
 ```
+
+### Git hook attivi (Husky)
+
+Dopo `pnpm install`, i seguenti hook girano automaticamente:
+
+- **`pre-commit`** — `lint-staged` esegue `eslint --fix` + `prettier --write` sui soli file in stage (veloce, auto-fix dove possibile)
+- **`commit-msg`** — `commitlint` valida il messaggio contro [Conventional Commits](https://www.conventionalcommits.org/); tipi accettati: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`
+- **`pre-push`** — blocca i push diretti su `main` (compensa la mancata enforcement server-side su GitHub Free privato)
+
+Razionale completo: [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md). Bypass emergenza: `git push --no-verify`.
 
 Comandi disponibili oggi (root):
 
@@ -87,7 +98,7 @@ Quando arriveranno i primi workspace, `lint` / `typecheck` / `test` torneranno a
 
 - **Codice** in inglese, **UI** in italiano (vedi STARTER_PROMPT.md).
 - **Commit message**: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`).
-- **Branch**: `main` (stabile), `feature/*`, `fix/*`. PR via Squash and merge. Vedi [ADR-0002](./docs/architecture/ADR-0002-branching-strategy.md) (divergenza consapevole dal §C12 del brief).
+- **Branch**: `main` (stabile), `feature/*`, `fix/*`. PR via Squash and merge — push diretti su `main` bloccati lato locale dal pre-push hook (vedi [ADR-0002](./docs/architecture/ADR-0002-branching-strategy.md) e [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md)).
 - **Decisioni architetturali** documentate come ADR in `docs/architecture/`.
 
 ## Stato del progetto

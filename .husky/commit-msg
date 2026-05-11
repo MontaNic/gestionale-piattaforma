@@ -1,0 +1,5 @@
+# Carica nvm/PATH per ambienti non-interactive — vedi ADR-0004.
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+pnpm exec commitlint --edit "$1"

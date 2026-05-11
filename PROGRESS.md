@@ -304,6 +304,40 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 
 ---
 
+## 📓 Incidents log / Lezioni operative
+
+Sezione viva. Registra incidenti, near-miss e lezioni che vale la pena ricordare per evitare di rifare gli stessi errori.
+
+### 2026-05-12 — Commit empty `2151e4f` pushato accidentalmente su `main` durante test hardening Husky
+
+**Cosa è successo.** Durante il setup di Husky (macro-task "Husky + lint-staged + commitlint"), nello specifico durante una variante di test del pre-push hook su `main`, ho fatto:
+
+```
+git stash --include-untracked   # libera il WT per checkout pulito a main
+git checkout main
+git commit --allow-empty -m "chore: hardening test pre-push block"
+git push origin main            # atteso BLOCK del pre-push hook
+```
+
+Il push **non è stato bloccato** ed è atterrato come commit `2151e4f` su `origin/main`.
+
+**Causa root.** `git stash --include-untracked` ha stashato anche i file `.husky/*` perché in quel momento erano **untracked** (non ancora committati nella feature branch in corso). Con `.husky/pre-commit`, `.husky/commit-msg`, `.husky/pre-push` rimossi dal working tree, Husky 9 (che routa via `core.hooksPath = .husky/_/` con proxy verso `.husky/<hook>`) non ha trovato gli script utente e ha eseguito un **no-op silenzioso**. Niente blocco del commit-msg, niente blocco del pre-push.
+
+**Decisione.** **Nessun force-push di rollback** su `origin/main`. Il commit `2151e4f` rimane in storia come monito permanente. Razionale:
+
+1. **Disciplina ferrea "`main` never force-pushed"** — fare un'eccezione anche per buona ragione apre un precedente
+2. **Lezione formativa al diritto**: il commit resta visibile per ricordare la lezione
+3. Funzionalmente innocuo (empty commit, non rompe nulla in CI o nello stato del codice)
+4. Costo del force-push (`--no-verify` del nostro pre-push hook, precedente di disciplina) > beneficio (pulizia estetica di 1 commit)
+
+**Lezioni.**
+
+1. **Mai stashare untracked quando dipendi dagli hook**. Prima di test che richiedono hook attivi: o committa gli hook prima (anche temporaneamente), o usa `git stash` (default, solo tracked) senza `--include-untracked`. In generale: stash `--include-untracked` è una forma di "disabilitazione silenziosa" di tutto ciò che non è ancora committato — pericoloso quando include codice di sicurezza.
+2. **Setup `Husky 9 = .husky/_` proxy fallisce silently** se gli script `.husky/<hook>` non esistono. Comportamento documentato ma controintuitivo: invece di error "hook not found", proxy esegue no-op. Importante saperlo perché può mascherare hook disattivati.
+3. **Test che dipendono da effetti su `origin/main` devono essere fatti con doppio gate**: hook attivo + autorizzazione esplicita dell'owner. Non fare test pre-push su `main` in modalità auto senza fermarsi a verificare lo stato degli hook prima.
+
+---
+
 ## 🧠 Note di contesto importanti
 
 ### Vincoli espliciti
