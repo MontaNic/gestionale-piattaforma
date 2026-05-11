@@ -4,8 +4,8 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 11 maggio 2026
-**Fase corrente:** Setup infrastruttura completato, pronti per inizializzazione monorepo
+**Ultimo aggiornamento:** 11 maggio 2026 (sera)
+**Fase corrente:** Monorepo inizializzato + stack dev attivo + repo su GitHub. Prossimo macro-task: CI/CD base.
 
 ---
 
@@ -119,6 +119,53 @@ pkill -u deploy -f vscode-server
 - [x] `~/projects/gestionale/STARTER_PROMPT.md` (11KB, protocollo operativo)
 - [x] `~/projects/gestionale/PROGRESS.md` (questo file)
 
+### Monorepo Git + struttura cartelle + stack dev (2026-05-11 sera)
+
+**Repository:**
+- [x] `git init` in `~/projects/gestionale/`, branch `main`, identità locale (`MontaNic` / `y2fvvhfc25@privaterelay.appleid.com` come email per i commit)
+- [x] Repository GitHub privato `MontaNic/gestionale-piattaforma` creato
+- [x] **Deploy Key** dedicata caricata su GitHub (write access) — chiave server-side `~/.ssh/id_ed25519_github`, blocco `Host github.com` in `~/.ssh/config`, **scope ristretto al solo repo** (no chiave account-wide)
+- [x] GitHub host key (`SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU` ed25519) verificata contro fingerprint pubblico ufficiale e pinnata in `~/.ssh/known_hosts`
+- [x] `git push -u origin main` riuscito — primo commit `d6cda3a` su [github.com/MontaNic/gestionale-piattaforma](https://github.com/MontaNic/gestionale-piattaforma)
+
+**Struttura monorepo (sez. A4 brief):**
+- [x] Cartelle create: `apps/`, `packages/`, `plugins/`, `infra/{docker,compose,caddy}/`, `docs/{architecture,decisions}/`, `scripts/` (placeholder `.gitkeep` dove vuote)
+- [x] `package.json` root: `private: true`, `type: "module"`, `packageManager: pnpm@9.15.0`, `engines.node: ">=20.18.0 <21"`, devDeps minime (typescript, turbo, prettier, eslint, typescript-eslint, @eslint/js, @types/node), scripts placeholder `dev/build/lint/typecheck/test/format` via `turbo run …`
+- [x] `pnpm-workspace.yaml` con `apps/*`, `packages/*`, `plugins/*`
+- [x] `turbo.json` v2 minimale (tasks: build/dev/lint/typecheck/test)
+- [x] `tsconfig.base.json` TS strict completo (`strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noFallthroughCasesInSwitch`) + path aliases `@gestionale/* → packages/*/src` e `@apps/* → apps/*/src`
+- [x] `eslint.config.js` (ESLint 9 **flat config**, no legacy `.eslintrc.cjs`) con `typescript-eslint` recommended
+- [x] `.prettierrc.json` (single quote, trailing comma all, printWidth 100, LF) + `.prettierignore`
+- [x] `.editorconfig` (UTF-8, LF, 2 spaces, final newline)
+- [x] `.nvmrc` → `20.18.1`
+- [x] `.gitignore` (Node, Next, Turbo, env, IDE, OS, log, coverage) e `.gitattributes` (LF normalizzato)
+- [x] `README.md` con stack table, struttura cartelle, comandi sviluppo, link ai documenti di progetto
+
+**Architecture Decision Records:**
+- [x] `docs/architecture/ADR-0001-caddy-as-container.md` (formalizza la scelta presa il 2026-05-11 mattina: Caddy come container in compose, non come servizio host)
+
+**Stack dev funzionante:**
+- [x] `docker-compose.dev.yml` (in root per ora — migrazione futura a `infra/compose/` quando arriveranno staging/prod):
+  - `postgres:16-alpine` (verificato 16.13) — volume `postgres_data`, healthcheck `pg_isready`, no porte esposte all'host (accesso via network interna)
+  - `redis:7-alpine` — volume `redis_data`, AOF `appendfsync everysec`, healthcheck `redis-cli ping`, no password in dev (TODO documentato per staging/prod)
+  - `caddy:2-alpine` — bind mount `./Caddyfile`, volumi `caddy_data`/`caddy_config`, porta `8080:80` (no 443/Let's Encrypt finché non avremo dominio)
+  - Network `gestionale_network` (bridge)
+- [x] `Caddyfile` placeholder: `:80 { respond "Gestionale - it works!" 200 }`
+- [x] `.env.example` committato (template documentato), `.env` reale con `POSTGRES_PASSWORD` 256-bit (`openssl rand -base64 32`), permessi 600, escluso da Git
+- [x] Smoke test 3/3 verdi: `psql SELECT version();` → PostgreSQL 16.13, `redis-cli ping` → PONG, `curl localhost:8080/` → 200 + "Gestionale - it works!"
+- [x] Container lasciati **up** per task successivi (volumi persistenti)
+
+### Decisioni prese in questa sessione (da aggiungere al log decisionale)
+
+- **2026-05-11**: **ESLint 9 flat config** (`eslint.config.js`), non legacy `.eslintrc.cjs` → evita migrazione obbligatoria entro 6-12 mesi
+- **2026-05-11**: `pnpm@9.15.0` come `packageManager` (corepack-driven) + Node `20.18.1` in `.nvmrc` — versioni pinned esatte
+- **2026-05-11**: TS strict baseline + `noUncheckedIndexedAccess: true` (più severo del minimo "strict")
+- **2026-05-11**: Path aliases TS scelti — `@gestionale/*` per packages condivisi, `@apps/*` per workspace applicativi
+- **2026-05-11**: `docker-compose.dev.yml` + `.env` + `Caddyfile` in **root**, non in `infra/compose/` — semplicità per dev iniziale. Quando arriveranno staging/prod, migrazione documentata
+- **2026-05-11**: SSH **Deploy Key** del solo repo (no account-wide key) per principio least-privilege; chiave dedicata `~/.ssh/id_ed25519_github` senza passphrase (giustificata da uso server-only)
+- **2026-05-11**: GitHub host key pinnata manualmente in `known_hosts` dopo verifica fingerprint contro pubblicazione ufficiale (no `StrictHostKeyChecking=accept-new` opaco)
+- **2026-05-11**: ADR-0001 formalizza "Caddy come container"; ADR-0002 in futuro per strategia ACME quando avremo dominio
+
 ### Decisioni prese durante setup (ADR informali, da formalizzare)
 
 - **2026-05-11**: Hetzner CPX32 (non CPX31 deprecato)
@@ -133,43 +180,45 @@ pkill -u deploy -f vscode-server
 
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: setup repository Git + struttura monorepo + primo docker-compose dev**
+**Macro-task: setup CI/CD base con GitHub Actions**
 
-### Owner: Claude Code in VS Code Remote-SSH
+### Motivazione (decisa il 2026-05-11 da Nicolò)
 
-### Stato preparazioni manuali Nicolò:
+Prima di scrivere codice di dominio (NestJS + Prisma + schema multi-tenant) costruiamo la safety net: ogni PR e ogni push su `main` devono passare per `lint` + `typecheck` + `prettier --check`. Vantaggi:
+- ~30 min di lavoro
+- Valida in pratica i config ESLint 9 / Prettier / TS strict appena scritti
+- Crea l'abitudine "check verdi/rossi su ogni PR" prima di accumulare codice
+- Quando attaccheremo il dominio (NestJS + Prisma) avremo già la safety net pronta
 
-- [ ] Verifica `groups` include `docker` nella sessione VS Code corrente
-- [ ] Verifica `docker ps` funziona senza errore permission denied
-- [ ] Creato repository GitHub privato `gestionale-piattaforma`
-  - Da fare: https://github.com → New repository → name `gestionale-piattaforma`, **Private**, no README/gitignore/license
-- [ ] Annotato:
-  - Username GitHub
-  - Email account GitHub  
-  - URL SSH: `git@github.com:USERNAME/gestionale-piattaforma.git`
+### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
-### Task per Claude Code (vedere sotto "Prompt operativo prossimo task")
+### Scope di alto livello (dettagli nel prompt operativo che Nicolò consegnerà a sessione successiva)
 
-Sequenza:
+1. Setup `pnpm install` locale (genera lockfile committabile)
+2. Workflow `.github/workflows/ci.yml`:
+   - Trigger: `pull_request` su `main`, `push` su `main`
+   - Job: setup Node 20.18.1 (da `.nvmrc`) + setup pnpm 9.15 (da `packageManager` via corepack) + cache pnpm store
+   - Step: `pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck`
+3. Primo PR di prova per vedere i check girare verdi
+4. Badge stato CI nel README
 
-1. **Git init + config locale + .gitignore + .gitattributes**
-2. **SSH key dedicata server → GitHub** (`~/.ssh/id_ed25519_github`, configurata in `~/.ssh/config` server-side, caricata su GitHub come Deploy Key del repo con write access)
-3. **git remote add origin** + branch main
-4. **Struttura monorepo** (cartelle apps/packages/plugins/infra/docs/scripts/, package.json root, pnpm-workspace.yaml, turbo.json, tsconfig.base.json, .editorconfig, .prettierrc.json, .eslintrc.cjs, .nvmrc, README.md)
-5. **ADR-0001-caddy-as-container.md** in docs/architecture/
-6. **docker-compose.dev.yml** + Caddyfile + .env.example + .env (postgres:16-alpine + redis:7-alpine + caddy:2-alpine)
-7. **Primo commit + push**
-8. **Test `docker compose up -d`** + verifiche
+### Decisioni aperte da chiarire in apertura del prossimo task
 
-Stop intermedi obbligatori: dopo step 2 (caricare SSH key su GitHub manualmente), dopo step 7 (review file prima commit), dopo step 8 (verifica container).
+- Strategia branching: lavoriamo direttamente su `main` o introduciamo `develop` + `feature/*` ora? Brief C12 menziona entrambi. Per progetto solo-dev forse basta `main` + `feature/*` (skip `develop`).
+- Cache pnpm store: usare action ufficiale `pnpm/action-setup` + `actions/cache` o `actions/setup-node` con `cache: pnpm`?
+- `pnpm install --frozen-lockfile` su CI richiede lockfile committato → da generare e committare nello stesso task
+
+### Preparazioni manuali a carico di Nicolò prima di partire
+
+(Nessuna nuova preparazione — l'accesso GitHub via Deploy Key con write access è già a posto. GitHub Actions su repository privati gratuiti ha minuti generosi mensili, niente setup billing.)
 
 ---
 
 ## 📋 Da fare prossimamente (dopo questo macro-task)
 
 ### Cleanup e formalizzazione
-- [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo)
-- [ ] Aggiornare PROGRESS.md con lo stato del monorepo
+- [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo) — la condizione "primo `docker compose up` funzionante" è ora soddisfatta (smoke test verdi il 2026-05-11 sera), quindi è il momento giusto. Operazione manuale di Nicolò (richiede password sudo). Comando: `sudo rm /etc/sudoers.d/deploy-setup` poi verifica `sudo -l` per confermare che NOPASSWD su apt/sysctl/systemctl non sia più presente.
+- [ ] ADR-0002 strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
 
 ### Verso F1 (Core Operativo MVP)
 - [ ] Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL
@@ -253,113 +302,9 @@ NON proporre, NON includere senza esplicito sblocco:
 
 ---
 
-## 📝 Prompt operativo prossimo task — da copiare a Claude Code
+## 📝 Prompt operativo prossimo task — da definire
 
-> Sostituire `[OUTPUT_GROUPS]`, `[OUTPUT_DOCKER_PS]`, `[USERNAME_GITHUB]`, `[EMAIL_GITHUB]` con valori reali prima di incollare.
-
-```
-=== STATO ATTUALE ===
-
-Sono Nicolò. Stiamo lavorando sul progetto descritto in PROJECT_BRIEF.md, seguendo il protocollo STARTER_PROMPT.md. Lo stato corrente è documentato in PROGRESS.md - leggilo PRIMA del brief per orientarti.
-
-Preparazioni manuali appena completate per il prossimo task:
-
-1. Sessione VS Code Remote riavviata, gruppo docker attivo per deploy:
-   $ groups
-   [OUTPUT_GROUPS]
-   $ docker ps
-   [OUTPUT_DOCKER_PS]
-
-2. Creato repository GitHub privato:
-   - URL SSH: git@github.com:[USERNAME_GITHUB]/gestionale-piattaforma.git
-   - Username GitHub: [USERNAME_GITHUB]
-   - Email per commit: [EMAIL_GITHUB]
-   - Repository vuoto (no README, no gitignore, no license)
-
-3. Decisione dominio: NIENTE DOMINIO PER ORA - Caddy gira su porte custom (8080) + IP server, no SSL/Let's Encrypt finché non servirà.
-
-=== TASK DI OGGI ===
-
-Inizializza repository Git locale + setup struttura monorepo + primo docker-compose dev. A macro-step con stop intermedi.
-
-STEP 1 - Git init + config locale + .gitignore + .gitattributes
-- git init in ~/projects/gestionale/
-- user.name e user.email LOCALI al repo (non globali)
-- .gitignore: Node.js, Next.js, Turborepo, env, IDE, OS, log
-- .gitattributes: LF line endings su file di codice
-
-STEP 2 - SSH key dedicata server -> GitHub  
-- ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_github (no passphrase)
-- Aggiungi Host github.com a ~/.ssh/config sul server
-- Mostra chiave pubblica (cat ~/.ssh/id_ed25519_github.pub)
-- STOP: aspetta che io carichi la chiave su GitHub come "Deploy key" del repo (settings repo > Deploy keys > Add deploy key, write access)
-- Test: ssh -T git@github.com -> "Hi USERNAME!"
-
-STEP 3 - Collega repo locale a GitHub
-- git remote add origin git@github.com:USERNAME/gestionale-piattaforma.git
-- git branch -M main
-
-STEP 4 - Struttura monorepo (sez. A4 brief)
-- Cartelle: apps/, packages/, plugins/, infra/, docs/architecture/, docs/decisions/, scripts/
-- package.json root con workspaces (pnpm)
-- pnpm-workspace.yaml
-- turbo.json minimale (configureremo dopo)
-- tsconfig.base.json (TS strict + path aliases base)
-- .editorconfig
-- .prettierrc.json
-- .eslintrc.cjs base TS strict
-- .nvmrc con Node LTS 20.x (versione specifica)
-- README.md base: descrizione, stack (cita brief A3), struttura, comandi placeholder
-
-STEP 5 - ADR-0001 in docs/architecture/
-- docs/architecture/ADR-0001-caddy-as-container.md
-- Sezioni: Status, Context, Decision, Consequences, Considered Alternatives
-
-STEP 6 - Primo docker-compose dev
-- docker-compose.dev.yml in root
-- postgres:16-alpine (volume, healthcheck, env password)
-- redis:7-alpine (volume, AOF persistence)
-- caddy:2-alpine (bind mount Caddyfile, 8080:80)
-- Caddyfile minimale: ":80 { respond 'Gestionale - it works!' 200 }"
-- Network: gestionale_network
-- Volumes named: postgres_data, redis_data, caddy_data, caddy_config
-- .env.example (committato, documentato)
-- .env (NON committato, valori reali, POSTGRES_PASSWORD generata con openssl rand -base64 32)
-
-STEP 7 - Primo commit + push
-- git add -A
-- git status
-- STOP: mostrami file da committare per review
-- git commit -m "chore: initial monorepo structure + dev docker-compose"
-- git push -u origin main
-- Verifica GitHub web
-
-STEP 8 - Test docker compose
-- docker compose -f docker-compose.dev.yml config (validazione)
-- docker compose -f docker-compose.dev.yml up -d
-- docker ps - 3 container running con healthcheck OK
-- Test connessioni:
-  - Postgres: docker exec gestionale_postgres psql -U postgres -c "SELECT version();"
-  - Redis: docker exec gestionale_redis redis-cli ping (atteso PONG)
-  - Caddy: curl http://localhost:8080/ (atteso "Gestionale - it works!")
-
-=== PROTOCOLLO ===
-
-1. Leggi PROGRESS.md (per stato corrente), poi sezioni rilevanti brief: A2, A3, A4, A5, C5, C8
-2. Riassumi cosa hai capito
-3. Elenca ambiguità (Node version esatto? prettier vs biome? eslint scope? naming convention volumes/network?)
-4. Verifica [BACKLOG] sez. F non toccato
-5. Piano per ogni STEP: file da creare/modificare + comandi da eseguire
-6. Per ogni comando indica chi esegue: tu (NOPASSWD apt/sysctl/systemctl, docker senza sudo, file ops) o Nicolò (sudo fuori NOPASSWD, GitHub web)
-7. ASPETTA OK su piano prima di eseguire
-
-Stop obbligatori:
-- Dopo STEP 2 (per caricare SSH key su GitHub manualmente)
-- Dopo STEP 7 prima del commit (review file)
-- Dopo STEP 8 (verifica finale)
-
-Pronto. Mostrami il piano.
-```
+> Il prompt operativo dettagliato per il prossimo macro-task (**setup CI/CD base con GitHub Actions**) verrà preparato da Nicolò all'apertura della prossima sessione. Il presente PROGRESS.md contiene già lo scope di alto livello nella sezione "🚧 In corso" sopra: Claude Code (sessione successiva) può partire da lì + lettura sezioni brief C7 (CI/CD) e C12 (convenzioni codice/branch).
 
 ---
 
