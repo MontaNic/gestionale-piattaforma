@@ -1,4 +1,4 @@
-# Gestionale
+# 🎯 Gestionale
 
 [![CI](https://github.com/MontaNic/gestionale-piattaforma/actions/workflows/ci.yml/badge.svg)](https://github.com/MontaNic/gestionale-piattaforma/actions/workflows/ci.yml)
 
