@@ -14,6 +14,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      # Binding solo su 127.0.0.1 -> raggiungibile da prisma migrate eseguito sul
+      # server (host) ma NON dall'esterno. L'API in container continuera a usare
+      # service name "postgres:5432" via gestionale_network. Vedi ADR-0005.
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -24,9 +29,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # Nessuna porta esposta sull'host in dev: l'accesso passa dalla network interna.
-    # Quando arriverà l'API NestJS che ha bisogno di connettersi, lo farà via service
-    # name "postgres:5432" su gestionale_network.
 
   redis:
     image: redis:7-alpine

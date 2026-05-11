@@ -1,0 +1,7 @@
+# Generato da Prisma (client + types). Sempre rigenerato da `prisma generate`.
+node_modules/.prisma/
+src/generated/
+
+# Build artifacts (placeholder per future build)
+dist/
+*.tsbuildinfo

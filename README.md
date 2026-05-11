@@ -75,6 +75,26 @@ Dopo `pnpm install`, i seguenti hook girano automaticamente:
 
 Razionale completo: [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md). Bypass emergenza: `git push --no-verify`.
 
+### Database layer (`packages/db`)
+
+Schema multi-tenant, migrations e Prisma client tipizzato sono in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script Prisma usano `dotenv-cli` per puntarlo).
+
+```bash
+# Applica migrations pendenti (dev)
+pnpm --filter @gestionale/db prisma:migrate:dev
+
+# Stato delle migrations
+pnpm --filter @gestionale/db prisma:migrate:status
+
+# Rigenera Prisma Client (dopo modifica schema)
+pnpm --filter @gestionale/db prisma:generate
+
+# Esplora il DB in browser
+pnpm --filter @gestionale/db prisma:studio
+```
+
+In dev il Postgres del compose espone `127.0.0.1:5432:5432` (localhost-only). L'API in container userà invece l'hostname `postgres` su `gestionale_network`. Razionale data layer: [ADR-0005](./docs/architecture/ADR-0005-prisma-data-layer.md).
+
 Comandi disponibili oggi (root):
 
 ```bash

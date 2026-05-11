@@ -1,0 +1,290 @@
+// =============================================================================
+// schema.prisma — Gestionale data layer (multi-tenant)
+// =============================================================================
+// Convenzioni (vedi PROJECT_BRIEF.md §C1):
+// - id: UUID v7 generato app-side (libreria `uuidv7`) -> niente @default qui,
+//   l'omissione su create() e' errore esplicito (coerenza con la regola).
+// - tenant_id: presente su ogni tabella multi-tenant; FK -> tenants(id) CASCADE.
+// - sede_id: presente su tabelle operative; FK -> sedi(id) CASCADE / SET NULL.
+// - timestamps: created_at, updated_at (auto via Prisma); deleted_at? per soft
+//   delete (extension client-side aggiunta nel prossimo macro-task).
+// - snake_case in DB via @map / @@map; camelCase in TS.
+// - RLS PostgreSQL attivato in migration separata (enable_rls), policy
+//   placeholder USING (true) finche' arrivera' auth NestJS con SET app.tenant_id.
+// - 2 UNIQUE INDEX parziali su user_roles per gestire NULL su sede_id sono
+//   aggiunti via SQL raw nella migration init (Prisma non li esprime).
+//
+// Vedi ADR-0005 per il razionale completo.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Multi-tenant root entities
+// =============================================================================
+
+model Tenant {
+  id        String    @id
+  name      String
+  slug      String    @unique
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  sedi      Sede[]
+  users     User[]
+  roles     Role[]
+  auditLogs AuditLog[]
+
+  @@map("tenants")
+}
+
+model Sede {
+  id         String    @id
+  tenantId   String    @map("tenant_id")
+  name       String
+  address    String?
+  city       String?
+  postalCode String?   @map("postal_code")
+  country    String    @default("IT")
+  timezone   String    @default("Europe/Rome")
+  currency   String    @default("EUR")
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  // Relations
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles UserRole[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@index([tenantId])
+  @@map("sedi")
+}
+
+// =============================================================================
+// Identity: User (vive a livello tenant; ruoli per-sede via UserRole.sedeId)
+// =============================================================================
+
+model User {
+  id                  String    @id
+  tenantId            String    @map("tenant_id")
+  email               String
+  passwordHash        String    @map("password_hash")
+  pinHash             String?   @map("pin_hash") // login PIN per POS, hashed argon2
+  firstName           String    @map("first_name")
+  lastName            String    @map("last_name")
+  emailVerifiedAt     DateTime? @map("email_verified_at")
+  lastLoginAt         DateTime? @map("last_login_at")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  isActive            Boolean   @default(true) @map("is_active")
+
+  // [PRE F2] — campi predisposti, non attivati in F1
+  totpSecret String?   @map("totp_secret") // 2FA TOTP
+  validUntil DateTime? @map("valid_until") // scadenza account stagionali
+  badgeNfcId String?   @map("badge_nfc_id") // badge NFC/QR (lettore non in F1)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roles         UserRole[] @relation("UserRoleAssignment")
+  assignedRoles UserRole[] @relation("UserRoleAssignedBy")
+  sessions      Session[]
+  auditLogs     AuditLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+// =============================================================================
+// RBAC: permission catalog (globale) + system templates (globale)
+//       + roles (tenant-scoped) + join tables
+// =============================================================================
+
+// Catalogo permessi atomici. Globale (no tenant_id), immutabile (no soft-delete).
+// Seedabile da prisma/seed.ts (macro-task successivo).
+model Permission {
+  id          String @id
+  code        String @unique // es. "comande.crea", "report.fatturato.visualizza"
+  description String
+  category    String // es. "comande", "report", "anagrafica", "sistema"
+
+  // Relations
+  rolePermissions               RolePermission[]
+  systemRoleTemplatePermissions SystemRoleTemplatePermission[]
+
+  @@index([category])
+  @@map("permissions")
+}
+
+// Template ruoli di sistema (globali). Quando nasce un tenant, il bootstrap
+// clona questi template in `roles` con il relativo tenant_id (vedi ADR-0005).
+// Niente tenant_id (sono template). Niente soft-delete (gestiti come immutabili).
+model SystemRoleTemplate {
+  id          String   @id
+  name        String   @unique // es. "Super Admin", "Cameriere"
+  description String
+  isDefault   Boolean  @default(false) @map("is_default") // true = clonato automaticamente al bootstrap tenant
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  permissions SystemRoleTemplatePermission[]
+
+  @@map("system_role_templates")
+}
+
+// Join table M:N system template <-> permission.
+model SystemRoleTemplatePermission {
+  templateId   String @map("template_id")
+  permissionId String @map("permission_id")
+
+  // Relations
+  template   SystemRoleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  permission Permission         @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([templateId, permissionId])
+  @@map("system_role_template_permissions")
+}
+
+// Ruoli effettivi tenant-scoped. is_system=true per ruoli clonati dai template
+// (non eliminabili lato app, vincolo enforced in NestJS service layer).
+model Role {
+  id          String    @id
+  tenantId    String    @map("tenant_id")
+  name        String
+  description String
+  isSystem    Boolean   @default(false) @map("is_system")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+// Join table M:N role <-> permission.
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// Assegnamento user <-> role, opzionalmente scoped per sede.
+// - sedeId NULL  -> ruolo tenant-wide (es. Super Admin)
+// - sedeId !NULL -> ruolo per-sede (es. Cameriere in Sede A)
+// 2 UNIQUE INDEX parziali in migration init garantiscono unicita' in entrambi
+// i casi (PostgreSQL considera NULL != NULL negli UNIQUE standard).
+model UserRole {
+  id           String   @id
+  userId       String   @map("user_id")
+  roleId       String   @map("role_id")
+  sedeId       String?  @map("sede_id")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+  assignedById String?  @map("assigned_by_id")
+
+  // Relations
+  user       User  @relation("UserRoleAssignment", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  sede       Sede? @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("UserRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([roleId])
+  @@index([sedeId])
+  @@map("user_roles")
+}
+
+// =============================================================================
+// Sessions (separate per dispositivo, vedi §B1)
+// =============================================================================
+
+enum DeviceType {
+  web
+  pos_tablet
+  pos_desktop
+  mobile
+
+  @@map("device_type")
+}
+
+model Session {
+  id               String     @id
+  userId           String     @map("user_id")
+  sedeId           String?    @map("sede_id")
+  deviceId         String     @map("device_id")
+  deviceType       DeviceType @map("device_type")
+  refreshTokenHash String     @map("refresh_token_hash") // argon2
+  ip               String?
+  userAgent        String?    @map("user_agent")
+  lastSeenAt       DateTime   @default(now()) @map("last_seen_at")
+  expiresAt        DateTime   @map("expires_at")
+  isActive         Boolean    @default(true) @map("is_active")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sede Sede? @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+
+  @@index([refreshTokenHash])
+  @@index([userId, isActive])
+  @@map("sessions")
+}
+
+// =============================================================================
+// Audit log (immutabile, no updated_at/deleted_at — vedi §B1)
+// =============================================================================
+
+model AuditLog {
+  id          String   @id
+  tenantId    String   @map("tenant_id")
+  sedeId      String?  @map("sede_id")
+  userId      String?  @map("user_id") // nullable per system events
+  deviceId    String?  @map("device_id")
+  action      String // es. "user.login", "ordine.crea", "menu.prezzo.modifica"
+  entityType  String?  @map("entity_type") // es. "User", "Ordine"
+  entityId    String?  @map("entity_id")
+  beforeValue Json?    @map("before_value")
+  afterValue  Json?    @map("after_value")
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  timestamp   DateTime @default(now())
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sede   Sede?  @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, timestamp(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
