@@ -5,7 +5,7 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 12 maggio 2026
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + **Prisma data layer multi-tenancy base** attivi. Schema F1 (11 entità) migrato su Postgres dev con RLS placeholder pronto per auth NestJS. Prossimo macro-task: da concordare (candidato A: seed `system_role_templates` + permission catalog + soft-delete extension; candidato B: NestJS scaffold + auth + sostituzione policy RLS reali).
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + **Prisma data layer COMPLETO** (schema + 3 migration + seed + soft-delete extension + helper id()/factory/singleton). 32 permessi e 6 system role templates seedati (104 mappings). Smoke test 9/9 verdi. Prossimo macro-task: **scaffold NestJS F1** (apps/api consumer di @gestionale/db, middleware tenant context, sostituzione policy RLS reali, auth module argon2+JWT).
 
 ---
 
@@ -318,6 +318,64 @@ pkill -u deploy -f vscode-server
 - **2026-05-12**: `DATABASE_URL` nel root `.env` + `dotenv-cli` wrapper. No secondo `.env` in packages/db.
 - **2026-05-12**: Postgres dev esposto su `127.0.0.1:5432` (no 0.0.0.0) — UFW non serve modifica, binding localhost basta.
 
+### Completamento Prisma data layer (Macro-task B, 2026-05-12)
+
+Chiusura della fase Prisma con seed catalog, soft-delete extension e helper esportati. Macro-task A formalmente chiuso in questa stessa PR.
+
+**Migration intermedia:**
+
+- [x] `20260511204441_add_permission_is_pre_f2` — aggiunge `permissions.is_pre_f2 BOOLEAN NOT NULL DEFAULT false` per supportare il flag F2 nel catalog seedato
+
+**Helper + factory + singleton (`packages/db/src/index.ts`):**
+
+- [x] `id()` → `string`: wrapper su `uuidv7()` per generare UUID v7 fresh (obbligatorio in ogni `create()` per via di `@id` senza default Prisma)
+- [x] `uuidv7` re-export raw
+- [x] `createPrismaClient()` factory: nuova istanza extended con `softDeleteExtension`. Per NestJS DI / test isolati.
+- [x] `prisma` singleton eager: istanza al primo import del modulo; connessione TCP al DB resta lazy (Prisma 6). Per script seed/smoke/utility.
+- [x] Type `ExtendedPrismaClient` esportato
+
+**Soft-delete extension (`packages/db/src/soft-delete.ts`):**
+
+- [x] **Auto-detect**: `modelsWithDeletedAt` set built al boot da `Prisma.dmmf.datamodel.models[].fields[].name === 'deletedAt'`. Niente lista hardcoded.
+- [x] **Query intercept** (`findUnique`, `findFirst`, `findMany`, `count`, `aggregate`, `groupBy`): inject `where.deletedAt = null` se model match E `where` non esplicita `deletedAt`. Helper `withSoftDeleteFilter()` con cast `as any` interno (runtime-safe via guard).
+- [x] **Escape esplicito**: `'deletedAt' in where` → no injection. Permette query "cestino" (`where: { deletedAt: { not: null } }`) e admin history.
+- [x] **Delete intercept** (`delete`, `deleteMany`): trasforma in `update`/`updateMany` con `data: { deletedAt: new Date() }`. Warning in-file: `deleteMany()` senza `where` = soft-delete dell'intero modello (intenzionale).
+- [x] **`forceDelete(where: { id })`** model extension: bypass via `$executeRawUnsafe('DELETE FROM "<table>" WHERE id = $1', id)`. Lookup tableName via `Prisma.dmmf.datamodel.models[].dbName`. ON DELETE CASCADE/SET NULL rispettati. Use case: GDPR right-to-erasure, cleanup admin.
+
+**Seed (`packages/db/prisma/seed.ts`, idempotente):**
+
+- [x] **32 permessi atomici namespaced** in 8 categorie: `sistema.*` (8), `anagrafica.*` (4), `menu.*` (5), `comande.*` (5), `cassa.*` (4), `report.*` (3), `magazzino.*` (2 con `isPreF2: true`), `ai.*` (1 con `isPreF2: true`)
+- [x] **6 system role templates** con `isDefault: true` (auto-clonati a ogni nuovo tenant): Super Admin (32 perm), Admin sede (31), Direzione (24), Cassiere (10), Cameriere (4), Cucina/Bar (3)
+- [x] **104 mappings** template ↔ permission via `system_role_template_permissions` (PK composta)
+- [x] Upsert pattern su unique key (code/name) e PK composta — re-esecuzione safe (verificato: re-run produce 0 created / N updated/re-affirmed, count DB invariati)
+- [x] Config `package.json#prisma.seed = "tsx prisma/seed.ts"` + script wrapper `db:seed` con `dotenv-cli`
+
+**Smoke test (`packages/db/scripts/smoke-soft-delete.ts`):**
+
+- [x] 5 scenari, 9 assertion, tutti verdi:
+  1. Create + findUnique trova
+  2. Delete → findUnique null, riga still in DB con escape esplicito
+  3. findMany cestino include soft-deleted
+  4. count default = 0, count con escape = 1
+  5. forceDelete → riga sparita anche con escape
+- [x] Autopulizia (scenario 5 forceDelete del tenant smoke-test)
+- [x] Script wrapper `smoke:soft-delete` con `dotenv-cli`
+
+**Fix tsconfig packages/db:**
+
+- [x] Rimosso `rootDir: ./src` (irrilevante con `noEmit: true`), aggiunto include `scripts/**/*.ts`. Tutti i sorgenti TS del workspace ora sotto `pnpm --filter @gestionale/db typecheck`.
+- [ ] **Issue parallelo da risolvere prima del scaffold NestJS**: root `pnpm typecheck` (tsconfig solution-style) non propaga ai workspace; CI non rileva errori TS. Vedi "📋 Da fare prossimamente → Qualità codice / processo".
+
+### Decisioni prese durante Macro-task B (2026-05-12)
+
+- **2026-05-12**: `forceDelete` via `$executeRawUnsafe` (opzione A) per bypass extension senza ricorsione. Firma `where: { id: string }` restrittiva ma sicura.
+- **2026-05-12**: `prisma` singleton eager (no Proxy lazy). Costo memoria trascurabile, connessione DB resta lazy.
+- **2026-05-12**: `deleteMany()` senza `where` = soft-delete totale by design. Documentato in-file.
+- **2026-05-12**: Campo `isPreF2` (vs `isPrerelease`) coerente con commenti `[PRE F2]` sparsi nel codice. Migration intermedia per aggiungerlo al schema.
+- **2026-05-12**: `isDefault: true` per tutti i 6 system_role_templates seedati — sono i ruoli base che ogni nuovo tenant eredita.
+- **2026-05-12**: Smoke test pragmatico (tsx + assertion manuali) invece di Vitest setup ora. Framework test rimandato a sessione NestJS auth quando ci sarà primo unit test reale.
+- **2026-05-12**: Pattern dotenv-cli esteso a tutti gli script che usano Prisma (`db:seed`, `smoke:*`), non solo `prisma:*` di prima.
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -326,10 +384,11 @@ pkill -u deploy -f vscode-server
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **Macro-task B Prisma — seed + soft-delete extension + uuidv7 helper** — completare il data layer: `prisma/seed.ts` con catalog ~30 permessi atomici + 6 system role templates con mapping permessi; client extension che intercetta `findUnique/First/Many` per iniettare `deletedAt: null` e `delete*` per fare update soft; helper `id()` wrapper su `uuidv7` esportato dal barrel. Stima: 1-2h.
-2. **NestJS scaffold + auth + sostituzione policy RLS** — `apps/api`: scaffold NestJS, middleware tenant context che fa `SET app.tenant_id` su transaction Prisma, sostituzione policy `USING (true)` con i 3 pattern reali (vedi ADR-0005), endpoint login email+password (argon2) + refresh token, PIN login per POS. Macro-task ampio. Vedi §D brief criteri F1.
-3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **NestJS scaffold + auth + sostituzione policy RLS** (primario F1) — `apps/api`: scaffold NestJS consumer di `@gestionale/db`, middleware tenant context che fa `SET app.tenant_id` su transaction Prisma, sostituzione policy `USING (true)` con i 3 pattern reali (vedi ADR-0005), endpoint login email+password (argon2) + refresh token, PIN login per POS. Macro-task ampio. Vedi §D brief criteri F1.
+2. **Bootstrap tenant logic** (parte di sopra o sub-task): clone `system_role_templates` (`isDefault: true`) → `roles` tenant-scoped con copia dei mapping a `role_permissions`, quando viene creato un nuovo tenant.
+3. **Strategia typecheck monorepo** (pre-requisito raccomandato per scaffold NestJS) — vedi follow-up sotto.
+4. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+5. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -346,23 +405,27 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 - [ ] ADR successivo (ADR-0005+) per strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
 
 ### Qualità codice / processo (post Husky setup)
+- [ ] **Strategia typecheck monorepo** (scoperto 2026-05-12 in Macro-task B): root `pnpm typecheck` con tsconfig solution-style `files: []` **non valida i workspace packages**. CI attuale non rileva errori TS in `packages/db` (e futuri). Valutare: (a) `turbo run typecheck` (ritorno a Turbo per propagation), (b) `pnpm -r typecheck` step CI dedicato, (c) Project references TS nel root tsconfig. Quick win probabilmente (b). Long-term (c) per build incrementale. **Da risolvere prima dello scaffold NestJS** per evitare regression silente.
 - [ ] **Miglioramento pre-push hook**: parsing stdin formato git pre-push per distinguere push regolari da delete (`local-sha == 0000...` indica delete). Elimina la necessità di `--no-verify` per cancellazioni remote legittime di branch diverso da `main` quando ci si trova su `main`. Vedi commit body PR #2 per dettagli edge case.
 - [ ] **Branch protection lato server**: attualmente Rulesets su GitHub Free **non enforced**. Decisione di rivalutarli solo se: (a) si passa a Team account ($4/mese — non giustificato per single-dev), oppure (b) il progetto diventa multi-developer. Fino ad allora, protezione affidata a pre-push hook (ADR-0004).
 - [ ] **PR template completo** secondo §C12 brief (test, docs, migrazione DB, breaking changes, impatto API pubbliche, token AI usage, impatto feature flag) — da espandere quando arriverà codice F1.
 - [ ] **Dependabot / Renovate** per security updates automatici delle dipendenze (vedi §C5 brief "Dipendenze monitorate"). Configurazione `.github/dependabot.yml` quando ci sarà più superficie da monitorare.
+- [ ] **Migration config Prisma 7**: spostare `"prisma"` config da `package.json` a `prisma.config.ts` quando upgraderemo Node a 20.19+ (oggi pin `.nvmrc` a 20.18.1) → Prisma 7. Deprecation warning attualmente visibile su `prisma db seed`. Non blocca, migration meccanica.
 
 ### Operazioni manuali ricorrenti
 - Cancellare a mano eventuali branch `revert-*` orfani via `git push origin --delete <branch>` se accidentali in futuro (UI GitHub "Revert" crea sempre la branch anche se non si conferma la PR di revert).
 
 ### Verso F1 (Core Operativo MVP)
-- [x] ~~Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL~~ — completato 2026-05-12 (vedi sezione Completato)
-- [ ] **Seed system_role_templates + permission catalog** (macro-task B prossimo)
-- [ ] **Soft-delete extension Prisma client** + helper `uuidv7` wrapper esportato (macro-task B)
-- [ ] **Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005) — richiede auth NestJS
-- [ ] **Bootstrap tenant logic**: clone `system_role_templates` → `roles` quando nasce un tenant
+- [x] ~~Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL~~ — completato 2026-05-12 (Macro-task A)
+- [x] ~~Seed system_role_templates + permission catalog~~ — completato 2026-05-12 (Macro-task B: 32 permessi + 6 templates + 104 mappings)
+- [x] ~~Soft-delete extension Prisma client + helper `uuidv7` wrapper esportato~~ — completato 2026-05-12 (Macro-task B: 5 scenari smoke verdi)
+- [ ] **Scaffold NestJS** `apps/api` consumer di `@gestionale/db` (prossimo macro-task)
+- [ ] **Middleware tenant context** NestJS: `SET app.tenant_id` su transaction Prisma per attivare RLS reale
+- [ ] **Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005) — sub-task del precedente
+- [ ] **Bootstrap tenant logic**: clone `system_role_templates` (`isDefault: true`) → `roles` con `tenant_id` reale + copia mapping `system_role_template_permissions` → `role_permissions`
+- [ ] **Auth backend NestJS** (email+pwd argon2 + JWT 15min/7d rotation + PIN POS per cassieri/camerieri)
+- [ ] **Primo Vitest setup** (in `packages/db` per test extension business logic, poi in `apps/api`)
 - [ ] Valutare RLS su `role_permissions` con `EXISTS` join (defense-in-depth, vedi ADR-0005 follow-up)
-- [ ] Setup multi-tenancy nei middleware NestJS
-- [ ] Auth backend NestJS (email+pwd + PIN operator)
 - [ ] UI shell Next.js (layout, theme, i18n setup IT primary + EN secondary)
 - [ ] Mappa tavoli editor + viewer (drag&drop, 6 tipi, 7 stati)
 - [ ] Menu CRUD + listini multipli

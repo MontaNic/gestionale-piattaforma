@@ -77,7 +77,7 @@ Razionale completo: [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md).
 
 ### Database layer (`packages/db`)
 
-Schema multi-tenant, migrations e Prisma client tipizzato sono in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script Prisma usano `dotenv-cli` per puntarlo).
+Schema multi-tenant, migrations, seed e Prisma client tipizzato (con soft-delete extension applicata) in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script `prisma:*`, `db:seed`, `smoke:*` usano `dotenv-cli` per puntarlo).
 
 ```bash
 # Applica migrations pendenti (dev)
@@ -91,9 +91,31 @@ pnpm --filter @gestionale/db prisma:generate
 
 # Esplora il DB in browser
 pnpm --filter @gestionale/db prisma:studio
+
+# Popola permission catalog + 6 system role templates (idempotente)
+pnpm --filter @gestionale/db db:seed
+
+# Validazione end-to-end soft-delete extension (5 scenari)
+pnpm --filter @gestionale/db smoke:soft-delete
 ```
 
 In dev il Postgres del compose espone `127.0.0.1:5432:5432` (localhost-only). L'API in container userà invece l'hostname `postgres` su `gestionale_network`. Razionale data layer: [ADR-0005](./docs/architecture/ADR-0005-prisma-data-layer.md).
+
+**Uso da altri workspace** (api, web, worker future, script):
+
+```ts
+import { prisma, id, createPrismaClient } from '@gestionale/db';
+
+// Singleton (per script seed/smoke/utility):
+const tenant = await prisma.tenant.create({ data: { id: id(), name: '...', slug: '...' } });
+
+// Factory (per NestJS DI / test isolati):
+const client = createPrismaClient();
+```
+
+`id()` genera UUID v7 (obbligatorio in ogni `create()` perché lo schema non ha `@default`). La soft-delete extension è applicata automaticamente: `find*` e `count` escludono i record con `deletedAt != null` by default; pass `where: { deletedAt: ... }` esplicito per query del "cestino"; `prisma.<model>.forceDelete({ id })` per hard-delete intenzionale (GDPR/cleanup).
+
+Al bootstrap del primo tenant (logica F1 NestJS), i 6 `system_role_templates` con `isDefault: true` saranno clonati come `roles` con il `tenant_id` reale (più copia dei mapping permission).
 
 Comandi disponibili oggi (root):
 
