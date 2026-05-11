@@ -4,8 +4,8 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 11 maggio 2026 (sera)
-**Fase corrente:** Monorepo inizializzato + stack dev attivo + repo su GitHub. Prossimo macro-task: CI/CD base.
+**Ultimo aggiornamento:** 11 maggio 2026 (notte)
+**Fase corrente:** Monorepo + stack dev + CI/CD GitHub Actions attivi. Primo ciclo `feature/* → PR → squash merge` completato. Prossimo macro-task: da concordare nella prossima sessione (candidate: Husky/lint-staged/commitlint, oppure prime tabelle Prisma + scaffold NestJS verso F1).
 
 ---
 
@@ -41,6 +41,12 @@ Lingua di lavoro: italiano.
 - [x] `apt update && upgrade -y` eseguito
 - [x] Timezone `Europe/Rome` (CEST/CET in `date`)
 - [x] Tooling base installato: `htop`, `ncdu`, `jq`, `git`, `curl`, `wget`, `unzip`
+- [x] **Node.js toolchain** (installato il 2026-05-11 notte come prerequisito CI/CD):
+  - nvm `v0.40.4` user-space in `~/.nvm` (script `install.sh` ispezionato pre-esecuzione, SHA256 `4b7412c4…`, URL esterni solo `nvm-sh/nvm`)
+  - Node `20.18.1` (allineato a `.nvmrc`)
+  - corepack upgraded `0.29.4` → `0.34.7` (fix bug noto verifica firme registry npm in corepack `< 0.31`)
+  - pnpm `9.15.0` risolto da `packageManager` field via corepack
+  - Aggiunte 3 righe standard a `~/.bashrc` (NVM_DIR + sourcing + bash_completion)
 
 **Utenti & SSH:**
 - [x] Utente `deploy` creato, password forte salvata da Nicolò
@@ -164,7 +170,7 @@ pkill -u deploy -f vscode-server
 - **2026-05-11**: `docker-compose.dev.yml` + `.env` + `Caddyfile` in **root**, non in `infra/compose/` — semplicità per dev iniziale. Quando arriveranno staging/prod, migrazione documentata
 - **2026-05-11**: SSH **Deploy Key** del solo repo (no account-wide key) per principio least-privilege; chiave dedicata `~/.ssh/id_ed25519_github` senza passphrase (giustificata da uso server-only)
 - **2026-05-11**: GitHub host key pinnata manualmente in `known_hosts` dopo verifica fingerprint contro pubblicazione ufficiale (no `StrictHostKeyChecking=accept-new` opaco)
-- **2026-05-11**: ADR-0001 formalizza "Caddy come container"; ADR-0002 in futuro per strategia ACME quando avremo dominio
+- **2026-05-11**: ADR-0001 formalizza "Caddy come container"; ADR successivo per strategia ACME quando avremo dominio (vedi "📋 Da fare prossimamente")
 
 ### Decisioni prese durante setup (ADR informali, da formalizzare)
 
@@ -176,41 +182,60 @@ pkill -u deploy -f vscode-server
 - **2026-05-11**: Sudo NOPASSWD limitato a 4 binari (apt/apt-get/sysctl/systemctl), non whitelist ampia che Claude Code aveva proposto. Esclusi specificamente: docker, tee, install, chmod, usermod (richiedono password)
 - **2026-05-11**: PROGRESS.md inizializzato dopo prima sessione di setup, sarà aggiornato dopo ogni macro-task
 
+### Setup CI/CD GitHub Actions (2026-05-11 notte)
+
+**Workflow CI attivo:**
+- [x] `.github/workflows/ci.yml` — trigger su `pull_request → main` e `push → main`, job singolo `Lint · Typecheck · Format` su `ubuntu-latest`, timeout 10min, blocco `concurrency` con `cancel-in-progress` per evitare run sovrapposte
+- [x] Setup pnpm via `pnpm/action-setup@v4` (versione letta da `packageManager` del `package.json`) + `actions/setup-node@v4` con `node-version-file: .nvmrc` e `cache: pnpm`
+- [x] Step: `pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck`
+- [x] Primo run CI su `push` su `main` (commit `92c0724`) verde in **33s**
+- [x] Primo ciclo PR completato (`feature/ci-test` → PR `#1` → CI verde su `pull_request` in **18s** grazie alla cache pnpm popolata → squash merge → branch eliminato → main resta lineare, commit risultante `b139a7f`)
+
+**Script root sincronizzati al regime CI:**
+- [x] `package.json` aggiornato: `lint → eslint .`, `typecheck → tsc --noEmit`, `test → placeholder echo+exit 0`, `format:check → prettier --check .`, nuovo `format:write → prettier --write .`. `dev`/`build` mantengono `turbo run` per quando esisteranno workspace
+- [x] `tsconfig.json` root (nuovo): forma canonica solution-style `{files:[], references:[]}` che estende `tsconfig.base.json` — pronta ad accogliere project references quando arriveranno workspace
+- [x] `tsconfig.base.json` corretto: rimossi path aliases illegali `@gestionale/*/*` e `@apps/*/*` (violavano TS5061 "max 1 `*` per pattern"). Forme rimaste: `@gestionale/* → packages/*/src/index.ts` e `@apps/* → apps/*/src/index.ts` (barrel pattern standard pnpm)
+- [x] `pnpm-lock.yaml` generato + committato (necessario per `--frozen-lockfile` in CI)
+
+**Convenzioni di processo:**
+- [x] `.github/PULL_REQUEST_TEMPLATE.md` versione minima (descrizione, tipo Conventional Commit, 3 check base). Versione completa C12 (test, docs, migrazione DB, breaking, API pubbliche, AI tokens, feature flag) rimandata a quando arriverà codice F1
+- [x] Badge CI nel README della homepage repo (`actions/workflows/ci.yml/badge.svg`)
+- [x] README "Comandi di sviluppo" allineato agli script attuali
+
+**ADR scritti:**
+- [x] **ADR-0002** branching strategy: GitHub Flow semplificato (solo `main` + `feature/*` + `fix/*`) + **Squash and merge** obbligatorio da UI GitHub. Divergenza consapevole dal §C12 del brief, motivata da single-dev e nessuna release pubblica. Reintroduzione di `develop` rivalutata quando il progetto diventerà multi-dev o avrà ambiente staging persistente.
+- [x] **ADR-0003** Prettier exclusions: i 3 documenti narrativi `PROJECT_BRIEF.md`, `PROGRESS.md`, `STARTER_PROMPT.md` esclusi via `.prettierignore` con commento di rimando all'ADR. Razionale: documenti scritti a mano con tabelle wide e struttura intenzionale, fuori dal regime di formatting automatico.
+
+**Standing rule introdotta:**
+- [x] Da oggi: niente più push diretti su `main`. Ogni macro-task → `feature/<topic>` → PR → CI verde → Squash and merge dalla UI da Nicolò. Eccezione one-shot: questo stesso aggiornamento di PROGRESS è andato direttamente su `main` (post-task docs update) per chiudere pulitamente il macro-task; da domani regola applicata senza eccezioni.
+
+### Decisioni prese durante setup CI/CD (2026-05-11 notte)
+
+- **2026-05-11**: Branching strategy = GitHub Flow semplificato + Squash and merge (ADR-0002)
+- **2026-05-11**: 3 .md narrativi esclusi da Prettier (ADR-0003)
+- **2026-05-11**: Cache pnpm via `actions/setup-node@v4` con `cache: pnpm` (più conciso e ufficiale rispetto a `actions/cache` manuale)
+- **2026-05-11**: Script root `lint`/`typecheck`/`test` come comandi diretti finché i workspace sono vuoti — torneranno a `turbo run` quando esisteranno `apps/`/`packages/` reali con i propri task
+- **2026-05-11**: nvm v0.40.4 user-space scelto rispetto a NodeSource apt-repo (futuro multi-versione, no impatto sistema, `.nvmrc`-aware)
+- **2026-05-11**: Husky / lint-staged / commitlint **rimandati** a macro-task dedicato successivo (priorità più alta: validare CI prima di pre-commit hooks)
+- **2026-05-11**: PR template completo C12 **rimandato** a quando arriverà codice F1 — la checklist (test, docs, migrazione DB, breaking, API pubbliche, AI tokens, feature flag) non avrebbe oggetti su cui mordere
+
 ---
 
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: setup CI/CD base con GitHub Actions**
+**Macro-task: da concordare nella prossima sessione.**
 
-### Motivazione (decisa il 2026-05-11 da Nicolò)
+Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-Prima di scrivere codice di dominio (NestJS + Prisma + schema multi-tenant) costruiamo la safety net: ogni PR e ogni push su `main` devono passare per `lint` + `typecheck` + `prettier --check`. Vantaggi:
-- ~30 min di lavoro
-- Valida in pratica i config ESLint 9 / Prettier / TS strict appena scritti
-- Crea l'abitudine "check verdi/rossi su ogni PR" prima di accumulare codice
-- Quando attaccheremo il dominio (NestJS + Prisma) avremo già la safety net pronta
+1. **Husky + lint-staged + commitlint** — chiudere il setup di qualità: pre-commit hook che esegue `lint-staged` (Prettier + ESLint sui file in stage) e `commitlint` che valida Conventional Commits. Stima: ~30-45 min. Vantaggio: blocca errori prima del push, complementare a CI.
+2. **Branch protection rules su `main`** — operazione manuale GitHub UI (Settings → Branches): richiedere status check `CI / checks` verde, disabilitare merge commit e rebase (lasciare solo squash), eventualmente "Require linear history". Stima: 5 min. Sblocca completamente il flow ADR-0002.
+3. **Prime tabelle Prisma + scaffold NestJS** — partire con codice di dominio F1: `apps/api` (NestJS), schema `Tenant`/`Sede`/`User`/`Role`/`Permission`/`AuditLog`, predisposizione RLS PostgreSQL. Macro-task più ampio, vedi sezione D del brief per criteri di accettazione F1.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
-### Scope di alto livello (dettagli nel prompt operativo che Nicolò consegnerà a sessione successiva)
-
-1. Setup `pnpm install` locale (genera lockfile committabile)
-2. Workflow `.github/workflows/ci.yml`:
-   - Trigger: `pull_request` su `main`, `push` su `main`
-   - Job: setup Node 20.18.1 (da `.nvmrc`) + setup pnpm 9.15 (da `packageManager` via corepack) + cache pnpm store
-   - Step: `pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck`
-3. Primo PR di prova per vedere i check girare verdi
-4. Badge stato CI nel README
-
-### Decisioni aperte da chiarire in apertura del prossimo task
-
-- Strategia branching: lavoriamo direttamente su `main` o introduciamo `develop` + `feature/*` ora? Brief C12 menziona entrambi. Per progetto solo-dev forse basta `main` + `feature/*` (skip `develop`).
-- Cache pnpm store: usare action ufficiale `pnpm/action-setup` + `actions/cache` o `actions/setup-node` con `cache: pnpm`?
-- `pnpm install --frozen-lockfile` su CI richiede lockfile committato → da generare e committare nello stesso task
-
 ### Preparazioni manuali a carico di Nicolò prima di partire
 
-(Nessuna nuova preparazione — l'accesso GitHub via Deploy Key con write access è già a posto. GitHub Actions su repository privati gratuiti ha minuti generosi mensili, niente setup billing.)
+(Nessuna preparazione bloccante. Quando si attaccherà la branch protection (opzione 2), sarà Nicolò a clickare in Settings → Branches.)
 
 ---
 
@@ -218,7 +243,13 @@ Prima di scrivere codice di dominio (NestJS + Prisma + schema multi-tenant) cost
 
 ### Cleanup e formalizzazione
 - [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo) — la condizione "primo `docker compose up` funzionante" è ora soddisfatta (smoke test verdi il 2026-05-11 sera), quindi è il momento giusto. Operazione manuale di Nicolò (richiede password sudo). Comando: `sudo rm /etc/sudoers.d/deploy-setup` poi verifica `sudo -l` per confermare che NOPASSWD su apt/sysctl/systemctl non sia più presente.
-- [ ] ADR-0002 strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
+- [ ] ADR successivo (ADR-0004 o oltre) per strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
+
+### Qualità codice / processo (post CI/CD base)
+- [ ] **Husky + lint-staged + commitlint** (pre-commit hook): blocca errori di stile/commit prima del push, complementare al CI già attivo. Probabile prossimo macro-task.
+- [ ] **Branch protection rules su `main`** da configurare via GitHub UI (Settings → Branches): richiedere check `CI / checks` verde, disabilitare merge commit + rebase merge, lasciare solo squash, richiedere linear history. Sblocca completamente ADR-0002.
+- [ ] **PR template completo** secondo §C12 brief (test, docs, migrazione DB, breaking changes, impatto API pubbliche, token AI usage, impatto feature flag) — da espandere quando arriverà codice F1.
+- [ ] **Dependabot / Renovate** per security updates automatici delle dipendenze (vedi §C5 brief "Dipendenze monitorate"). Configurazione `.github/dependabot.yml` quando ci sarà più superficie da monitorare.
 
 ### Verso F1 (Core Operativo MVP)
 - [ ] Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL
