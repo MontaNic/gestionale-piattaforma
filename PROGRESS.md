@@ -4,8 +4,8 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 12 maggio 2026
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + **Prisma data layer COMPLETO** (schema + 3 migration + seed + soft-delete extension + helper id()/factory/singleton). 32 permessi e 6 system role templates seedati (104 mappings). Smoke test 9/9 verdi. Prossimo macro-task: **scaffold NestJS F1** (apps/api consumer di @gestionale/db, middleware tenant context, sostituzione policy RLS reali, auth module argon2+JWT).
+**Ultimo aggiornamento:** 13 maggio 2026
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma data layer COMPLETO + **typecheck monorepo via Turbo** (CI ora valida tutti i workspace TS). Quality gates locali + safety net CI completi e propagati. Prossimo macro-task: **scaffold NestJS F1** (apps/api consumer di @gestionale/db, middleware tenant context, sostituzione policy RLS reali, auth module argon2+JWT).
 
 ---
 
@@ -376,6 +376,40 @@ Chiusura della fase Prisma con seed catalog, soft-delete extension e helper espo
 - **2026-05-12**: Smoke test pragmatico (tsx + assertion manuali) invece di Vitest setup ora. Framework test rimandato a sessione NestJS auth quando ci sarà primo unit test reale.
 - **2026-05-12**: Pattern dotenv-cli esteso a tutti gli script che usano Prisma (`db:seed`, `smoke:*`), non solo `prisma:*` di prima.
 
+### Strategia typecheck monorepo (Macro-task C, 2026-05-13)
+
+Quick win di tooling che chiude il gap CI scoperto durante Macro-task B prima di affrontare lo scaffold NestJS.
+
+**Modifiche:**
+
+- [x] `package.json` root: `scripts.typecheck` da `"tsc --noEmit"` a `"turbo run typecheck"` — propaga ai workspace via Turbo
+- [x] `turbo.json`: rimosso `dependsOn: ["^build"]` da task `typecheck` (no build step oggi; reintrodurremo con NestJS se servirà)
+- [x] `packages/db/package.json`: invariato (script `typecheck: "tsc --noEmit"` già presente)
+- [x] `.github/workflows/ci.yml`: invariato (step `pnpm typecheck` propaga automaticamente ora)
+
+**Failure injection test** (validazione empirica):
+
+| Scenario | Atteso | Misurato |
+|---|---|---|
+| Cache miss vuoto | `tsc` esegue, OK | ✅ 1.136s, hash `23e2d6404c6783a9` |
+| Cache hit vuoto | `>>> FULL TURBO` | ✅ **54ms**, stesso hash |
+| Errore TS injection | exit 2, TS2322 catturato | ✅ exit 2, `'number' is not assignable to type 'string'` |
+| Cleanup | exit 0, hash ripristinato | ✅ 48ms, stesso hash di partenza (file byte-identico) |
+
+**Gap chiuso e dimostrato.** Speedup re-run locale: **21×** (1.1s → 54ms).
+
+**Convenzioni di processo:**
+
+- [x] **ADR-0006** strategia typecheck monorepo: razionale (gap CI scoperto Macro-task B), implementation details, 4 alternative considerate (turbo chosen, pnpm -r rejected, Project References rimandato, lasciare gap rejected), reversibility documentata, sezione "Test di validazione" con failure injection matrix
+- [x] PR #7 (`ci: fix typecheck propagation to workspace packages via Turbo`) — in corso di apertura/merge
+
+### Decisioni prese durante Macro-task C (2026-05-13)
+
+- **2026-05-13**: Approccio (a) `turbo run typecheck` scelto come orchestratore. Coerente con `dev`/`build` già su Turbo. Pattern scalabile (nuovi workspace TS auto-inclusi).
+- **2026-05-13**: TS Project References (opzione c) **rimandato** finché non avremo 5+ workspace o build incrementale necessario. Setup non banale, beneficio reale solo a scala.
+- **2026-05-13**: Cache Turbo in CI **non configurata** (oggi CI ~30s adeguato). Follow-up tracciato per quando diventerà bottleneck.
+- **2026-05-13**: Rimosso `dependsOn: ["^build"]` da `turbo.json` task `typecheck` — coerenza dichiarazione vs realtà (no build step oggi). Reintroduciamo con il primo workspace che ha build.
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -386,9 +420,8 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 
 1. **NestJS scaffold + auth + sostituzione policy RLS** (primario F1) — `apps/api`: scaffold NestJS consumer di `@gestionale/db`, middleware tenant context che fa `SET app.tenant_id` su transaction Prisma, sostituzione policy `USING (true)` con i 3 pattern reali (vedi ADR-0005), endpoint login email+password (argon2) + refresh token, PIN login per POS. Macro-task ampio. Vedi §D brief criteri F1.
 2. **Bootstrap tenant logic** (parte di sopra o sub-task): clone `system_role_templates` (`isDefault: true`) → `roles` tenant-scoped con copia dei mapping a `role_permissions`, quando viene creato un nuovo tenant.
-3. **Strategia typecheck monorepo** (pre-requisito raccomandato per scaffold NestJS) — vedi follow-up sotto.
-4. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-5. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -404,8 +437,10 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 - [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo) — la condizione "primo `docker compose up` funzionante" è ora soddisfatta (smoke test verdi il 2026-05-11 sera), quindi è il momento giusto. Operazione manuale di Nicolò (richiede password sudo). Comando: `sudo rm /etc/sudoers.d/deploy-setup` poi verifica `sudo -l` per confermare che NOPASSWD su apt/sysctl/systemctl non sia più presente.
 - [ ] ADR successivo (ADR-0005+) per strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
 
-### Qualità codice / processo (post Husky setup)
-- [ ] **Strategia typecheck monorepo** (scoperto 2026-05-12 in Macro-task B): root `pnpm typecheck` con tsconfig solution-style `files: []` **non valida i workspace packages**. CI attuale non rileva errori TS in `packages/db` (e futuri). Valutare: (a) `turbo run typecheck` (ritorno a Turbo per propagation), (b) `pnpm -r typecheck` step CI dedicato, (c) Project references TS nel root tsconfig. Quick win probabilmente (b). Long-term (c) per build incrementale. **Da risolvere prima dello scaffold NestJS** per evitare regression silente.
+### Qualità codice / processo (post Husky setup + typecheck monorepo)
+- [x] ~~**Strategia typecheck monorepo**~~ — RISOLTO 2026-05-13 (Macro-task C, ADR-0006). `pnpm typecheck` ora propaga via Turbo a tutti i workspace, CI valida `packages/db` e futuri.
+- [ ] **Cache Turbo in CI** via `actions/cache` su `.turbo/`: quando CI diventerà bottleneck (oggi ~30s adeguato, niente di urgente). Beneficio atteso: skip ricalcolo typecheck/lint per file invariati. Stima: 15 min.
+- [ ] **TS Project References nel root `tsconfig.json`**: quando avremo 5+ workspace o quando il typecheck cross-package supererà 10-15s, valutare migrazione a `composite: true` per build incrementale. Vedi ADR-0006 sezione "Considered Alternatives" punto (c).
 - [ ] **Miglioramento pre-push hook**: parsing stdin formato git pre-push per distinguere push regolari da delete (`local-sha == 0000...` indica delete). Elimina la necessità di `--no-verify` per cancellazioni remote legittime di branch diverso da `main` quando ci si trova su `main`. Vedi commit body PR #2 per dettagli edge case.
 - [ ] **Branch protection lato server**: attualmente Rulesets su GitHub Free **non enforced**. Decisione di rivalutarli solo se: (a) si passa a Team account ($4/mese — non giustificato per single-dev), oppure (b) il progetto diventa multi-developer. Fino ad allora, protezione affidata a pre-push hook (ADR-0004).
 - [ ] **PR template completo** secondo §C12 brief (test, docs, migrazione DB, breaking changes, impatto API pubbliche, token AI usage, impatto feature flag) — da espandere quando arriverà codice F1.
