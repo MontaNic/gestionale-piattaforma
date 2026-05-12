@@ -33,6 +33,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        # @prisma/client e' uno stub vuoto on npm; i tipi reali sono generati
+        # da `prisma generate` leggendo schema.prisma. Necessario in CI perche'
+        # in locale lo stesso lavoro lo fa implicitamente `prisma migrate dev`
+        # (eseguito durante lo sviluppo, non in CI). Senza questo step, il
+        # typecheck di packages/db fallisce con "no exported member 'Prisma'".
+        run: pnpm --filter @gestionale/db exec prisma generate
+
       - name: Prettier check
         run: pnpm format:check
 
