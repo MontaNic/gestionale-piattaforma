@@ -49,4 +49,30 @@ export default tseslint.config(
       },
     },
   },
+  // NestJS workspace (apps/api): override per i pattern del framework.
+  // ESLint 9 flat config NON fa config-discovery automatica nei workspace,
+  // quindi le override stanno qui scoped per glob. Vedi ADR-0007.
+  {
+    files: ['apps/api/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        // I decorator NestJS richiedono il flag legacy (TypeScript pre-stage-3)
+        // + l'emit dei metadati per la reflection-based DI.
+        experimentalDecorators: true,
+        emitDecoratorMetadata: true,
+      },
+    },
+    rules: {
+      // NestJS Module classes sono spesso shell con solo @Module decorator.
+      '@typescript-eslint/no-extraneous-class': 'off',
+      // Constructor injection: `constructor(private readonly x: X) {}` puo'
+      // sembrare useless ma e' il pattern DI canonico.
+      '@typescript-eslint/no-useless-constructor': 'off',
+      // NestJS DI richiede import VALUE delle classi service iniettate
+      // (decorator metadata via `emitDecoratorMetadata` legge il riferimento
+      // runtime alla classe). `import type` le stripperebbe a compile-time
+      // rompendo DI.
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
 );

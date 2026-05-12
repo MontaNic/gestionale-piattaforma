@@ -20,7 +20,7 @@
 //   (oppure: pnpm --filter @gestionale/db exec prisma db seed)
 // =============================================================================
 
-import { id, prisma } from '../src/index.js';
+import { id, prisma } from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Permission catalog (32 atomici)

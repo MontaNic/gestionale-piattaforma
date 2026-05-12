@@ -117,24 +117,36 @@ const client = createPrismaClient();
 
 Al bootstrap del primo tenant (logica F1 NestJS), i 6 `system_role_templates` con `isDefault: true` saranno clonati come `roles` con il `tenant_id` reale (più copia dei mapping permission).
 
+### API server (`apps/api`)
+
+Backend NestJS 11 (CommonJS) in [`apps/api/`](./apps/api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck; auth e business logic in macro-task successivi (D2/D3/D4).
+
+```bash
+# Dev server (ts-node-dev + watch + restart automatico)
+pnpm --filter @gestionale/api dev
+
+# Endpoint disponibili
+curl http://localhost:3000/         # → "Gestionale API"
+curl http://localhost:3000/health   # → {"status":"ok","db":"connected","timestamp":"..."}
+```
+
+`PORT` è letta da `.env` (default 3000). `DATABASE_URL` consumata via `DbService` (singleton Prisma client esteso, con lifecycle gestito da NestJS — `$connect` su startup, `$disconnect` su SIGTERM/SIGINT grazie a `app.enableShutdownHooks()`).
+
+Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HTTP 503** (via `ServiceUnavailableException`) quando il DB è unreachable. Pattern production-ready per orchestrator (Kubernetes liveness/readiness, load balancer).
+
+Razionale scaffold + 4 course corrections empiriche (tsx fail su decorator metadata, swc detour 13min, packages/db CJS tech debt, enableShutdownHooks): [ADR-0007](./docs/architecture/ADR-0007-nestjs-api-scaffold.md).
+
 Comandi disponibili oggi (root):
 
 ```bash
-pnpm lint          # ESLint sull'intero repo (eslint .)
-pnpm typecheck     # tsc --noEmit (root tsconfig solution-style, vuoto finché non ci sono workspace)
+pnpm lint          # ESLint su tutto il repo (eslint .)
+pnpm typecheck     # turbo run typecheck → propaga ai workspace (@gestionale/db, @gestionale/api)
 pnpm format:check  # Prettier --check (CI lo verifica)
 pnpm format:write  # Prettier --write per allineare il repo
 pnpm test          # placeholder finché non ci sono test (echo + exit 0)
+pnpm dev           # turbo run dev (attivo quando un workspace ha script `dev`)
+pnpm build         # turbo run build (per produzione futura)
 ```
-
-Comandi predisposti via Turborepo (attivi quando esisteranno workspace in `apps/` o `packages/`):
-
-```bash
-pnpm dev          # turbo run dev
-pnpm build        # turbo run build
-```
-
-Quando arriveranno i primi workspace, `lint` / `typecheck` / `test` torneranno a delegare via `turbo run` per beneficiare di cache e parallelismo.
 
 ## Convenzioni
 

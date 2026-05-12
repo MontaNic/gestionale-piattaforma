@@ -1,0 +1,32 @@
+{
+  "name": "@gestionale/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NestJS API per la piattaforma Gestionale (consumer di @gestionale/db). F1 scaffold con healthcheck — auth e business logic in macro-task successivi.",
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- ts-node-dev --respawn --transpile-only src/main.ts",
+    "build": "nest build",
+    "start:prod": "dotenv -e ../../.env -- node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@gestionale/db": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.17.0",
+    "dotenv-cli": "^11.0.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.2"
+  }
+}
