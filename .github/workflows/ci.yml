@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   checks:
-    name: Lint · Typecheck · Format
+    name: Lint · Typecheck · Format · Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -49,3 +49,8 @@ jobs:
 
       - name: TypeScript typecheck
         run: pnpm typecheck
+
+      - name: Vitest
+        # turbo run test -> propaga ai workspace con script `test`.
+        # Workspace senza spec files passano via --passWithNoTests.
+        run: pnpm test
