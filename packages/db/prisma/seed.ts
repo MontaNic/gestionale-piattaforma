@@ -20,6 +20,8 @@
 //   (oppure: pnpm --filter @gestionale/db exec prisma db seed)
 // =============================================================================
 
+import argon2 from 'argon2';
+
 import { id, prisma } from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -330,12 +332,137 @@ async function main(): Promise<void> {
   console.log(`  -> ${mapCreated} created, ${mapUpdated} re-affirmed, ${mapTotal} total\n`);
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Dev tenant + admin (opt-out via NODE_ENV=production)
+  // ───────────────────────────────────────────────────────────────────────────
+  // Crea un tenant "demo" + sede + user admin@demo.local + clone del template
+  // Super Admin in `roles` + mapping in `role_permissions` + assegnazione
+  // tenant-wide (sede_id NULL) all'admin. Solo per dev locale (D2a auth).
+  // Per skippare: NODE_ENV=production prisma db seed.
+  // ───────────────────────────────────────────────────────────────────────────
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Dev data (NODE_ENV != "production"):');
+
+    // 1. Tenant
+    const tenant = await prisma.tenant.upsert({
+      where: { slug: 'demo' },
+      create: { id: id(), name: 'Demo Pizzeria', slug: 'demo', isActive: true },
+      update: { name: 'Demo Pizzeria', isActive: true },
+    });
+    console.log(`  Tenant 'demo': ${tenant.id}`);
+
+    // 2. Sede (UNIQUE su (tenant_id, name) non esiste nello schema, uso findFirst+upsert manuale)
+    let sede = await prisma.sede.findFirst({
+      where: { tenantId: tenant.id, name: 'Sede Principale' },
+    });
+    if (!sede) {
+      sede = await prisma.sede.create({
+        data: {
+          id: id(),
+          tenantId: tenant.id,
+          name: 'Sede Principale',
+          address: 'Via Roma 1',
+          city: 'Milano',
+          postalCode: '20100',
+        },
+      });
+    }
+    console.log(`  Sede 'Sede Principale': ${sede.id}`);
+
+    // 3. Admin user
+    const adminPasswordHash = await argon2.hash('Admin123!', { type: argon2.argon2id });
+    const admin = await prisma.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email: 'admin@demo.local' } },
+      create: {
+        id: id(),
+        tenantId: tenant.id,
+        email: 'admin@demo.local',
+        passwordHash: adminPasswordHash,
+        firstName: 'Admin',
+        lastName: 'Demo',
+        isActive: true,
+      },
+      update: {
+        passwordHash: adminPasswordHash,
+        firstName: 'Admin',
+        lastName: 'Demo',
+        isActive: true,
+      },
+    });
+    console.log(`  User 'admin@demo.local': ${admin.id}`);
+
+    // 4. Clone Super Admin template -> role tenant-scoped
+    const superAdminTpl = await prisma.systemRoleTemplate.findUnique({
+      where: { name: 'Super Admin' },
+    });
+    if (!superAdminTpl) throw new Error("System template 'Super Admin' missing");
+
+    const superAdminRole = await prisma.role.upsert({
+      where: { tenantId_name: { tenantId: tenant.id, name: 'Super Admin' } },
+      create: {
+        id: id(),
+        tenantId: tenant.id,
+        name: 'Super Admin',
+        description: superAdminTpl.description,
+        isSystem: true,
+      },
+      update: { description: superAdminTpl.description, isSystem: true },
+    });
+    console.log(`  Role 'Super Admin' (tenant 'demo'): ${superAdminRole.id}`);
+
+    // 5. Copia mappings da template -> role_permissions
+    const tplPermissions = await prisma.systemRoleTemplatePermission.findMany({
+      where: { templateId: superAdminTpl.id },
+    });
+    let rolePermCreated = 0;
+    let rolePermSkipped = 0;
+    for (const tp of tplPermissions) {
+      const existing = await prisma.rolePermission.findUnique({
+        where: {
+          roleId_permissionId: { roleId: superAdminRole.id, permissionId: tp.permissionId },
+        },
+      });
+      if (existing) {
+        rolePermSkipped++;
+      } else {
+        await prisma.rolePermission.create({
+          data: { roleId: superAdminRole.id, permissionId: tp.permissionId },
+        });
+        rolePermCreated++;
+      }
+    }
+    console.log(
+      `  role_permissions (Super Admin demo): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
+    );
+
+    // 6. Assegnazione admin -> Super Admin tenant-wide (sede_id NULL)
+    // Lo unique index parziale "user_roles_tenant_wide_unique" garantisce no
+    // duplicati su (user_id, role_id) WHERE sede_id IS NULL.
+    const existingAssignment = await prisma.userRole.findFirst({
+      where: { userId: admin.id, roleId: superAdminRole.id, sedeId: null },
+    });
+    if (!existingAssignment) {
+      await prisma.userRole.create({
+        data: { id: id(), userId: admin.id, roleId: superAdminRole.id, sedeId: null },
+      });
+      console.log(`  user_roles: admin -> Super Admin (tenant-wide) created`);
+    } else {
+      console.log(`  user_roles: admin -> Super Admin (tenant-wide) already exists`);
+    }
+    console.log('');
+  } else {
+    console.log('Dev data: SKIPPED (NODE_ENV=production)\n');
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // Sommario finale
   // ───────────────────────────────────────────────────────────────────────────
   console.log('=== Seed summary ===');
   console.log(`  Permissions:           ${PERMISSIONS.length}`);
   console.log(`  Role templates:        ${ROLE_TEMPLATES.length}`);
   console.log(`  Total mappings:        ${mapTotal}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`  Dev tenant:            demo (admin@demo.local / Admin123!)`);
+  }
   console.log('  ✅ Seed completato (idempotente).');
 }
 

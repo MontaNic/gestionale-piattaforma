@@ -6,20 +6,36 @@
 // =============================================================================
 
 import 'reflect-metadata';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { Logger } from '@nestjs/common';
 
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+
+  // Versionamento URL (§C2 brief): tutti gli endpoint sotto /api/v1.
+  // Health/root del macro-task D1 vengono auto-prefissati.
+  app.setGlobalPrefix('api/v1');
+
+  // ValidationPipe globale: applica class-validator decorators dei DTO,
+  // strip campi extra (whitelist), trasforma payload nei tipi class-transformer.
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      transform: true,
+    }),
+  );
+
   // Abilita gli shutdown hooks (SIGTERM/SIGINT) per propagare onModuleDestroy
   // ai provider — necessario per il graceful $disconnect del Prisma client
-  // gestito da DbService. Senza, il processo termina senza chiamare destroy.
+  // gestito da DbService.
   app.enableShutdownHooks();
+
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
-  Logger.log(`Gestionale API listening on http://localhost:${port}`, 'Bootstrap');
+  Logger.log(`Gestionale API listening on http://localhost:${port}/api/v1`, 'Bootstrap');
 }
 
 bootstrap().catch((err: unknown) => {

@@ -1,0 +1,20 @@
+import { Controller, Get, NotFoundException } from '@nestjs/common';
+
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
+import { UsersService } from '../users/users.service';
+import type { FullProfile } from '../users/users.service';
+
+@Controller('me')
+export class MeController {
+  constructor(private readonly users: UsersService) {}
+
+  @Get()
+  async me(@CurrentUser() user: AuthenticatedUser | undefined): Promise<{ data: FullProfile }> {
+    // JwtAuthGuard globale assicura user presente; check defensive.
+    if (!user) throw new NotFoundException('E_USER_NOT_FOUND');
+    const profile = await this.users.findFullProfile(user.id);
+    if (!profile) throw new NotFoundException('E_USER_NOT_FOUND');
+    return { data: profile };
+  }
+}

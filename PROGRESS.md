@@ -4,8 +4,8 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma data layer COMPLETO + typecheck monorepo via Turbo + **NestJS scaffold + healthcheck (D1)** attivi. `apps/api` consumer di `@gestionale/db` con DbModule pattern, GET / e GET /health funzionanti, lifecycle Prisma gestito. Prossimo macro-task: **D2 Auth module** (argon2 + JWT email/password + PIN POS) verso F1.
+**Ultimo aggiornamento:** 13 maggio 2026 (notte)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + **D2a Auth module (email/password + JWT + refresh rotation + /me)** attivi. `apps/api` con 6 endpoint funzionanti (root, /health, /auth/login, /auth/refresh, /auth/logout, /me). Admin demo seedato (admin@demo.local / Admin123! / tenant 'demo'). Smoke E2E 10/10 verdi. Prossimo macro-task: **D2-vitest** (Vitest baseline + 3 test essential + theft detection full) o **D2b** (PIN POS).
 
 ---
 
@@ -466,6 +466,85 @@ Smoke regression packages/db: 9/9 verdi (no regression post-CC2/CC3)
 - **2026-05-13**: ESLint override scoped per apps/api accentrate nel root config (no config-discovery in flat config 9)
 - **2026-05-13**: `tsconfig.json` apps/api con `noEmit: true` — build futura via `tsconfig.build.json` dedicato
 
+### D2a Auth module — email/password + JWT + refresh rotation (Macro-task D2a, 2026-05-13 notte)
+
+Backend auth funzionante end-to-end. Scope ridotto rispetto al D2 monolitico per disciplina tempi (calibrazione 5h vs 3h sottostimato): D2-vitest e D2b in macro-task separati.
+
+**Endpoint attivi (6, sotto `/api/v1/`):**
+
+- [x] GET `/` (Public) — root, "Gestionale API"
+- [x] GET `/health` (Public) — DB ping, 200/503 semantico
+- [x] POST `/auth/login` (Public, header `X-Tenant-Slug` required) — email + password + tenant → JWT pair + session record
+- [x] POST `/auth/refresh` (Public, tenantId dal JWT payload) — rotation: vecchia session `is_active: false`, nuova creata
+- [x] POST `/auth/logout` (Protected) — session corrente disattivata, 204
+- [x] GET `/me` (Protected) — user + roles + 32 permissions flat dal DB (no JWT inlining)
+
+**Pattern auth (10 decisioni, ADR-0008):**
+
+- [x] **Argon2id** per password hashing (vincitore PHC 2015, OWASP 2023+)
+- [x] **JWT HS256** con `@nestjs/jwt` (secret 64-byte base64 da `openssl rand -base64 48`)
+- [x] **Payload minimal**: `{sub, tenantId, sessionId, type, iat, exp}` — niente roles/permissions inline (revoca istantanea, no stale token)
+- [x] **Refresh rotation BASE**: token rotato → vecchia session disattivata + nuova creata + new pair returned. Detection FULL (revoke all on reuse) → D2-vitest
+- [x] **JwtAuthGuard globale** security-by-default + `@Public()` opt-out (root, /health, /auth/login, /auth/refresh)
+- [x] **Tenant resolution via header `X-Tenant-Slug`** scoped a `/auth/login` only (TenantMiddleware). Post-auth tenantId dal JWT payload — anti-spoofing
+- [x] **Audit log best-effort** in `audit_logs` su login.success / login.failure / logout (wrapped try/catch, audit fail non blocca auth)
+- [x] **failed_login_attempts counter** incrementato su wrong password, reset su login success (anti-brute baseline F1)
+- [x] **No info leak** su credenziali: stesso `E_AUTH_INVALID_CREDENTIALS` per email-non-esiste / password-errata / utente-disabilitato
+- [x] **Sessioni stateful** in tabella `sessions`: device_id=user_agent slice, device_type='web' (D2b distinguera POS), refresh_token_hash argon2, expires_at NOT NULL, is_active per soft-revoke
+
+**Smoke E2E 10/10 verdi** (eseguito 2026-05-13 00:20 UTC):
+
+| # | Scenario | Esito |
+|---|---|---|
+| 1 | GET /health | ✅ 200 |
+| 2 | POST /auth/login con tenant + admin | ✅ 200 + JWT pair |
+| 3 | GET /me con access token | ✅ 200 + user + role + 32 permissions flat |
+| 4 | POST /auth/refresh | ✅ 200 + new pair, session rotated |
+| 4b | Vecchio refresh re-use | ✅ 401 |
+| 4c | GET /me con NEW_ACCESS | ✅ 200 |
+| 5 | POST /auth/logout | ✅ 204 |
+| 5b | GET /me post-logout | ✅ 401 (session is_active=false) |
+| 6 | POST /auth/login senza X-Tenant-Slug | ✅ 401 E_AUTH_TENANT_REQUIRED |
+| 7 | POST /auth/login wrong password | ✅ 401 E_AUTH_INVALID_CREDENTIALS |
+
+**Seed dev data (opt-out via NODE_ENV=production):**
+
+- [x] `packages/db/prisma/seed.ts` esteso: tenant "demo" + sede "Sede Principale" + admin@demo.local (password Admin123! argon2 hashed, pin NULL) + role "Super Admin" tenant-scoped + 32 mappings cloni da template + user_role assignment tenant-wide
+- [x] Verifica DB count post-seed: tenants=1, sedi=1, users=1, roles=1, role_permissions=32, user_roles=1 (idempotente con upsert)
+
+**File creati (24 nuovi in apps/api/src/):**
+
+- `auth/`: auth.module.ts, auth.controller.ts, auth.service.ts, strategies/jwt.strategy.ts, guards/jwt-auth.guard.ts, decorators/public.decorator.ts, decorators/current-user.decorator.ts, interfaces/jwt-payload.interface.ts, interfaces/authenticated-request.interface.ts, dto/{login,refresh,auth-response}.dto.ts
+- `tenant/`: tenant.module.ts, tenant.middleware.ts, decorators/current-tenant.decorator.ts
+- `users/`: users.module.ts, users.service.ts
+- `me/`: me.module.ts, me.controller.ts
+
+**File modificati (5):**
+
+- `apps/api/src/main.ts` — `setGlobalPrefix('api/v1')` + `useGlobalPipes(ValidationPipe)`
+- `apps/api/src/app.module.ts` — imports nuovi moduli + TenantMiddleware scoped a `/auth/login` only
+- `apps/api/src/app.controller.ts` — `@Public()` su GET `/`
+- `apps/api/src/health/health.controller.ts` — `@Public()` su GET `/health`
+- `.env.example` — placeholder `JWT_SECRET` + comando openssl
+
+**Dipendenze installate (apps/api):**
+
+- `@nestjs/jwt`, `@nestjs/passport`, `passport`, `passport-jwt`
+- `argon2`, `class-validator`, `class-transformer`
+- devDeps: `@types/passport-jwt`
+
+### Decisioni prese durante D2a (2026-05-13 notte)
+
+- **2026-05-13**: Scope split D2a / D2b / D2-vitest per disciplina tempi (calibrazione 5h vs 3h sottostimata). PR coordinate: D2a auth base + ADR-0008, D2-vitest test framework, D2b PIN POS
+- **2026-05-13**: **Scoperta importante** — migration `unique_pin_per_tenant` rimossa (era nel prompt originale). Argon2 salt random vanifica la unique constraint: hash di "1234" per user A != hash per user B → constraint non scatta mai per duplicati clear-text. Falsa sicurezza. Soluzione D2b: verifica applicativa via `argon2.verify()` loop su `usersWithPin` del tenant
+- **2026-05-13**: TenantMiddleware scoped SOLO a `/auth/login` (e in D2b a `/auth/login-pin`). `/auth/refresh` deriva tenantId dal payload JWT del refresh token. Pattern anti-spoofing
+- **2026-05-13**: JWT payload minimal `{sub, tenantId, sessionId, type, iat, exp}` — roles/permissions lookup runtime dal DB per revoca istantanea
+- **2026-05-13**: JwtAuthGuard globale via APP_GUARD + `@Public()` opt-out (security-by-default). Endpoint pubblici: root, /health, /auth/login, /auth/refresh
+- **2026-05-13**: Audit log best-effort (try/catch + Logger warn su fail). Fail audit non blocca auth — accettato per F1
+- **2026-05-13**: `failed_login_attempts` counter base solo (no rate limiting in D2a). Auth hardening macro-task per Redis throttler + IP lockout
+- **2026-05-13**: Seed dev data opt-out (`NODE_ENV !== 'production'`) — convenience by default, safety via env explicit in prod
+- **2026-05-13**: Theft detection BASE in D2a (vecchio refresh → 401). Detection FULL (revoke all su token rotato re-used) rimandata a D2-vitest
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -474,11 +553,12 @@ Smoke regression packages/db: 9/9 verdi (no regression post-CC2/CC3)
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **D2 Auth module** (primario F1) — `apps/api/src/auth/`: argon2 + JWT (access 15min, refresh 7d con rotation), endpoint `POST /auth/login` (email+password) + `POST /auth/refresh` + `POST /auth/logout`, PIN login per POS (`POST /auth/pin-login`), session persistence in `sessions` table, audit log entries.
-2. **D3 Middleware tenant context + RLS reali** — middleware NestJS che estrae `tenant_id` dal JWT e fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
-3. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
-4. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-5. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **D2-vitest** (raccomandato come next) — Vitest baseline (~1.5h): `vitest.config.ts` root + apps/api/, 3 test essential su `AuthService` con mock DbService (login OK, wrong password, tenant invalid) + **theft detection FULL**: refresh token già rotato → REVOKE ALL sessions dello user (in `AuthService.refresh`, ~30 min extra). Tracciato in ADR-0008.
+2. **D2b PIN POS** (~1.5h) — `POST /auth/pin-setup` (protected) + `POST /auth/login-pin` (Public, header tenant + device) + verifica uniqueness PIN applicativa (argon2.verify loop su usersWithPin del tenant) + 2 test PIN. Tracciato in ADR-0008.
+3. **D3 Middleware tenant context + RLS reali** — middleware NestJS che fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
+4. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -522,8 +602,9 @@ Tracking accentrato delle 2 course corrections più rilevanti. Dettagli in [ADR-
 - [ ] **Middleware tenant context** NestJS: `SET app.tenant_id` su transaction Prisma per attivare RLS reale
 - [ ] **Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005) — sub-task del precedente
 - [ ] **Bootstrap tenant logic**: clone `system_role_templates` (`isDefault: true`) → `roles` con `tenant_id` reale + copia mapping `system_role_template_permissions` → `role_permissions`
-- [ ] **Auth backend NestJS** (email+pwd argon2 + JWT 15min/7d rotation + PIN POS per cassieri/camerieri)
-- [ ] **Primo Vitest setup** (in `packages/db` per test extension business logic, poi in `apps/api`)
+- [x] ~~**Auth backend NestJS — email/password + JWT + refresh rotation + /me**~~ — completato 2026-05-13 notte (D2a, ADR-0008). 6 endpoint, smoke 10/10 verdi, admin@demo.local seedato
+- [ ] **D2-vitest**: primo Vitest setup + 3 test AuthService + theft detection FULL (revoke all su token rotato re-used)
+- [ ] **D2b PIN POS**: `/auth/pin-setup` + `/auth/login-pin` + uniqueness applicativa + 2 test PIN
 - [ ] Valutare RLS su `role_permissions` con `EXISTS` join (defense-in-depth, vedi ADR-0005 follow-up)
 - [ ] UI shell Next.js (layout, theme, i18n setup IT primary + EN secondary)
 - [ ] Mappa tavoli editor + viewer (drag&drop, 6 tipi, 7 stati)

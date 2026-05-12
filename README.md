@@ -119,18 +119,50 @@ Al bootstrap del primo tenant (logica F1 NestJS), i 6 `system_role_templates` co
 
 ### API server (`apps/api`)
 
-Backend NestJS 11 (CommonJS) in [`apps/api/`](./apps/api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck; auth e business logic in macro-task successivi (D2/D3/D4).
+Backend NestJS 11 (CommonJS) in [`apps/api/`](./apps/api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck + auth module D2a (email/password + JWT + refresh rotation + `/me`). PIN POS in D2b, theft detection completa in D2-vitest.
 
 ```bash
 # Dev server (ts-node-dev + watch + restart automatico)
 pnpm --filter @gestionale/api dev
 
-# Endpoint disponibili
-curl http://localhost:3000/         # → "Gestionale API"
-curl http://localhost:3000/health   # → {"status":"ok","db":"connected","timestamp":"..."}
+# Endpoint pubblici
+curl http://localhost:3000/api/v1/                # → "Gestionale API"
+curl http://localhost:3000/api/v1/health          # → {"status":"ok","db":"connected","timestamp":"..."}
+
+# Login (admin@demo.local seedato via NODE_ENV != production)
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "X-Tenant-Slug: demo" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@demo.local","password":"Admin123!"}'
+# → {"data":{"accessToken":"...","refreshToken":"...","expiresIn":900}}
+
+# Endpoint protetti (Authorization: Bearer <access>)
+curl http://localhost:3000/api/v1/me -H "Authorization: Bearer $ACCESS"
+# → {"data":{"user":{...},"roles":[...],"permissions":[...]}}
+
+curl -X POST http://localhost:3000/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refresh-from-login>"}'
+# → nuovi tokens, vecchia session disattivata
+
+curl -X POST http://localhost:3000/api/v1/auth/logout -H "Authorization: Bearer $ACCESS"
+# → HTTP 204
 ```
 
-`PORT` è letta da `.env` (default 3000). `DATABASE_URL` consumata via `DbService` (singleton Prisma client esteso, con lifecycle gestito da NestJS — `$connect` su startup, `$disconnect` su SIGTERM/SIGINT grazie a `app.enableShutdownHooks()`).
+**Env vars** (`.env`):
+
+- `PORT` (default 3000)
+- `DATABASE_URL` (Prisma connection string)
+- `JWT_SECRET` (HS256 secret, generato con `openssl rand -base64 48`)
+
+**Pattern auth (vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md))**:
+
+- **Argon2id** per password (e in D2b per PIN)
+- **JWT HS256**: access 15min + refresh 7d, refresh rotation con session invalidation
+- **JwtAuthGuard globale** security-by-default + `@Public()` opt-out
+- **Tenant resolution**: header `X-Tenant-Slug` solo pre-auth (`/auth/login`); post-auth tenantId dal JWT payload (anti-spoofing)
+- **Sessioni stateful** in tabella `sessions` con lifecycle (refresh rotation → vecchia `is_active: false`, nuova creata)
+- **Audit log** best-effort su login/logout in tabella `audit_logs`
 
 Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HTTP 503** (via `ServiceUnavailableException`) quando il DB è unreachable. Pattern production-ready per orchestrator (Kubernetes liveness/readiness, load balancer).
 
