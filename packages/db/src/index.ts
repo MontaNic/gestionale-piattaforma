@@ -16,7 +16,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 
-import { softDeleteExtension } from './soft-delete.js';
+import { softDeleteExtension } from './soft-delete';
 
 /**
  * Genera un UUID v7 (ordinabile per tempo di creazione). Pattern obbligatorio

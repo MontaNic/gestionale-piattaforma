@@ -1,0 +1,3 @@
+# Build output di `nest build` / `tsc`
+dist/
+*.tsbuildinfo

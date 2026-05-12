@@ -5,7 +5,7 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 13 maggio 2026
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma data layer COMPLETO + **typecheck monorepo via Turbo** (CI ora valida tutti i workspace TS). Quality gates locali + safety net CI completi e propagati. Prossimo macro-task: **scaffold NestJS F1** (apps/api consumer di @gestionale/db, middleware tenant context, sostituzione policy RLS reali, auth module argon2+JWT).
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma data layer COMPLETO + typecheck monorepo via Turbo + **NestJS scaffold + healthcheck (D1)** attivi. `apps/api` consumer di `@gestionale/db` con DbModule pattern, GET / e GET /health funzionanti, lifecycle Prisma gestito. Prossimo macro-task: **D2 Auth module** (argon2 + JWT email/password + PIN POS) verso F1.
 
 ---
 
@@ -410,6 +410,62 @@ Quick win di tooling che chiude il gap CI scoperto durante Macro-task B prima di
 - **2026-05-13**: Cache Turbo in CI **non configurata** (oggi CI ~30s adeguato). Follow-up tracciato per quando diventerà bottleneck.
 - **2026-05-13**: Rimosso `dependsOn: ["^build"]` da `turbo.json` task `typecheck` — coerenza dichiarazione vs realtà (no build step oggi). Reintroduciamo con il primo workspace che ha build.
 
+### D1 NestJS scaffold + healthcheck (Macro-task D1, 2026-05-13)
+
+Backend NestJS in `apps/api/`, consumer di `@gestionale/db`. Scaffold base con DbModule + HealthModule. Niente auth, niente business logic (rimandati a D2/D3/D4).
+
+**Scaffold manuale (no `nest new`):**
+
+- [x] `apps/api/package.json` — `@gestionale/api`, CJS (no `type: module`), deps NestJS 11 + workspace `@gestionale/db@workspace:*`
+- [x] `apps/api/tsconfig.json` — estende `tsconfig.base.json`, override `module: commonjs` + `moduleResolution: node`, `experimentalDecorators` + `emitDecoratorMetadata`, `noEmit: true` (dev via ts-node-dev)
+- [x] `apps/api/nest-cli.json` — per `nest build` futuro
+- [x] `apps/api/src/main.ts` — bootstrap + `app.enableShutdownHooks()` per graceful SIGTERM
+- [x] `apps/api/src/app.module.ts` + `app.controller.ts` (GET `/` → "Gestionale API")
+- [x] `apps/api/src/db/{db.module.ts, db.service.ts}` — `@Global` + composition wrapper su `prisma` singleton + `OnModuleInit`/`OnModuleDestroy` lifecycle (`$connect`/`$disconnect` con log)
+- [x] `apps/api/src/health/{health.module.ts, health.controller.ts, health.service.ts, health.dto.ts}` — GET `/health` con `$queryRaw\`SELECT 1\``, HTTP 200/503 semantico via `ServiceUnavailableException`
+
+**Modifiche correlate (4 course corrections):**
+
+- [x] **CC1**: dev runner = `ts-node-dev --respawn --transpile-only` (NOT tsx — non emette `emitDecoratorMetadata` necessario a NestJS DI). Valutato empiricamente swc (13 min, fallback): swc/nest -b swc presuppongono build→dist→run, incompatibile con consumo TS-source-live di workspace deps via symlink
+- [x] **CC2**: `packages/db/package.json` rimosso `"type": "module"` per CJS interop con apps/api. Asimmetria CJS/ESM evitata, tech debt esplicito tracciato (vedi sezione sotto)
+- [x] **CC3**: rimosso `.js` suffix da import interni di `packages/db/src/index.ts`, `prisma/seed.ts`, `scripts/smoke-soft-delete.ts` (conseguenza diretta di CC2: `.js` suffix non risolve in CJS)
+- [x] **CC4**: `app.enableShutdownHooks()` in main.ts → SIGTERM/SIGINT propaga `OnModuleDestroy` ai provider, `$disconnect` graceful
+
+**Convenzioni di processo:**
+
+- [x] ESLint override scoped `apps/api/**/*.ts` accentrate nel root `eslint.config.js` (flat config 9 no config-discovery): `experimentalDecorators` + disable `no-extraneous-class`, `no-useless-constructor`, `consistent-type-imports` (necessari per pattern NestJS DI/Module)
+- [x] `.env.example` aggiornato con `PORT` (commentato, default 3000)
+- [x] Pattern `dotenv-cli` esteso a `dev` e `start:prod` di apps/api (coerente con packages/db)
+- [x] **ADR-0007** scaffold + 4 course corrections + sezione "Tech Debt Accepted" esplicita + sezione "Empirical Evidence" con swc detour 13 min
+- [x] PR #8 (`feat: NestJS API scaffold with healthcheck endpoint and DbModule`) — in corso
+
+**Verifica runtime end-to-end:**
+
+```
+$ curl http://localhost:3000/      → 200 "Gestionale API"
+$ curl http://localhost:3000/health → 200 {"status":"ok","db":"connected","timestamp":"..."}
+
+Lifecycle log:
+[NestFactory] Starting Nest application...
+[DbService] Prisma connected to PostgreSQL  ← OnModuleInit OK
+[NestApplication] Nest application successfully started
+[Bootstrap] Gestionale API listening on http://localhost:3000
+
+Quality gates: format + lint + typecheck (Turbo 2/2 workspace) ALL GREEN
+Smoke regression packages/db: 9/9 verdi (no regression post-CC2/CC3)
+```
+
+### Decisioni prese durante D1 NestJS (2026-05-13)
+
+- **2026-05-13**: NestJS 11 + manual scaffold (aderenza monorepo)
+- **2026-05-13**: CJS apps/api + packages/db (CC2). Asimmetria CJS/ESM rifiutata
+- **2026-05-13**: ts-node-dev per dev (swc detour empirico documentato in ADR-0007 "Empirical Evidence")
+- **2026-05-13**: DbModule `@Global` + DbService **composition** (non inheritance). `OnModuleInit`/`OnModuleDestroy` per lifecycle Prisma
+- **2026-05-13**: HTTP 200/503 semantico via `ServiceUnavailableException` su `/health`
+- **2026-05-13**: `app.enableShutdownHooks()` attivo dal D1 (CC4)
+- **2026-05-13**: ESLint override scoped per apps/api accentrate nel root config (no config-discovery in flat config 9)
+- **2026-05-13**: `tsconfig.json` apps/api con `noEmit: true` — build futura via `tsconfig.build.json` dedicato
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -418,10 +474,11 @@ Quick win di tooling che chiude il gap CI scoperto durante Macro-task B prima di
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **NestJS scaffold + auth + sostituzione policy RLS** (primario F1) — `apps/api`: scaffold NestJS consumer di `@gestionale/db`, middleware tenant context che fa `SET app.tenant_id` su transaction Prisma, sostituzione policy `USING (true)` con i 3 pattern reali (vedi ADR-0005), endpoint login email+password (argon2) + refresh token, PIN login per POS. Macro-task ampio. Vedi §D brief criteri F1.
-2. **Bootstrap tenant logic** (parte di sopra o sub-task): clone `system_role_templates` (`isDefault: true`) → `roles` tenant-scoped con copia dei mapping a `role_permissions`, quando viene creato un nuovo tenant.
-3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **D2 Auth module** (primario F1) — `apps/api/src/auth/`: argon2 + JWT (access 15min, refresh 7d con rotation), endpoint `POST /auth/login` (email+password) + `POST /auth/refresh` + `POST /auth/logout`, PIN login per POS (`POST /auth/pin-login`), session persistence in `sessions` table, audit log entries.
+2. **D3 Middleware tenant context + RLS reali** — middleware NestJS che estrae `tenant_id` dal JWT e fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
+3. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+4. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+5. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -436,6 +493,13 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 ### Cleanup e formalizzazione
 - [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo) — la condizione "primo `docker compose up` funzionante" è ora soddisfatta (smoke test verdi il 2026-05-11 sera), quindi è il momento giusto. Operazione manuale di Nicolò (richiede password sudo). Comando: `sudo rm /etc/sudoers.d/deploy-setup` poi verifica `sudo -l` per confermare che NOPASSWD su apt/sysctl/systemctl non sia più presente.
 - [ ] ADR successivo (ADR-0005+) per strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
+
+### Tech debt esplicito (NestJS scaffold D1)
+
+Tracking accentrato delle 2 course corrections più rilevanti. Dettagli in [ADR-0007](docs/architecture/ADR-0007-nestjs-api-scaffold.md) sezione "Tech Debt Accepted".
+
+- [ ] **CC2 — CJS/ESM strategy re-evaluation**: `packages/db` ha perso `"type": "module"` per consentire interop CJS con `apps/api`. **Trigger**: arrivo `apps/web` (Next.js 14+ App Router, ESM-everywhere per design). Rischi: edge runtime, Server Components, future major version. **Stima rework**: 1-2h. Opzioni: (a) **dual package** via `exports` field con build step `dist/index.{cjs,mjs}` + project references; (b) **ESM-everywhere** con apps/api migrato a ESM + dev runner che supporta decorator metadata in ESM context. Da decidere strategicamente prima del primo macro-task Next.js.
+- [ ] **CC1 — ts-node-dev → swc-node migration**: `ts-node-dev` v2.0.0 (~2022) è "stale repo". Rivalutare **insieme a CC2** (decisione strategica unica). Workaround disponibili se serve switchare a swc prima: build step packages/db, loader Node `@swc-node/register` con nodemon, TS Project References (ADR-0006 opzione c). Monitor maintenance status ogni 6 mesi.
 
 ### Qualità codice / processo (post Husky setup + typecheck monorepo)
 - [x] ~~**Strategia typecheck monorepo**~~ — RISOLTO 2026-05-13 (Macro-task C, ADR-0006). `pnpm typecheck` ora propaga via Turbo a tutti i workspace, CI valida `packages/db` e futuri.

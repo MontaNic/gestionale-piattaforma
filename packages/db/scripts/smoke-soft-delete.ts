@@ -14,7 +14,7 @@
 //   DELETE FROM tenants WHERE slug='smoke-test';
 // =============================================================================
 
-import { id, prisma } from '../src/index.js';
+import { id, prisma } from '../src/index';
 
 const TEST_SLUG = 'smoke-test';
 const TEST_NAME = 'Smoke Test Tenant';
