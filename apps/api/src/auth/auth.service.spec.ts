@@ -94,8 +94,11 @@ describe('AuthService', () => {
   let auth: AuthService;
   let users: {
     findByTenantEmail: ReturnType<typeof vi.fn>;
+    findById: ReturnType<typeof vi.fn>;
     incrementFailedAttempts: ReturnType<typeof vi.fn>;
     recordSuccessfulLogin: ReturnType<typeof vi.fn>;
+    findAllWithPinByTenant: ReturnType<typeof vi.fn>;
+    setPinHash: ReturnType<typeof vi.fn>;
   };
   let prisma: {
     session: {
@@ -111,8 +114,11 @@ describe('AuthService', () => {
   beforeEach(() => {
     users = {
       findByTenantEmail: vi.fn(),
+      findById: vi.fn(),
       incrementFailedAttempts: vi.fn().mockResolvedValue(undefined),
       recordSuccessfulLogin: vi.fn().mockResolvedValue(undefined),
+      findAllWithPinByTenant: vi.fn().mockResolvedValue([]),
+      setPinHash: vi.fn().mockResolvedValue(undefined),
     };
     prisma = {
       session: {
@@ -251,5 +257,67 @@ describe('AuthService', () => {
 
     // Niente nuova session emessa (theft block, no rotation)
     expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  // ─── Test 5 — setupPin success (D2b) ──────────────────────────────────────
+  it('setupPin success: re-auth OK + uniqueness clean + hashes PIN + audit auth.pin.setup', async () => {
+    // User esiste, password verifica, nessun peer con PIN -> first-time setup
+    users.findById.mockResolvedValue({ ...baseUser, pinHash: null });
+    vi.mocked(argon2.verify).mockResolvedValueOnce(true); // verify currentPassword
+    users.findAllWithPinByTenant.mockResolvedValue([]); // nessun peer con PIN
+
+    const result = await auth.setupPin(USER_ID, TENANT_ID, 'Admin123!', '4827', {
+      ip: '10.0.0.1',
+      userAgent: 'curl/test',
+    });
+
+    expect(result).toEqual({ success: true });
+
+    // PIN hashato + salvato
+    expect(argon2.hash).toHaveBeenCalledWith('4827', { type: 2 });
+    expect(users.setPinHash).toHaveBeenCalledWith(USER_ID, 'argon2$mocked$hash');
+
+    // Audit "auth.pin.setup" (wasReset=false, era pinHash null pre-call)
+    expect(prisma.auditLog.create).toHaveBeenCalledOnce();
+    const auditCall = prisma.auditLog.create.mock.calls[0]?.[0]?.data;
+    expect(auditCall.action).toBe('auth.pin.setup');
+    expect(auditCall.afterValue).toMatchObject({ wasReset: false });
+  });
+
+  // ─── Test 6 — loginPin success (D2b) ──────────────────────────────────────
+  it('loginPin success: matches user via argon2 loop, creates POS session, returns JWT pair', async () => {
+    // Setup: 2 candidati nel tenant, il secondo matcha
+    users.findAllWithPinByTenant.mockResolvedValue([
+      { id: 'other-user', tenantId: TENANT_ID, pinHash: 'argon2$other$hash' },
+      { id: USER_ID, tenantId: TENANT_ID, pinHash: 'argon2$matching$hash' },
+    ]);
+    // argon2.verify: false sul primo, true sul secondo
+    vi.mocked(argon2.verify).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const tokens = await auth.loginPin(TENANT_ID, '4827', 'tablet-01', 'pos_tablet', {
+      ip: '10.0.0.1',
+      userAgent: 'POSApp/1.0',
+    });
+
+    expect(tokens.accessToken).toBe('eyJ.mocked.token');
+    expect(tokens.refreshToken).toBe('eyJ.mocked.token');
+    expect(tokens.expiresIn).toBe(15 * 60);
+
+    // Session POS creata con device override (decisione D D2b)
+    expect(prisma.session.create).toHaveBeenCalledOnce();
+    const sessionData = prisma.session.create.mock.calls[0]?.[0]?.data;
+    expect(sessionData?.userId).toBe(USER_ID);
+    expect(sessionData?.deviceId).toBe('tablet-01');
+    expect(sessionData?.deviceType).toBe('pos_tablet');
+
+    // recordSuccessfulLogin chiamato sul user matched
+    expect(users.recordSuccessfulLogin).toHaveBeenCalledWith(USER_ID);
+
+    // 2 audit logs: auth.login.success (issue tokens) + auth.login_pin.success
+    expect(prisma.auditLog.create).toHaveBeenCalledTimes(2);
+    const actions = prisma.auditLog.create.mock.calls.map(
+      (c: unknown[]) => (c[0] as { data: { action: string } })?.data?.action,
+    );
+    expect(actions).toContain('auth.login_pin.success');
   });
 });

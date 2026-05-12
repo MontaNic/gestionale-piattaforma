@@ -5,7 +5,7 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 13 maggio 2026 (notte tardi)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + **D2-vitest (Vitest 3.2.4 baseline + 4 test essential + theft detection FULL)** attivi. 6 endpoint funzionanti, 4 test verdi, theft detection E2E verificato (revoke all + audit forense). Prossimo macro-task: **D2b PIN POS** (pin-setup + login-pin + uniqueness applicativa + 2 test PIN).
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + **D2b PIN POS login** completi. **8 endpoint funzionanti, 6 test verdi**, theft detection E2E verificato (revoke all + audit forense) + smoke E2E 8 scenari PIN verdi. Prossimo macro-task candidato: **D3 RLS reali** (middleware tenant context + sostituzione policy `USING (true)` con i 3 pattern ADR-0005).
 
 ---
 
@@ -595,6 +595,32 @@ Run: `pnpm test` → 4 passed (8ms), 380ms total setup.
 - **2026-05-13**: Turbo task `test`: rimosso `dependsOn: ["^build"]` (test indipendenti, parallelismo dev locale, cache cleanliness)
 - **2026-05-13**: Audit log `auth.refresh.success` aggiunto come action distinta da `auth.login.success` (analytics tracking, joint via `previousSessionId` in afterValue)
 
+### D2b — PIN POS login (Macro-task D2b, 2026-05-13 notte tardi)
+
+Auth completata con flusso PIN dedicato ai terminali POS. Scope: 2 endpoint + uniqueness applicativa + 4 audit actions + 2 test essential + smoke E2E 8 scenari.
+
+- [x] **POST `/api/v1/auth/pin-setup` (Protected)** — re-auth `currentPassword` (OWASP) + validazione formato PIN (`^\d{4,6}$`) + check forbidden patterns (~60 entries hardcoded: all-same + sequenziali asc/desc 4/5/6 cifre) + uniqueness applicativa via `argon2.verify` loop su `findAllWithPinByTenant(tenantId, excludeId=userId)` + `argon2.hash` + `users.pin_hash` update. Idempotente (overwrite permesso, audit discriminato).
+- [x] **POST `/api/v1/auth/login-pin` (Public)** — header `X-Tenant-Slug` obbligatorio (TenantMiddleware scoped al path) + DTO `{pin, deviceId, deviceType}` con `deviceType ∈ {pos_tablet, pos_desktop, mobile}` (escluso `web`) + scan argon2.verify sui candidati `pin_hash != null AND isActive` + emette JWT pair + session con `deviceId`/`deviceType` overrides.
+- [x] **`apps/api/src/auth/utils/pin-validator.ts`**: `FORBIDDEN_PINS: ReadonlySet<string>` (~60 entries) + `validatePin()` con errore `E_AUTH_PIN_FORBIDDEN_PATTERN`.
+- [x] **DTO**: `PinSetupDto` (currentPassword min 8 + pin regex) e `LoginPinDto` (pin regex + deviceId 1-64 + deviceType `@IsIn`).
+- [x] **`UsersService` esteso**: `findAllWithPinByTenant(tenantId, excludeId?)` + `setPinHash(userId, hash)`.
+- [x] **4 nuove audit actions** (totale 9): `auth.pin.setup` (wasReset:false), `auth.pin.reset` (wasReset:true), `auth.login_pin.success`, `auth.login_pin.failure`. Re-auth fallito su pin-setup riusa `auth.login.failure` con `reason: 'pin_setup_password_check_failed'`.
+- [x] **2 nuovi test essential** (totale 6): test 5 verifica setupPin success path (argon2.hash + setPinHash + audit setup); test 6 verifica loginPin scan multi-candidate (verify false → true) + session POS + audit login_pin.success.
+- [x] **TenantMiddleware esteso**: `auth/login-pin` aggiunto a `forRoutes` (pre-auth, no JWT da cui derivare tenantId).
+- [x] **Smoke E2E 8 scenari verdi** (PIN `4827` random non-pattern): login admin → pin-setup OK → pin-setup forbidden 1234 → wrong password 401 → login-pin success → login-pin wrong 0000 → /me con PIN token → DB session deviceType=pos_tablet.
+
+#### Decisioni prese durante D2b (2026-05-13 notte tardi)
+
+- **2026-05-13**: PIN regex `^\d{4,6}$` (no separator). Tastiere POS numeriche; lunghezza variabile per UX/security trade-off.
+- **2026-05-13**: `FORBIDDEN_PINS` set hardcoded (~60 entries: all-same + sequenziali asc/desc per 4-6 cifre). Niente file/rete; revocabile/estendibile in-source.
+- **2026-05-13**: **Uniqueness via argon2.verify loop** (decisione critica). Migration `unique_pin_per_tenant` rifiutata: argon2 salt random → hash dello stesso PIN sono diversi → l'index non scatta mai per duplicati clear-text (falsa sicurezza). F1 OK con N piccolo (poche user/tenant). Tech debt F2: HMAC-SHA256(pin, tenantSalt) come `pin_lookup` indicizzato.
+- **2026-05-13**: PIN overwrite consentito + audit discriminato `auth.pin.setup` (pin_hash era NULL) vs `auth.pin.reset` (overwrite). UX: utente puo' resettare il proprio PIN senza percorso admin.
+- **2026-05-13**: Re-auth `currentPassword` su pin-setup (OWASP "Authentication-sensitive operation"). Mitigazione XSS/session hijack.
+- **2026-05-13**: `login-pin` failure NON incrementa `failed_login_attempts` (counter e' per coppia email+password). Tech debt F1+: rate limit dedicato per `(tenantId, deviceId, ip)` in Redis bucket.
+- **2026-05-13**: `deviceType` login-pin esclude `web` (DTO `@IsIn` ammette solo pos_tablet/pos_desktop/mobile). `web` non e' POS.
+- **2026-05-13**: Single error code `E_AUTH_INVALID_CREDENTIALS` per PIN wrong / no match. No info leak (stesso pattern login email/password).
+- **2026-05-13**: Smoke test PIN `4827` (random non-pattern) invece di `5678` originalmente proposto (sequenziale, sarebbe stato rifiutato dal validator).
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -603,12 +629,11 @@ Run: `pnpm test` → 4 passed (8ms), 380ms total setup.
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **D2b PIN POS** (~1.5h) — `POST /auth/pin-setup` (protected) + `POST /auth/login-pin` (Public, header tenant + device) + verifica uniqueness PIN applicativa (argon2.verify loop su usersWithPin del tenant) + 2 test PIN. Tracciato in ADR-0008.
-2. **D3 Middleware tenant context + RLS reali** — middleware NestJS che fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
-3. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
-4. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, E2E test (full Nest bootstrap + Testcontainers).
-5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **D3 Middleware tenant context + RLS reali** — middleware NestJS che fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
+2. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+3. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, rate limit dedicato `login-pin` per `(tenantId, deviceId, ip)`, E2E test (full Nest bootstrap + Testcontainers).
+4. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+5. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 

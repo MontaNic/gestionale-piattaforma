@@ -119,7 +119,7 @@ Al bootstrap del primo tenant (logica F1 NestJS), i 6 `system_role_templates` co
 
 ### API server (`apps/api`)
 
-Backend NestJS 11 (CommonJS) in [`apps/api/`](./apps/api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck + auth module D2a (email/password + JWT + refresh rotation + `/me`). PIN POS in D2b, theft detection completa in D2-vitest.
+Backend NestJS 11 (CommonJS) in [`apps/api/`](./apps/api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck + auth module completo: email/password + JWT + refresh rotation + theft detection (D2a + D2-vitest) e **PIN POS login** (D2b).
 
 ```bash
 # Dev server (ts-node-dev + watch + restart automatico)
@@ -149,6 +149,30 @@ curl -X POST http://localhost:3000/api/v1/auth/logout -H "Authorization: Bearer 
 # → HTTP 204
 ```
 
+#### PIN POS login (D2b)
+
+Flusso a 2 endpoint per terminali POS (tablet/desktop), separato dal login email/password:
+
+```bash
+# 1. Setup PIN (protected): re-auth via currentPassword + PIN 4-6 cifre non-pattern
+curl -X POST http://localhost:3000/api/v1/auth/pin-setup \
+  -H "Authorization: Bearer $ACCESS" \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword":"Admin123!","pin":"4827"}'
+# → {"data":{"success":true}}
+# PIN proibiti (400 E_AUTH_PIN_FORBIDDEN_PATTERN): all-same (0000, 1111...) e sequenziali (1234, 4321...)
+
+# 2. Login PIN (public, X-Tenant-Slug + device): emette JWT pair + session POS
+curl -X POST http://localhost:3000/api/v1/auth/login-pin \
+  -H "X-Tenant-Slug: demo" \
+  -H "Content-Type: application/json" \
+  -d '{"pin":"4827","deviceId":"tablet-01","deviceType":"pos_tablet"}'
+# → {"data":{"accessToken":"...","refreshToken":"...","expiresIn":900}}
+# deviceType ∈ {pos_tablet, pos_desktop, mobile} (no web)
+```
+
+Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt random di argon2id rende inutile un UNIQUE index su `pin_hash`). Vedi [ADR-0008 sezione D2b](./docs/architecture/ADR-0008-auth-module.md#d2b-implementation--pin-pos-login-2026-05-13-update) per decisioni e tech debt (HMAC lookup index in F2).
+
 **Env vars** (`.env`):
 
 - `PORT` (default 3000)
@@ -157,10 +181,10 @@ curl -X POST http://localhost:3000/api/v1/auth/logout -H "Authorization: Bearer 
 
 **Pattern auth (vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md))**:
 
-- **Argon2id** per password (e in D2b per PIN)
+- **Argon2id** per password e PIN POS
 - **JWT HS256**: access 15min + refresh 7d, refresh rotation con session invalidation
 - **JwtAuthGuard globale** security-by-default + `@Public()` opt-out
-- **Tenant resolution**: header `X-Tenant-Slug` solo pre-auth (`/auth/login`); post-auth tenantId dal JWT payload (anti-spoofing)
+- **Tenant resolution**: header `X-Tenant-Slug` solo pre-auth (`/auth/login`, `/auth/login-pin`); post-auth tenantId dal JWT payload (anti-spoofing)
 - **Sessioni stateful** in tabella `sessions` con lifecycle (refresh rotation → vecchia `is_active: false`, nuova creata)
 - **Audit log** best-effort su login/logout in tabella `audit_logs`
 

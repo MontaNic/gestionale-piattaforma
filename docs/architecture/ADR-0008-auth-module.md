@@ -318,3 +318,91 @@ Tempo run: ~8ms (4 tests). Setup totale ~380ms (transform/collect/prepare).
 - Coverage non misurato in CI (script `test:coverage` disponibile localmente). Tracciato come follow-up: aggiungere step CI `pnpm test:coverage` quando ci saranno piu' di 10 test e vorremo soglia minima
 - E2E test (vero Nest bootstrap, DB reale via Testcontainers o postgres dev) RIMANDATI a macro-task dedicato "Auth E2E hardening" insieme a rate limiting + theft detection enhancement (email notify)
 - Le 5 azioni audit (`auth.*`) sono il primo enum strutturato di azioni. Quando arriveranno B/B/B... modules domain (comande, cassa, ecc.), valuteremo un registro centralizzato `audit-actions.ts` per coerenza
+
+## D2b implementation — PIN POS login (2026-05-13 update)
+
+Estende l'autenticazione con flusso PIN per terminali POS:
+
+- `POST /api/v1/auth/pin-setup` (protected) — re-auth con `currentPassword` + validazione formato PIN + uniqueness check + hash + save. Idempotente (overwrite permesso).
+- `POST /api/v1/auth/login-pin` (public, header `X-Tenant-Slug`) — risolve tenant, scan argon2.verify sui candidati con `pin_hash != null`, emette JWT pair + session con `deviceType` POS.
+
+### Decisioni D2b
+
+| #   | Decisione                                                                                                                                            | Razionale                                                                                                                                                                                                                                                |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **PIN regex `^\d{4,6}$`** (no separator)                                                                                                             | Tastiere POS numeriche, lunghezza variabile per UX/security trade-off                                                                                                                                                                                    |
+| 2   | **`FORBIDDEN_PINS` set hardcoded (~60 entries)**: all-same `0000`..`9999` + `00000`..`99999` + `000000`..`999999` + sequenziali asc/desc 4/5/6 cifre | Pattern banali rifiutati a livello applicativo; nessuna lista esterna (no rete/file)                                                                                                                                                                     |
+| 3   | **`deviceId` mandatory in login-pin DTO** (max 64) + `deviceType ∈ {pos_tablet, pos_desktop, mobile}` (escluso `web`)                                | Tracciamento device per audit/sessione; `web` non e' POS, fuori scope                                                                                                                                                                                    |
+| 4   | **Re-auth con `currentPassword` su pin-setup** (OWASP)                                                                                               | Mitigazione XSS/session hijack: anche con token valido, cambio PIN richiede prova di password attuale                                                                                                                                                    |
+| 5   | **PIN uniqueness check via `argon2.verify` loop** (F1)                                                                                               | argon2 salt random → uniqueness lookup deterministico via DB index e' impossibile. Loop su `users WHERE pin_hash IS NOT NULL AND isActive=true` (N piccolo). Tech debt F2: indice HMAC-SHA256(pin, tenantSalt) per lookup O(1) quando N > 50 user/tenant |
+| 6   | **PIN login via `argon2.verify` loop sui candidati del tenant**                                                                                      | Stesso vincolo crittografico del punto 5. Tech debt: HMAC index F2                                                                                                                                                                                       |
+| 7   | **PIN overwrite consentito + audit discriminato**: `auth.pin.setup` (pin_hash era NULL) vs `auth.pin.reset` (overwrite)                              | UX: utente puo' resettare il proprio PIN senza percorso admin. Audit distingue first-time vs reset per detection di anomalie                                                                                                                             |
+| 8   | **`login-pin` failure NON incrementa `failed_login_attempts`**                                                                                       | F1 semplificazione: il counter e' per coppia (email,password). Tech debt F1+: rate limit dedicato per `login-pin` (es. Redis bucket per (tenantId, deviceId, ip))                                                                                        |
+
+### TenantMiddleware scope
+
+`app.module.ts` estende `forRoutes` con `{ path: 'auth/login-pin', method: POST }`. Solo questi due endpoint pre-auth richiedono header `X-Tenant-Slug`. `pin-setup` e' protetto: `tenantId` dal JWT (anti-spoofing).
+
+### Audit log enum espanso (4 nuovi → totale 9)
+
+- `auth.pin.setup` — first time, `afterValue: { wasReset: false }`
+- `auth.pin.reset` — overwrite, `afterValue: { wasReset: true }`
+- `auth.login_pin.success` — match argon2, `afterValue: { deviceId, deviceType }`
+- `auth.login_pin.failure` — no match, `afterValue: { reason: 'no_pin_match', deviceId, deviceType }`
+
+Re-auth fallito su `pin-setup` riusa `auth.login.failure` con `reason: 'pin_setup_password_check_failed'` (no nuovo enum: stessa semantica "password check failed").
+
+### Test essential aggiunti (2 → totale 6)
+
+| #   | Test                                                                                  | Cosa copre                                                                                                                                                                                                                                                    |
+| --- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5   | `setupPin success: hashes PIN, persists, records audit auth.pin.setup`                | argon2.hash chiamato, `setPinHash` chiamato, audit `auth.pin.setup` con `wasReset:false`, uniqueness loop su candidati escludendo `userId` corrente                                                                                                           |
+| 6   | `loginPin success: scans candidates, emits POS session, audit auth.login_pin.success` | `findAllWithPinByTenant` chiamato, argon2.verify loop (2 candidati: primo false → secondo true), session creata con `deviceType='pos_tablet'`/`deviceId='tablet-01'`, `recordSuccessfulLogin` chiamato, audit `auth.login.success` + `auth.login_pin.success` |
+
+Tempo run: ~12ms (6 tests).
+
+### Smoke E2E 8 scenari (2026-05-13)
+
+PIN valido di test: `4827` (random non-pattern). PIN proibiti testati: `1234` (sequenziale), `0000` (login-pin).
+
+```
+1. login admin → access OK
+2. POST /auth/pin-setup {pin:"4827"} → 200 {success:true} + audit auth.pin.setup wasReset:false
+3. POST /auth/pin-setup {pin:"1234"} → 400 E_AUTH_PIN_FORBIDDEN_PATTERN
+4. POST /auth/pin-setup {currentPassword:"WrongPass1!"} → 401 E_AUTH_INVALID_CREDENTIALS + audit auth.login.failure pin_setup_password_check_failed
+5. POST /auth/login-pin {pin:"4827",deviceId:"tablet-01",deviceType:"pos_tablet"} → 200 JWT pair + session POS + audit auth.login.success + auth.login_pin.success
+6. POST /auth/login-pin {pin:"0000",...} → 401 E_AUTH_INVALID_CREDENTIALS + audit auth.login_pin.failure no_pin_match
+7. GET /me Bearer <PIN_ACCESS> → 200 user + 32 permissions
+8. SELECT * FROM sessions WHERE deviceType='pos_tablet' → 1 row (deviceId='tablet-01')
+```
+
+### Considered Alternatives (D2b)
+
+| Decisione                | Alternativa                                                                 | Esito         | Razionale                                                                                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PIN uniqueness           | `CREATE UNIQUE INDEX users(tenant_id, pin_hash) WHERE pin_hash IS NOT NULL` | **Rejected**  | False security: argon2 salt random → hash dello stesso PIN sono diversi. L'index non previene collision sul cleartext, solo sul ciphertext (zero-utility) |
+| PIN uniqueness           | HMAC-SHA256(pin, tenantSalt) come `pin_lookup` indicizzato                  | Rejected (F2) | Setup tenant-salt + migrazione + nuovo flow setup non giustificato per N piccolo. Pianificato come tech debt                                              |
+| PIN login info leak      | `E_AUTH_PIN_NOT_FOUND` vs `E_AUTH_PIN_WRONG` distinti                       | Rejected      | Stesso pattern login email: single `E_AUTH_INVALID_CREDENTIALS` per no info leak                                                                          |
+| PIN format               | Solo 6 cifre                                                                | Rejected      | Tablet POS reali in EU usano spesso 4 cifre; flexibility 4-6 con forbidden list copre i pattern banali                                                    |
+| Re-auth pin-setup        | Solo session valida (no password)                                           | Rejected      | OWASP "Authentication-sensitive operation": cambio credenziale richiede prova diretta della credenziale primaria                                          |
+| login-pin failed counter | Incrementa `failed_login_attempts`                                          | Rejected (F1) | Counter e' per `(email, password)`; PIN non identifica univocamente prima del match. F1+: rate limit dedicato per (tenantId, deviceId, ip)                |
+| login-pin device         | `deviceType: 'web'` permesso                                                | Rejected      | `web` non e' un terminale POS; flusso login email/password e' la via web. DTO `@IsIn(PIN_DEVICE_TYPES)` lo vieta                                          |
+| PIN overwrite            | Vietare overwrite, richiedere reset admin                                   | Rejected      | UX peggiore senza guadagno security. Audit distingue `setup` vs `reset` per detection                                                                     |
+
+### Reversibility (D2b)
+
+- Disabilitare PIN flow → rimuovere 2 endpoint da `AuthController` + 2 route da `TenantMiddleware` (`app.module.ts`). Schema `users.pin_hash` resta (nullable), nessuna migrazione downgrade necessaria
+- Tornare a uniqueness DB-index (mai esistito): no-op
+- F2 HMAC migration: aggiungere colonna `users.pin_lookup` + backfill + cutover, retro-compatibile
+
+### Tech debt registrato
+
+1. **Uniqueness/lookup HMAC** quando N user/tenant cresce (>50). Cambio interno, contratto API invariato
+2. **Rate limit `login-pin` dedicato** (Redis bucket per `tenantId+deviceId+ip`) — pianificato in macro-task "Auth hardening"
+3. **E2E con full Nest bootstrap + Testcontainers** — stesso macro-task "Auth E2E hardening" del D2-vitest
+
+### Notes (D2b)
+
+- I 4 nuovi audit portano il totale a 9. Soglia per registro centralizzato `audit-actions.ts` (decisione D2-vitest) non ancora raggiunta, ma ci avviciniamo
+- `auth.service.ts` ora ~480 righe: monitorare; possibile split futuro `auth.password.service.ts` / `auth.pin.service.ts` se le sezioni crescono (no premature abstraction adesso)
+- `findAllWithPinByTenant` filtra `isActive: true`: utenti disabilitati non sono candidati nemmeno se hanno PIN settato
