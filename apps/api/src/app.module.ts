@@ -22,6 +22,8 @@ export class AppModule implements NestModule {
     // /health o / il tenant non serve.
     consumer.apply(TenantMiddleware).forRoutes(
       { path: 'auth/login', method: RequestMethod.POST },
+      // D2b: /auth/login-pin richiede tenant resolution via header (pre-auth).
+      { path: 'auth/login-pin', method: RequestMethod.POST },
       // /auth/refresh non incluso: deriva tenantId dal payload JWT del
       // refresh token (verificato in AuthService.refresh). Header non serve.
     );

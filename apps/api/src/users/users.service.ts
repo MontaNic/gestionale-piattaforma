@@ -39,6 +39,37 @@ export class UsersService {
     return this.db.prisma.user.findUnique({ where: { id: userId } });
   }
 
+  /**
+   * Restituisce tutti gli user del tenant con `pin_hash != null` (utenti che
+   * hanno PIN POS configurato). Usato da `AuthService` per:
+   * - PIN setup: uniqueness check via argon2.verify loop (decisione 5 D2b)
+   * - PIN login: scan dei candidati per match argon2 (decisione 6 D2b)
+   *
+   * F1 OK con N piccolo (poche user per tenant). Tech debt F2+: HMAC
+   * lookup index se tenant > 50 user (vedi ADR-0008 D2b).
+   *
+   * @param tenantId   Tenant scope (multi-tenancy isolation)
+   * @param excludeId  User da escludere dal set (es. user che sta cambiando il proprio PIN)
+   */
+  async findAllWithPinByTenant(tenantId: string, excludeId?: string) {
+    return this.db.prisma.user.findMany({
+      where: {
+        tenantId,
+        pinHash: { not: null },
+        isActive: true,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true, pinHash: true, tenantId: true },
+    });
+  }
+
+  async setPinHash(userId: string, pinHash: string): Promise<void> {
+    await this.db.prisma.user.update({
+      where: { id: userId },
+      data: { pinHash },
+    });
+  }
+
   async incrementFailedAttempts(userId: string): Promise<void> {
     await this.db.prisma.user.update({
       where: { id: userId },

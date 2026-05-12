@@ -16,7 +16,13 @@
 // la stessa exception per evitare info leak (timing attack residuo accettato F1).
 // =============================================================================
 
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { id } from '@gestionale/db';
@@ -24,7 +30,9 @@ import { id } from '@gestionale/db';
 import { DbService } from '../db/db.service';
 import { UsersService } from '../users/users.service';
 import type { AuthTokensPayload } from './dto/auth-response.dto';
+import type { PinLoginDeviceType } from './dto/login-pin.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
+import { validatePin } from './utils/pin-validator';
 
 // Costanti TTL — coerenti con §B1 brief.
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15min
@@ -35,7 +43,12 @@ type AuditAction =
   | 'auth.login.failure'
   | 'auth.logout'
   | 'auth.refresh.success'
-  | 'auth.theft_detected';
+  | 'auth.theft_detected'
+  // D2b additions:
+  | 'auth.pin.setup' // first-time PIN setup (user.pinHash era null)
+  | 'auth.pin.reset' // PIN overwrite (user.pinHash !== null pre-call)
+  | 'auth.login_pin.success'
+  | 'auth.login_pin.failure';
 
 @Injectable()
 export class AuthService {
@@ -184,6 +197,134 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------------
+  // PIN SETUP — re-auth pattern (password) + uniqueness check + hash + save
+  // ---------------------------------------------------------------------------
+  // Flusso (decisioni 4/5 D2b):
+  //   1. Verifica currentPassword via argon2 (anti session-hijack abuse)
+  //   2. Valida pattern PIN (validatePin: forbidden patterns)
+  //   3. Uniqueness check: argon2.verify loop su tutti i user del tenant con
+  //      pin_hash (escluso self). O(N) costo per F1 ok. Tech debt HMAC F2+.
+  //   4. Hash PIN con argon2id + persist user.pin_hash
+  //   5. Audit log: action = 'auth.pin.setup' (first time) o 'auth.pin.reset'
+  //      (overwrite) — determinato a runtime via stato pre-call di pinHash.
+  async setupPin(
+    userId: string,
+    tenantId: string,
+    currentPassword: string,
+    pin: string,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<{ success: true }> {
+    const user = await this.users.findById(userId);
+    if (!user || !user.isActive || user.tenantId !== tenantId) {
+      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+    }
+
+    // Re-auth con password corrente (decisione 4 D2b)
+    const passwordOk = await argon2.verify(user.passwordHash, currentPassword);
+    if (!passwordOk) {
+      await this.recordAudit({
+        tenantId,
+        userId,
+        action: 'auth.login.failure',
+        meta,
+        payload: { reason: 'pin_setup_password_check_failed' },
+      });
+      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+    }
+
+    // Pattern check (decisione 2 D2b)
+    const validation = validatePin(pin);
+    if (!validation.valid) {
+      throw new BadRequestException(validation.reason ?? 'E_AUTH_PIN_FORBIDDEN_PATTERN');
+    }
+
+    // Uniqueness check applicativa (decisione 5/6 D2b: F1 loop argon2.verify)
+    const peers = await this.users.findAllWithPinByTenant(tenantId, userId);
+    for (const peer of peers) {
+      if (!peer.pinHash) continue;
+      const collision = await argon2.verify(peer.pinHash, pin);
+      if (collision) {
+        throw new ConflictException('E_AUTH_PIN_TAKEN');
+      }
+    }
+
+    // Hash + save (idempotente per overwrite)
+    const wasReset = user.pinHash !== null;
+    const pinHash = await argon2.hash(pin, { type: argon2.argon2id });
+    await this.users.setPinHash(userId, pinHash);
+
+    // Audit action discriminata (decisione C D2b pre-flight)
+    await this.recordAudit({
+      tenantId,
+      userId,
+      action: wasReset ? 'auth.pin.reset' : 'auth.pin.setup',
+      meta,
+      payload: { wasReset },
+    });
+
+    return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // LOGIN PIN — scan candidati nel tenant + session POS
+  // ---------------------------------------------------------------------------
+  // Flusso (decisione 6 D2b, no failed_attempts increment — decisione B):
+  //   1. Carica tutti gli user del tenant con pin_hash != null
+  //   2. Loop argon2.verify finche' trova match (O(N) costo)
+  //   3. Match -> recordSuccessfulLogin + create session POS + JWT pair
+  //   4. No match -> audit auth.login_pin.failure + 401 generic
+  //
+  // Anti-brute baseline: argon2.verify e' lento (rate limiting naturale).
+  // Lockout reale tracciato in Auth hardening macro-task (ADR-0008 D2b).
+  async loginPin(
+    tenantId: string,
+    pin: string,
+    deviceId: string,
+    deviceType: PinLoginDeviceType,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<AuthTokensPayload> {
+    const candidates = await this.users.findAllWithPinByTenant(tenantId);
+
+    let matchedUserId: string | null = null;
+    for (const candidate of candidates) {
+      if (!candidate.pinHash) continue;
+      const isMatch = await argon2.verify(candidate.pinHash, pin);
+      if (isMatch) {
+        matchedUserId = candidate.id;
+        break;
+      }
+    }
+
+    if (!matchedUserId) {
+      await this.recordAudit({
+        tenantId,
+        userId: undefined,
+        action: 'auth.login_pin.failure',
+        meta,
+        payload: { reason: 'no_pin_match', deviceId, deviceType },
+      });
+      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+    }
+
+    await this.users.recordSuccessfulLogin(matchedUserId);
+
+    const tokens = await this.issueTokensAndCreateSession(matchedUserId, tenantId, meta, null, {
+      deviceId,
+      deviceType,
+    });
+
+    await this.recordAudit({
+      tenantId,
+      userId: matchedUserId,
+      action: 'auth.login_pin.success',
+      meta,
+      payload: { deviceId, deviceType },
+    });
+
+    return tokens;
+  }
+
+  // ---------------------------------------------------------------------------
   // LOGOUT — invalida session corrente
   // ---------------------------------------------------------------------------
   async logout(sessionId: string, userId: string, tenantId: string): Promise<void> {
@@ -208,6 +349,7 @@ export class AuthService {
     tenantId: string,
     meta: { ip?: string; userAgent?: string },
     sedeId: string | null = null,
+    deviceOverride?: { deviceId: string; deviceType: PinLoginDeviceType },
   ): Promise<AuthTokensPayload> {
     const sessionId = id();
     const accessPayload: Omit<JwtPayload, 'iat' | 'exp'> = {
@@ -237,8 +379,11 @@ export class AuthService {
         id: sessionId,
         userId,
         sedeId,
-        deviceId: meta.userAgent?.slice(0, 64) ?? 'unknown',
-        deviceType: 'web',
+        // Login email/password: device_type='web' + device_id derivato da UA.
+        // Login PIN: device_type='pos_tablet'/'pos_desktop'/'mobile' + device_id
+        // dal client (DTO).
+        deviceId: deviceOverride?.deviceId ?? meta.userAgent?.slice(0, 64) ?? 'unknown',
+        deviceType: deviceOverride?.deviceType ?? 'web',
         refreshTokenHash,
         ip: meta.ip,
         userAgent: meta.userAgent,
