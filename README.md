@@ -8,6 +8,9 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
 
+> 🚨 **SECURITY — RLS NON ANCORA ATTIVATO (D3b PENDING).**
+> Il framework Row Level Security (AsyncLocalStorage context + Prisma extension) è operativo dal Macro-task D3a, ma le **policy DB sono ancora placeholder `USING(true)`** e l'app si connette come `postgres` (superuser). Multi-tenant isolation **NON enforced runtime** fino al merge di D3b (app role non-superuser + migration policy reali). **Non deployare in produzione senza D3b.** Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md).
+
 ## Stack
 
 Vincolato dalla sezione A3 del brief.
@@ -187,6 +190,32 @@ Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt ran
 - **Tenant resolution**: header `X-Tenant-Slug` solo pre-auth (`/auth/login`, `/auth/login-pin`); post-auth tenantId dal JWT payload (anti-spoofing)
 - **Sessioni stateful** in tabella `sessions` con lifecycle (refresh rotation → vecchia `is_active: false`, nuova creata)
 - **Audit log** best-effort su login/logout in tabella `audit_logs`
+
+#### RLS Framework (D3a)
+
+Framework di multi-tenant isolation operativo a livello applicativo (vedi [ADR-0009](./docs/architecture/ADR-0009-rls-real.md)). Vedi callout di sicurezza in cima al README: D3a fornisce il framework, **D3b è obbligatorio per l'attivazione reale**.
+
+Componenti (D3a):
+
+- **AsyncLocalStorage context** (`packages/db/src/rls.ts`): ALS singleton + helpers `runInTenantContext`, `withSystemContext`, `withSuperAdminContext`. Propaga `(tenantId, isSuperAdmin)` lungo l'intera chain async.
+- **Prisma extension RLS** (`rlsExtension`): wrappa ogni operazione model in `$transaction` interactive con `SET LOCAL app.tenant_id` + `SET LOCAL app.is_super_admin`. Fail-fast: throw `RLS_NO_CONTEXT` se la query parte fuori da context.
+- **TenantContextInterceptor** (`apps/api/src/context/tenant-context.interceptor.ts`): globale post-JwtAuthGuard, wrappa handler in `runInTenantContext({tenantId: req.tenantId, isSuperAdmin: false})`. Skip per route Public senza tenant (root, /health, /auth/refresh).
+- **TenantMiddleware** (refactor D3a): slug lookup in `withSystemContext`, dopo resolve `runInTenantContext(...)` per il resto della chain. Pre-auth routes (login, login-pin).
+- **AuthService.refresh wrap**: `/auth/refresh` non passa per middleware tenant → wrap interno con tenantId dal payload JWT.
+
+3 modalità di accesso DB:
+
+| Modalità                 | Quando                                                           | Helper                                      |
+| ------------------------ | ---------------------------------------------------------------- | ------------------------------------------- |
+| Tenant-scoped (99%)      | Request post-auth + pre-auth con tenant slug                     | `runInTenantContext({tenantId, false}, fn)` |
+| System                   | Seed, jobs, bootstrap, health check, slug pre-tenant             | `withSystemContext(fn)`                     |
+| Super Admin cross-tenant | Script ops manuali (no JWT-based super admin in F1, vedi ADR-S5) | `withSuperAdminContext(tenantId, fn)`       |
+
+**Caveat noti** (documentati in ADR-0009):
+
+- `$queryRaw` / `$executeRawUnsafe` bypassano l'extension (intercetta solo model operations). Chiamanti devono usare `withSystemContext` o accettare bypass.
+- D3a fix R3: `query(args)` dentro $transaction NON eredita il tx context. Workaround: `tx[model][operation](args)` + re-entrancy guard. Verificato empiricamente.
+- D3b deferred (R9): postgres user è superuser+BYPASSRLS, bypassa RLS sempre. **Senza app role non-superuser, framework è no-op.**
 
 Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HTTP 503** (via `ServiceUnavailableException`) quando il DB è unreachable. Pattern production-ready per orchestrator (Kubernetes liveness/readiness, load balancer).
 

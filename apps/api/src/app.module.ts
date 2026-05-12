@@ -1,7 +1,9 @@
 import { type MiddlewareConsumer, Module, type NestModule, RequestMethod } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { TenantContextInterceptor } from './context/tenant-context.interceptor';
 import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -12,6 +14,11 @@ import { UsersModule } from './users/users.module';
 @Module({
   imports: [DbModule, TenantModule, UsersModule, AuthModule, MeModule, HealthModule],
   controllers: [AppController],
+  providers: [
+    // TenantContextInterceptor registrato globale: wrappa ogni handler in
+    // AsyncLocalStorage RLS context se req.tenantId presente. Vedi ADR-0009.
+    { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

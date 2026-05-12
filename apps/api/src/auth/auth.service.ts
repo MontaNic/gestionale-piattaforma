@@ -25,7 +25,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
-import { id } from '@gestionale/db';
+import { id, runInTenantContext } from '@gestionale/db';
 
 import { DbService } from '../db/db.service';
 import { UsersService } from '../users/users.service';
@@ -128,6 +128,24 @@ export class AuthService {
       throw new UnauthorizedException('E_AUTH_INVALID_REFRESH_TOKEN');
     }
 
+    // /auth/refresh non passa per TenantMiddleware (no header X-Tenant-Slug
+    // sui refresh — tenantId arriva dal payload JWT). Wrap esplicito in ALS
+    // RLS context dal payload.tenantId per il resto del flusso DB. Decisione
+    // 10 ADR-0009.
+    return runInTenantContext({ tenantId: payload.tenantId, isSuperAdmin: false }, () =>
+      this.refreshInContext(refreshToken, payload, meta),
+    );
+  }
+
+  /**
+   * Body del refresh flow, gira sempre dentro ALS tenant context (vedi sopra).
+   * Estratto come metodo privato per leggibilita' (no deep-indent del flow).
+   */
+  private async refreshInContext(
+    refreshToken: string,
+    payload: JwtPayload,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<AuthTokensPayload> {
     const session = await this.db.prisma.session.findUnique({
       where: { id: payload.sessionId },
     });

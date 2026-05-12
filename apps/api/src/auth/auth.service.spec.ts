@@ -45,6 +45,16 @@ vi.mock('@gestionale/db', () => ({
   prisma: {},
   uuidv7: vi.fn(() => '00000000-0000-7000-8000-000000000001'),
   createPrismaClient: vi.fn(),
+  // RLS helpers (D3a): AuthService.refresh wrappa il flusso in runInTenantContext.
+  // I test bypassano il DI Prisma reale, quindi runInTenantContext deve solo
+  // eseguire la callback direttamente senza ALS reale. withSystemContext
+  // / withSuperAdminContext seguono lo stesso pattern (non chiamati nei test
+  // attuali ma esportati per coerenza).
+  runInTenantContext: vi.fn(<T>(_ctx: unknown, fn: () => Promise<T> | T) => Promise.resolve(fn())),
+  withSystemContext: vi.fn(<T>(fn: () => Promise<T> | T) => Promise.resolve(fn())),
+  withSuperAdminContext: vi.fn(<T>(_tenantId: string, fn: () => Promise<T> | T) =>
+    Promise.resolve(fn()),
+  ),
 }));
 
 import argon2 from 'argon2';
