@@ -1,13 +1,16 @@
 // =============================================================================
-// auth.service.ts — Login, refresh rotation, logout
+// auth.service.ts — Login, refresh rotation (con theft detection FULL), logout
 // =============================================================================
 // Pattern (vedi ADR-0008):
 // - Password & PIN hashed argon2id (decisione 1)
 // - JWT HS256 (decisione 2)
 // - Sessioni stateful in tabella `sessions` (decisione 7)
-// - Refresh rotation BASE in D2a: vecchia session disattivata + nuova creata
-//   (theft detection full -> rimandato a D2-vitest, ADR-0008 sezione "D2b/D2-vitest")
-// - Audit log su login success/fail e logout (best effort, decisione 9)
+// - Refresh rotation con THEFT DETECTION FULL (D2-vitest update):
+//     se un refresh token gia' usato (session is_active=false) torna a
+//     riapparire -> revoke ALL sessions del user + audit log con payload
+//     forense (revokedSessionCount, suspectedSessionId, attackerIp, ua).
+// - Audit log su login success/fail, logout, refresh.success, theft_detected
+//   (best effort, non blocca auth).
 //
 // Verifica "wrong password / wrong email / tenant non trovato" usa SEMPRE
 // la stessa exception per evitare info leak (timing attack residuo accettato F1).
@@ -26,6 +29,13 @@ import type { JwtPayload } from './interfaces/jwt-payload.interface';
 // Costanti TTL — coerenti con §B1 brief.
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15min
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7d
+
+type AuditAction =
+  | 'auth.login.success'
+  | 'auth.login.failure'
+  | 'auth.logout'
+  | 'auth.refresh.success'
+  | 'auth.theft_detected';
 
 @Injectable()
 export class AuthService {
@@ -51,20 +61,26 @@ export class AuthService {
     // Single exception per email-non-trovata + password-errata + utente-disabilitato:
     // no info leak su esistenza account, no enumeration attack.
     if (!user || !user.isActive) {
-      await this.recordAuditLogin(
+      await this.recordAudit({
         tenantId,
-        user?.id,
+        userId: user?.id,
+        action: 'auth.login.failure',
         meta,
-        'failure',
-        'user_not_found_or_inactive',
-      );
+        payload: { reason: 'user_not_found_or_inactive' },
+      });
       throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
     }
 
     const ok = await argon2.verify(user.passwordHash, password);
     if (!ok) {
       await this.users.incrementFailedAttempts(user.id);
-      await this.recordAuditLogin(tenantId, user.id, meta, 'failure', 'wrong_password');
+      await this.recordAudit({
+        tenantId,
+        userId: user.id,
+        action: 'auth.login.failure',
+        meta,
+        payload: { reason: 'wrong_password' },
+      });
       throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
     }
 
@@ -73,11 +89,17 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------------
-  // REFRESH — rotation: invalida session corrente, crea nuova
+  // REFRESH — rotation + THEFT DETECTION FULL
   // ---------------------------------------------------------------------------
-  // Theft detection BASE (D2a): se il refresh token non corrisponde a una
-  // session attiva, ritorna 401. La detection FULL (revoke all sessions on
-  // rotated-token reuse) e' rimandata a D2-vitest (vedi ADR-0008).
+  // Decision tree:
+  //   1. Verify JWT signature/expiry/type. Fail -> 401.
+  //   2. Lookup session by payload.sessionId.
+  //      a. Session absent (DB pulito?) -> 401 generic.
+  //      b. Session ACTIVE + hash matches -> rotate (D2a flow).
+  //      c. Session NOT ACTIVE + hash matches -> THEFT! Revoke all user
+  //         sessions + audit + 401 E_AUTH_THEFT_DETECTED.
+  //      d. Session ACTIVE/NOT ACTIVE + hash mismatch -> 401 generic (forged token).
+  //      e. Session expired / userId mismatch -> 401 generic.
   async refresh(
     refreshToken: string,
     meta: { ip?: string; userAgent?: string },
@@ -97,28 +119,68 @@ export class AuthService {
       where: { id: payload.sessionId },
     });
 
-    if (
-      !session ||
-      !session.isActive ||
-      session.expiresAt < new Date() ||
-      session.userId !== payload.sub
-    ) {
+    if (!session || session.userId !== payload.sub || session.expiresAt < new Date()) {
       throw new UnauthorizedException('E_AUTH_INVALID_REFRESH_TOKEN');
     }
 
-    // Verify che il token corrisponda effettivamente all'hash della session
-    const matches = await argon2.verify(session.refreshTokenHash, refreshToken);
-    if (!matches) {
+    const hashMatches = await argon2.verify(session.refreshTokenHash, refreshToken);
+    if (!hashMatches) {
+      // Token forged (hash mismatch). Niente theft trigger: il token non
+      // proviene da una nostra emissione precedente per questa session.
       throw new UnauthorizedException('E_AUTH_INVALID_REFRESH_TOKEN');
     }
 
-    // Rotation: disattiva session corrente + crea nuova (transactional)
+    // ─── THEFT DETECTION ─────────────────────────────────────────────────────
+    // Session already rotated (is_active=false) + token corrisponde al hash
+    // storico. Significa: qualcuno (legittimo o attaccante) sta riusando
+    // un token GIA' ruotato. Defense in depth: revoca tutto.
+    if (!session.isActive) {
+      const revoked = await this.db.prisma.session.updateMany({
+        where: { userId: session.userId, isActive: true },
+        data: { isActive: false },
+      });
+      await this.recordAudit({
+        tenantId: payload.tenantId,
+        userId: session.userId,
+        action: 'auth.theft_detected',
+        meta,
+        payload: {
+          revokedSessionCount: revoked.count,
+          suspectedSessionId: session.id,
+          attackerIp: meta.ip ?? null,
+          attackerUserAgent: meta.userAgent ?? null,
+        },
+      });
+      this.logger.warn(
+        `Theft detected on user=${session.userId} session=${session.id} revoked=${revoked.count}`,
+      );
+      throw new UnauthorizedException('E_AUTH_THEFT_DETECTED');
+    }
+
+    // Rotation normale (D2a flow): disattiva session corrente + crea nuova.
     await this.db.prisma.session.update({
       where: { id: session.id },
       data: { isActive: false },
     });
 
-    return this.issueTokensAndCreateSession(session.userId, payload.tenantId, meta, session.sedeId);
+    const tokens = await this.issueTokensAndCreateSession(
+      session.userId,
+      payload.tenantId,
+      meta,
+      session.sedeId,
+    );
+    // Override audit action: la create session ha gia' loggato 'auth.login.success'
+    // ma vogliamo distinguere refresh da login fresh per analytics.
+    // Soluzione semplice: log esplicito qui sopra (login.success comunque OK
+    // per auditability, ma aggiungiamo refresh-specific).
+    await this.recordAudit({
+      tenantId: payload.tenantId,
+      userId: session.userId,
+      action: 'auth.refresh.success',
+      meta,
+      payload: { previousSessionId: session.id },
+    });
+    return tokens;
   }
 
   // ---------------------------------------------------------------------------
@@ -129,7 +191,13 @@ export class AuthService {
       where: { id: sessionId },
       data: { isActive: false },
     });
-    await this.recordAuditLogin(tenantId, userId, {}, 'logout', 'user_initiated');
+    await this.recordAudit({
+      tenantId,
+      userId,
+      action: 'auth.logout',
+      meta: {},
+      payload: { sessionId },
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -179,37 +247,45 @@ export class AuthService {
       },
     });
 
-    await this.recordAuditLogin(tenantId, userId, meta, 'success', 'login_completed');
+    await this.recordAudit({
+      tenantId,
+      userId,
+      action: 'auth.login.success',
+      meta,
+      payload: { sessionId },
+    });
 
     return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS };
   }
 
-  private async recordAuditLogin(
-    tenantId: string,
-    userId: string | undefined,
-    meta: { ip?: string; userAgent?: string },
-    outcome: 'success' | 'failure' | 'logout',
-    reason: string,
-  ): Promise<void> {
+  /**
+   * Audit log best-effort. Pattern decisione 9 ADR-0008: il fallimento
+   * dell'audit log NON blocca l'auth (resiliency by design). Logga warning.
+   */
+  private async recordAudit(input: {
+    tenantId: string;
+    userId: string | undefined;
+    action: AuditAction;
+    meta: { ip?: string; userAgent?: string };
+    payload: Record<string, unknown>;
+  }): Promise<void> {
     try {
       await this.db.prisma.auditLog.create({
         data: {
           id: id(),
-          tenantId,
-          userId: userId ?? null,
-          action: `auth.${outcome === 'success' ? 'login.success' : outcome === 'logout' ? 'logout' : 'login.failure'}`,
+          tenantId: input.tenantId,
+          userId: input.userId ?? null,
+          action: input.action,
           entityType: 'User',
-          entityId: userId ?? null,
-          afterValue: { reason },
-          ip: meta.ip ?? null,
-          userAgent: meta.userAgent ?? null,
+          entityId: input.userId ?? null,
+          afterValue: input.payload as object,
+          ip: input.meta.ip ?? null,
+          userAgent: input.meta.userAgent ?? null,
         },
       });
     } catch (err) {
-      // Best effort: il fallimento dell'audit log non blocca l'auth (decisione 9
-      // ADR-0008). Logga ma non rilancia.
       this.logger.warn(
-        `Audit log failed for ${outcome}: ${err instanceof Error ? err.message : err}`,
+        `Audit log failed for ${input.action}: ${err instanceof Error ? err.message : err}`,
       );
     }
   }

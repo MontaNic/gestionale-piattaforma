@@ -168,6 +168,23 @@ Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HT
 
 Razionale scaffold + 4 course corrections empiriche (tsx fail su decorator metadata, swc detour 13min, packages/db CJS tech debt, enableShutdownHooks): [ADR-0007](./docs/architecture/ADR-0007-nestjs-api-scaffold.md).
 
+### Testing (Vitest)
+
+Vitest 3.2.4 con pattern `projects` array (Vitest 4-ready). Config in [`vitest.config.mts`](./vitest.config.mts) root + `apps/<workspace>/vitest.config.mts`.
+
+```bash
+# Tutti i test del monorepo (propaga via Turbo)
+pnpm test
+
+# Solo apps/api in watch mode
+pnpm --filter @gestionale/api test:watch
+
+# Coverage v8 (locale)
+pnpm --filter @gestionale/api test:coverage
+```
+
+Pattern test attuale (D2-vitest): instanziazione manuale dei service NestJS con mock providers via `vi.fn()` (bypass DI container, vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md) sezione "D2-vitest implementation"). E2E test (full Nest bootstrap + Testcontainers) in macro-task futuro.
+
 Comandi disponibili oggi (root):
 
 ```bash
@@ -175,7 +192,7 @@ pnpm lint          # ESLint su tutto il repo (eslint .)
 pnpm typecheck     # turbo run typecheck → propaga ai workspace (@gestionale/db, @gestionale/api)
 pnpm format:check  # Prettier --check (CI lo verifica)
 pnpm format:write  # Prettier --write per allineare il repo
-pnpm test          # placeholder finché non ci sono test (echo + exit 0)
+pnpm test          # turbo run test → propaga ai workspace con spec files
 pnpm dev           # turbo run dev (attivo quando un workspace ha script `dev`)
 pnpm build         # turbo run build (per produzione futura)
 ```

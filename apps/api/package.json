@@ -9,7 +9,9 @@
     "start:prod": "dotenv -e ../../.env -- node dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "echo \"no tests yet\" && exit 0"
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
     "@gestionale/db": "workspace:*",
@@ -29,12 +31,14 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.1.19",
     "@types/express": "^5.0.0",
     "@types/node": "^20.17.0",
     "@types/passport-jwt": "^4.0.1",
     "dotenv-cli": "^11.0.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
   }
 }
