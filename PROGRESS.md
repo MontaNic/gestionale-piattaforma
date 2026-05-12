@@ -4,8 +4,8 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (notte)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + **D2a Auth module (email/password + JWT + refresh rotation + /me)** attivi. `apps/api` con 6 endpoint funzionanti (root, /health, /auth/login, /auth/refresh, /auth/logout, /me). Admin demo seedato (admin@demo.local / Admin123! / tenant 'demo'). Smoke E2E 10/10 verdi. Prossimo macro-task: **D2-vitest** (Vitest baseline + 3 test essential + theft detection full) o **D2b** (PIN POS).
+**Ultimo aggiornamento:** 13 maggio 2026 (notte tardi)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + **D2-vitest (Vitest 3.2.4 baseline + 4 test essential + theft detection FULL)** attivi. 6 endpoint funzionanti, 4 test verdi, theft detection E2E verificato (revoke all + audit forense). Prossimo macro-task: **D2b PIN POS** (pin-setup + login-pin + uniqueness applicativa + 2 test PIN).
 
 ---
 
@@ -545,6 +545,56 @@ Backend auth funzionante end-to-end. Scope ridotto rispetto al D2 monolitico per
 - **2026-05-13**: Seed dev data opt-out (`NODE_ENV !== 'production'`) — convenience by default, safety via env explicit in prod
 - **2026-05-13**: Theft detection BASE in D2a (vecchio refresh → 401). Detection FULL (revoke all su token rotato re-used) rimandata a D2-vitest
 
+### D2-vitest — Vitest baseline + theft detection FULL (2026-05-13 notte tardi)
+
+Setup framework test del monorepo + chiusura decisione 10 di ADR-0008 (Vitest rimandato).
+
+**Vitest setup:**
+
+- [x] **Vitest 3.2.4** (downgrade da 4.1.6 — bug native binding rolldown irrisolto da pnpm)
+- [x] **`projects` array** in `vitest.config.mts` root (API Vitest 4-ready, no `workspace` field deprecato)
+- [x] **`.mts` extension** per config (Vite 7 ESM-only, apps/api CJS preserved)
+- [x] **`apps/api/test/setup.ts`** placeholder per future global mocks
+- [x] **`--passWithNoTests`** su script `test`/`test:coverage` (workspace senza spec non rompono)
+- [x] **`turbo.json` task test**: rimosso `dependsOn: ["^build"]` (test indipendenti)
+- [x] **Root script** `test`: da placeholder a `turbo run test`
+
+**Theft detection FULL (`AuthService.refresh`):**
+
+- [x] Decision tree 5 scenari: JWT invalid / session absent / hash mismatch / session active + hash match (rotation) / session NOT active + hash match (**THEFT**)
+- [x] Theft action: `updateMany` revoke all user sessions con `isActive: true` + audit `auth.theft_detected` con payload forense `{revokedSessionCount, suspectedSessionId, attackerIp, attackerUserAgent}` + throw `E_AUTH_THEFT_DETECTED`
+- [x] Audit actions enum espanso: `auth.{login.success, login.failure, logout, refresh.success, theft_detected}`
+- [x] Logger warn esplicito su theft detection (alert-friendly)
+
+**4 test essential (`apps/api/src/auth/auth.service.spec.ts`):**
+
+| # | Test | Esito |
+|---|---|---|
+| 1 | login success → JWT pair + session + audit `auth.login.success` | ✅ |
+| 2 | login wrong password → throws + `failed_login_attempts++` + audit `auth.login.failure` reason `wrong_password` | ✅ |
+| 3 | login user not found → throws E_AUTH_INVALID_CREDENTIALS (no info leak) + audit reason `user_not_found_or_inactive` | ✅ |
+| 4 | refresh con rotated token → `updateMany({userId, isActive: true})` revoke all + audit `auth.theft_detected` con payload forense completo + throws E_AUTH_THEFT_DETECTED | ✅ |
+
+Run: `pnpm test` → 4 passed (8ms), 380ms total setup.
+
+**E2E smoke verifica empirica** (2026-05-13 00:41 UTC):
+
+1. Login → refresh_A
+2. refresh(refresh_A) → refresh_B (rotation, vecchia session `is_active=false`)
+3. refresh(refresh_A) re-use → **HTTP 401 E_AUTH_THEFT_DETECTED**
+4. `SELECT COUNT(*) FROM sessions WHERE user_id=admin AND is_active=true` → **0** (entrambe revocate)
+5. `SELECT * FROM audit_logs WHERE action='auth.theft_detected'` → 1 row con `afterValue = {attackerIp, attackerUserAgent, suspectedSessionId, revokedSessionCount: 1}` ✅
+
+### Decisioni prese durante D2-vitest (2026-05-13 notte tardi)
+
+- **2026-05-13**: Vitest 3.2.4 (no 4.x) — bug rolldown native binding pnpm. Stabile, Vite 7-compatible
+- **2026-05-13**: `.mts` extension per config Vitest — necessario per Vite 7 ESM-only senza toccare CJS apps/api
+- **2026-05-13**: **Bypass DI container** nei test — instanziazione manuale `new AuthService(mockDb, mockUsers, mockJwt)`. Motivo: esbuild Vitest non emette `emitDecoratorMetadata` (stesso problema D1 con tsx). Trade-off accettato: test business logic isolata vs DI tree validation. E2E test (full bootstrap) in macro-task futuro
+- **2026-05-13**: Mock argon2 + @gestionale/db module-level via `vi.mock()`. Determinismo + zero CPU cost del KDF reale
+- **2026-05-13**: Theft action = revoke ALL + audit forense (no email notify F1). Defense in depth: anche legittimo costretto re-login. Email notification in macro-task "Auth E2E hardening" insieme rate limiting
+- **2026-05-13**: Turbo task `test`: rimosso `dependsOn: ["^build"]` (test indipendenti, parallelismo dev locale, cache cleanliness)
+- **2026-05-13**: Audit log `auth.refresh.success` aggiunto come action distinta da `auth.login.success` (analytics tracking, joint via `previousSessionId` in afterValue)
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -553,10 +603,10 @@ Backend auth funzionante end-to-end. Scope ridotto rispetto al D2 monolitico per
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **D2-vitest** (raccomandato come next) — Vitest baseline (~1.5h): `vitest.config.ts` root + apps/api/, 3 test essential su `AuthService` con mock DbService (login OK, wrong password, tenant invalid) + **theft detection FULL**: refresh token già rotato → REVOKE ALL sessions dello user (in `AuthService.refresh`, ~30 min extra). Tracciato in ADR-0008.
-2. **D2b PIN POS** (~1.5h) — `POST /auth/pin-setup` (protected) + `POST /auth/login-pin` (Public, header tenant + device) + verifica uniqueness PIN applicativa (argon2.verify loop su usersWithPin del tenant) + 2 test PIN. Tracciato in ADR-0008.
-3. **D3 Middleware tenant context + RLS reali** — middleware NestJS che fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
-4. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+1. **D2b PIN POS** (~1.5h) — `POST /auth/pin-setup` (protected) + `POST /auth/login-pin` (Public, header tenant + device) + verifica uniqueness PIN applicativa (argon2.verify loop su usersWithPin del tenant) + 2 test PIN. Tracciato in ADR-0008.
+2. **D3 Middleware tenant context + RLS reali** — middleware NestJS che fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
+3. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+4. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, E2E test (full Nest bootstrap + Testcontainers).
 5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
 6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
@@ -603,7 +653,7 @@ Tracking accentrato delle 2 course corrections più rilevanti. Dettagli in [ADR-
 - [ ] **Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005) — sub-task del precedente
 - [ ] **Bootstrap tenant logic**: clone `system_role_templates` (`isDefault: true`) → `roles` con `tenant_id` reale + copia mapping `system_role_template_permissions` → `role_permissions`
 - [x] ~~**Auth backend NestJS — email/password + JWT + refresh rotation + /me**~~ — completato 2026-05-13 notte (D2a, ADR-0008). 6 endpoint, smoke 10/10 verdi, admin@demo.local seedato
-- [ ] **D2-vitest**: primo Vitest setup + 3 test AuthService + theft detection FULL (revoke all su token rotato re-used)
+- [x] ~~**D2-vitest: Vitest 3 baseline + 4 test AuthService + theft detection FULL**~~ — completato 2026-05-13 notte tardi (E2E theft verificato: revoke all + audit forense)
 - [ ] **D2b PIN POS**: `/auth/pin-setup` + `/auth/login-pin` + uniqueness applicativa + 2 test PIN
 - [ ] Valutare RLS su `role_permissions` con `EXISTS` join (defense-in-depth, vedi ADR-0005 follow-up)
 - [ ] UI shell Next.js (layout, theme, i18n setup IT primary + EN secondary)

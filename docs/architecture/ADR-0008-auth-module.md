@@ -223,3 +223,98 @@ Pattern security-by-default: dimenticare `@Auth()` su un endpoint nuovo = endpoi
 - Schema `sessions` gia' completo da Macro-task A: `device_id`, `device_type` enum (web/pos_tablet/pos_desktop/mobile), `refresh_token_hash` (argon2id), `expires_at`, `is_active`, `last_seen_at`. D2a usa `device_type: 'web'` (user-agent come `device_id`). D2b distinguera' `pos_tablet`/`pos_desktop` per PIN login.
 - ESLint root config aveva gia' override scoped per `apps/api/**/*.ts` da ADR-0007. Niente modifiche in D2a.
 - `TenantMiddleware` registrato in `app.module.ts` con `RequestMethod.POST` esplicito su `/auth/login`. Endpoint futuri pre-auth (es. `/auth/login-pin`, `/auth/password-reset`) si aggiungeranno alla lista.
+
+## D2-vitest implementation (2026-05-13 update)
+
+Estensione D2-vitest: Vitest baseline + theft detection FULL + 4 test essential su `AuthService`. Decisione 10 dell'ADR originale (Vitest setup rimandato) viene chiusa qui.
+
+### Vitest setup
+
+- **Vitest 3.2.4** (downgrade da 4.1.6 — bug noto `rolldown@1.0.0` native binding non risolto da pnpm)
+- **Pattern `projects` array** in root `vitest.config.mts` (Vitest 4-ready API moderna, niente `workspace` field deprecato)
+- **`.mts` extension** per i config Vitest: `vitest.config.mts` root + `apps/api/vitest.config.mts`. Vite 7 richiede ESM-only e `apps/api` ha CJS package.json, `.mts` forza loading ESM senza toccare il `type` del package
+- **`apps/api/test/setup.ts`** placeholder (vuoto) per future global mocks/fixtures
+- **`--passWithNoTests`** flag sugli script `test`/`test:coverage`: workspace senza spec files non rompono CI (utile per `packages/db` finche' non ha test)
+- **Turbo task `test`**: rimosso `dependsOn: ["^build"]` (decisione E nel piano D2-vitest). Test indipendenti, no upstream build dependency. `outputs: ["coverage/**"]` mantenuto per cache coverage future
+- **Root script `test`** da `echo no tests yet && exit 0` a `turbo run test` (propaga ai workspace come `typecheck`/`lint`)
+
+### Mock strategy (decisione D nel piano D2-vitest)
+
+**Bypass del DI container NestJS** per i test: `AuthService` instanziato manualmente con `new AuthService(mockDb, mockUsers, mockJwt)`. Motivo: Vitest+esbuild non emette `emitDecoratorMetadata` (stesso problema scoperto in D1 con tsx, vedi ADR-0007 sezione "course corrections"). `Test.createTestingModule().compile()` fallisce risoluzione DI senza metadata reflection.
+
+Approccio:
+
+- `vi.mock('argon2', ...)` module-level: `verify` configurabile per test, `hash` ritorna stub deterministico (evita CPU cost del KDF reale durante test)
+- `vi.mock('@gestionale/db', ...)` module-level: stubs di `id()`, `prisma`, `uuidv7`, `createPrismaClient` (alcuni non-chiamati ma richiesti per non rompere import statici)
+- **Mock providers per-test** via `vi.fn()`: `users` (con findByTenantEmail/incrementFailedAttempts/recordSuccessfulLogin), `prisma` (session.{create,findUnique,update,updateMany}, auditLog.create), `jwt` (signAsync/verifyAsync)
+- **Cast `as unknown as DbService` / `UsersService` / `JwtService`**: type-safe abbastanza per testing, evita istanziazione classi reali
+
+Trade-off vs Test.createTestingModule(): perdiamo testing del DI tree (es. moduleInit ordering), guadagniamo velocita' + zero setup compiler. Per business logic test e' la scelta giusta. E2E test (futuro macro-task) useranno full Nest bootstrap.
+
+### Theft detection FULL (Decision C/D nel piano D2-vitest)
+
+`AuthService.refresh()` ora distingue 5 scenari nel decision tree:
+
+1. **JWT signature/expiry invalid** → 401 generic
+2. **Session absent / userId mismatch / expired** → 401 generic
+3. **Hash mismatch** (token forged) → 401 generic
+4. **Session ACTIVE + hash matches** → rotation D2a flow (vecchia `is_active=false`, nuova creata, audit `auth.refresh.success`)
+5. **Session NOT ACTIVE + hash matches** → **THEFT TRIGGER**:
+   - `updateMany` su tutte le user sessions con `isActive: true` → tutte revocate
+   - `auditLog.create` con `action: 'auth.theft_detected'` + payload forense: `{revokedSessionCount, suspectedSessionId, attackerIp, attackerUserAgent}`
+   - `throw UnauthorizedException('E_AUTH_THEFT_DETECTED')`
+
+**Verifica empirica E2E** (2026-05-13 00:41 UTC):
+
+```
+1. login → refresh_A
+2. refresh(refresh_A) → refresh_B (rotation OK)
+3. refresh(refresh_A) re-use → 401 E_AUTH_THEFT_DETECTED
+4. SELECT * FROM sessions WHERE user_id = admin AND is_active = true → 0 rows
+5. SELECT * FROM audit_logs WHERE action = 'auth.theft_detected' → 1 row
+   afterValue = {
+     "attackerIp": "::ffff:127.0.0.1",
+     "attackerUserAgent": "curl/7.81.0",
+     "suspectedSessionId": "019e1e59-...",
+     "revokedSessionCount": 1
+   }
+```
+
+### Audit log enum espanso
+
+`AuditAction` type union ora include 5 actions:
+
+- `auth.login.success` — issueTokensAndCreateSession (incluso anche post-refresh, ma con seguente)
+- `auth.login.failure` — wrong password / user not found / inactive (reason discriminante in afterValue)
+- `auth.logout` — explicit logout endpoint
+- `auth.refresh.success` — successful rotation (con `previousSessionId` in afterValue per join tracking)
+- `auth.theft_detected` — refresh token reuse rilevato (payload forense completo)
+
+### 4 test essential (apps/api/src/auth/auth.service.spec.ts)
+
+| #   | Test                                                                                               | Cosa copre                                                                                                                                                                                                                                         |
+| --- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `login success: returns JWT pair + creates session + records audit`                                | Happy path: argon2.verify OK, session.create chiamato, auditLog `auth.login.success`, recordSuccessfulLogin chiamato, incrementFailedAttempts NON chiamato                                                                                         |
+| 2   | `login wrong password: throws + increments failed_login_attempts`                                  | argon2.verify false → throws UnauthorizedException, incrementFailedAttempts chiamato, session.create NON chiamato, audit `auth.login.failure` con `reason: 'wrong_password'`                                                                       |
+| 3   | `login user not found: throws E_AUTH_INVALID_CREDENTIALS (no info leak)`                           | findByTenantEmail null → throws con stesso messaggio di test 2 (no enumeration), incrementFailedAttempts NON chiamato (no user da incrementare), audit con `reason: 'user_not_found_or_inactive'`                                                  |
+| 4   | `refresh with rotated token: triggers theft detection, revokes all user sessions, audit forensics` | session.findUnique ritorna session con `isActive: false` + hash match → updateMany chiamato con `{userId, isActive: true}` + audit `auth.theft_detected` con payload forense completo + throws E_AUTH_THEFT_DETECTED + session.create NON chiamato |
+
+Tempo run: ~8ms (4 tests). Setup totale ~380ms (transform/collect/prepare).
+
+### Considered Alternatives (D2-vitest update)
+
+| Decisione             | Alternativa                               | Esito              | Razionale                                                           |
+| --------------------- | ----------------------------------------- | ------------------ | ------------------------------------------------------------------- |
+| Vitest version        | 4.1.6 (latest)                            | Rejected           | Bug rolldown native binding non risolto da pnpm                     |
+| Config file extension | `.ts` con package type:module su apps/api | Rejected           | Romperebbe NestJS CJS interop                                       |
+| DI testing            | Test.createTestingModule                  | Rejected (per ora) | esbuild no emit metadata, stesso problema D1 tsx                    |
+| DI testing            | swc-node + unplugin-swc Vite              | Rejected (per ora) | Setup overhead non giustificato per 4 test                          |
+| Mock argon2           | argon2 reale + clean DB                   | Rejected           | CPU cost KDF reale rallenta test (~100ms/verify)                    |
+| Theft action          | Solo audit, no revoke                     | Rejected           | Defense in depth: il legittimo user deve re-login, attacco rilevato |
+| Theft action          | Revoke + force email notification         | Rejected (per ora) | Email service ancora non setupato; F1+                              |
+
+### Notes (D2-vitest)
+
+- Coverage non misurato in CI (script `test:coverage` disponibile localmente). Tracciato come follow-up: aggiungere step CI `pnpm test:coverage` quando ci saranno piu' di 10 test e vorremo soglia minima
+- E2E test (vero Nest bootstrap, DB reale via Testcontainers o postgres dev) RIMANDATI a macro-task dedicato "Auth E2E hardening" insieme a rate limiting + theft detection enhancement (email notify)
+- Le 5 azioni audit (`auth.*`) sono il primo enum strutturato di azioni. Quando arriveranno B/B/B... modules domain (comande, cassa, ecc.), valuteremo un registro centralizzato `audit-actions.ts` per coerenza
