@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (mattina)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + **E1 Next.js scaffold + dual package strategy** completi. **10 endpoint operativi** API a `:3000` + **scaffold web a `:3001`** (Next 15 + React 18.3 + Tailwind 3.4 + shadcn/ui), **8 test Vitest verdi** + RLS attivo + enforced runtime + smoke RLS E2E 7/7 PASS + gate Fase 6 6/6 PASS. `packages/db` ora dual package (CJS+ESM+DTS) generato da `tsup`, consumer trasparente per apps/api (CJS) e apps/web (ESM).
+**Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + **E2 Login form UI + integrazione API** completi. **Primo login browser funzionante**: `http://localhost:3001/login` → admin@demo.local + Admin123! → `/dashboard` con Welcome Admin Demo + 32 permessi (smoke 9/9 PASS, screenshot verificato). **12 endpoint operativi** API a `:3000` (inclusi CORS abilitato + logout già esistente) + frontend `:3001` con `/login` + `/dashboard` + `/` redirect, **8 test Vitest verdi** + RLS attivo + smoke RLS E2E 7/7 PASS.
 
-> ✅ **RLS Active + Tenant bootstrap + Next.js scaffold operativo.** D3a + D3b + D4 + **E1** completi. Cross-tenant lookup bloccato a livello DB anche con UUID esatto, app role NOSUPERUSER + FORCE RLS su 7 tabelle, endpoint POST /tenants atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui via dual package exports**. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + **[ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold)**. Prossimo macro-task candidato: **E2 Login form UI + integrazione API**.
+> ✅ **Primo login browser end-to-end funzionante.** E1 + **E2** completi. Form login `/login` (react-hook-form + zod + shadcn Form) → POST `/auth/login` → localStorage JWT → `/dashboard` GET `/me` → render Welcome + 32 permessi + logout. Backend CORS abilitato (discovery E2 F3 critical), session JWT 15min + refresh 7d con rotation invariati. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + **[ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2)**. Prossimo macro-task candidato: **da concordare nella prossima sessione**.
 
 ---
 
@@ -742,18 +742,51 @@ Primo macro-task frontend. Trigger di CC2 ADR-0007 (CJS/ESM strategy) ora risolt
 
 ---
 
+### E2 — Login form UI + integrazione API (Macro-task E2, 2026-05-13 mattina-pomeriggio)
+
+Primo flow end-to-end frontend↔API via browser. Form login `/login` (react-hook-form + zod + shadcn Form/Input/Card/Alert) → POST `/auth/login` con `X-Tenant-Slug: demo` → localStorage JWT → `/dashboard` GET `/me` → render Welcome `<firstName>` `<lastName>` + 32 permessi badge + logout. Auto-redirect `/` → `/login` o `/dashboard` basato su auth state. Bug fix collaterale **CORS missing backend (F3 critical)**: primo client browser-based ha esposto gap latente.
+
+- [x] **Pre-flight**: branch `feature/login-flow-e2`, baseline 8/8 Vitest + 7/7 smoke RLS, admin@demo.local login + /me verificato via curl reale (shape MeResponse empirica)
+- [x] **Fase 1 — shadcn install**: `printf "N\n" | pnpm dlx shadcn@latest add form input label card alert` (preserve button.tsx E1). Deps installate: `react-hook-form@7.75`, `@hookform/resolvers@5.2`, `zod@4.4`, `@radix-ui/react-label@2.1.8`. **Pollution check verde**: no T4 (no oklch/@base-ui/tw-animate-css), React resta 18.3.1. Pattern senior: `shadcn add` (E2) rispetta `components.json` ≠ `shadcn init` (E1) pollution
+- [x] **Fase 2 — API client + auth lib + types**: 3 file `apps/web/src/lib/`: `api.ts` (`ApiError` class + `apiPost<T>` + `apiGet<T>` con DRY `parseError`), `auth.ts` (4 token functions con SSR guards), `types.ts` (`LoginResponse` + `MeUser` + `MeRole` + `MeResponse` shape verificata empiricamente via curl `/me` reale). `.env.local.example` committato + `.env.local` gitignored (riga 33 root)
+- [x] **Fase 3 — Login page**: `apps/web/src/app/login/page.tsx` 128 LOC con `'use client'` + RHF + zodResolver + shadcn Form components. Zod schema email + min(8) password con messaggi IT. Submit try/catch ApiError → discriminate `E_AUTH_INVALID_CREDENTIALS` → "Email o password non corrette". autoComplete hints email/current-password
+- [x] **Fase 4 — Dashboard + root redirect**: `apps/web/src/app/dashboard/page.tsx` 113 LOC (useEffect fetch /me + handle 401 → clearTokens + redirect, loading state, error state, Card Welcome + roles list + permessi flex-wrap badges + logout button). `apps/web/src/app/page.tsx` REPLACE (Server Component E1 → client-side redirect via `isAuthenticated()` + `router.replace`)
+- [x] **Fase 5 — Gate critico**: 4/4 curl endpoint (health 200 + /login 200 + /dashboard 200 + / 200), typecheck FULL TURBO 4/4, lint clean (post fix F2 import type), Vitest 8/8 cached, smoke RLS 7/7. **9/9 smoke browser PASS** (Nicolò Mac manual, screenshot Welcome Admin Demo verificato)
+- [x] **Fase 5 fix in-fase F3 ⭐ CRITICAL — CORS missing backend**: discovery dal browser console "Access to fetch blocked by CORS policy". Root cause: D2a-D4 testati SOLO via curl (no Origin enforcement), E2 primo browser-based caller espone gap. Fix: 5 LOC funzionali in `apps/api/src/main.ts` (`app.enableCors({origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001', credentials: true})`) + `.env.example` sezione CORS. ts-node-dev hot-reload PID 770893 → 781095. Curl OPTIONS preflight verificato: 4 header CORS attesi presenti
+- [x] **Fase 6 — Docs**: [ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md) (status, context, 6 decisions, 4 discoveries E2, 9 considered alternatives, 6 reversibility scenarios, 6 tech debt TD-1→TD-6, security pro/contro). README Stack table + sezione "Login flow (E2)" + paragrafo CORS. PROGRESS questa sezione
+
+#### Discoveries E2 (4 finding, tutti tracked in ADR-0012)
+
+- **F1 — Limitazione testing Claude Code remoto** (STOP 3): server SSH Hetzner no Chromium/Playwright. Validation client-side React richiede browser headless o manual test Nicolò. Server-side render verificabile via curl (HTTP 200 + token HTML), bundle compile verde, ma 4 test validation client-side delegati a Nicolò. Tracked TD-4: setup Playwright per E2E CI
+- **F2 — shadcn CLI output non passa monorepo lint strict** (STOP 5): `apps/web/src/components/ui/form.tsx` generato con `import * as LabelPrimitive` ma usato solo type position. Violava `@typescript-eslint/consistent-type-imports` root config. Fix 1 carattere: `import type * as LabelPrimitive`. Lesson: file generated-by-tool validati dal gate lint. Tracked TD-5: verify lint immediato post-`shadcn add`
+- **F3 ⭐ CRITICAL — CORS missing in NestJS backend** (Fase 5): browser fetch blocked by CORS policy, root cause backend NestJS never enabled CORS. Causa latency: D2a/D2b/D3a/D3b/D4 endpoint testati SOLO via curl (no Origin enforcement). E2 primo browser-based caller espone gap. Fix in `apps/api/src/main.ts` 5 LOC (`app.enableCors({origin: env.CORS_ORIGIN ?? 'http://localhost:3001', credentials: true})`) + env var CORS_ORIGIN + credentials:true preparato httpOnly cookie migration. Verifica empirica curl OPTIONS preflight: Allow-Origin + Allow-Credentials + Allow-Methods + Allow-Headers tutti presenti. **Lesson generalizzabile**: ogni nuovo "tipo di client" (browser, mobile, third-party SDK) può rivelare gap latenti del backend invisibili dal client precedente
+- **F4 — Cross-platform browser shortcuts** (smoke test 8): Nicolò usa Mac → `Cmd+R` per refresh (NON `F5` come scritto inizialmente nei test). Memo documentation: futuri test browser includere shortcut Mac/Windows/Linux distinti
+
+#### Decisioni prese durante E2 (2026-05-13 mattina-pomeriggio)
+
+- **2026-05-13**: **JWT storage localStorage (NO httpOnly cookie)**: pragmatic over secure per progetto NOT-production. ~1.5h risparmiate vs setup cookie middleware + CSRF. Anti-pattern XSS surface accettato, tracked TD-1
+- **2026-05-13**: **react-hook-form + zod (vs formik/yup vs manual useState)**: shadcn Form richiede RHF peer dep, zod type-safe + `z.infer<>` automatic. Versioni installate più recenti del prompt (zod 4 vs 3, resolvers 5 vs 3) ma API pattern invariata
+- **2026-05-13**: **TENANT_SLUG = 'demo' hardcoded**: single-tenant flow E2 scope-contained. Subdomain/path routing tracked TD-2. Comment esplicito sul const top-level
+- **2026-05-13**: **Pages structure 3-route + client-side redirect /**: `/` (page.tsx replace E1 con redirect), `/login`, `/dashboard`. Server Component inadatto per `/` (serve localStorage check). `router.replace` (NON `push`) → no history pollution su redirect e logout
+- **2026-05-13**: **No auto-refresh token**: access token 15min, user re-login forzato post-scadenza. Trade-off UX accettato E2, pattern logout naturale. Tracked TD-3
+- **2026-05-13**: **shadcn CLI `add` (vs E1 `init` manual scaffold)**: `add` rispetta `components.json` esistente (zero pollution). `printf "N\n"` per preservare `button.tsx` E1 quando `form` dipendenza chiede overwrite. Pattern senior consolidato
+
+---
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: da concordare nella prossima sessione.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **E2 Login form UI + integrazione API** — `apps/web/src/app/login/page.tsx` con form email/password (shadcn Form + Input + Label), POST a `/api/v1/auth/login` con `X-Tenant-Slug: demo`, storage refresh in httpOnly cookie (vs localStorage trade-off), redirect post-login a una placeholder dashboard. Primo flow end-to-end frontend↔API.
-2. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo, email notification theft, rate limit `login-pin` + `POST /tenants`, E2E test (full Nest bootstrap + Testcontainers).
-3. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
-4. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
-5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo, email notification theft, rate limit `login-pin` + `POST /tenants`, E2E test (full Nest bootstrap + Testcontainers).
+2. **Logout server-side completo** (TD-6 ADR-0012) — `apps/web/src/app/dashboard/page.tsx#handleLogout` deve chiamare `POST /api/v1/auth/logout` PRIMA di clearTokens. Backend endpoint già esiste (D2a). Stima ~30 min.
+3. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Stima 1-2h.
+4. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
+5. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
+6. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+7. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+8. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -769,9 +802,9 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 - [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo) — la condizione "primo `docker compose up` funzionante" è ora soddisfatta (smoke test verdi il 2026-05-11 sera), quindi è il momento giusto. Operazione manuale di Nicolò (richiede password sudo). Comando: `sudo rm /etc/sudoers.d/deploy-setup` poi verifica `sudo -l` per confermare che NOPASSWD su apt/sysctl/systemctl non sia più presente.
 - [ ] ADR successivo (ADR-0005+) per strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
 
-### Tech debt esplicito (NestJS scaffold D1 + E1)
+### Tech debt esplicito (NestJS scaffold D1 + E1 + E2)
 
-Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/architecture/ADR-0007-nestjs-api-scaffold.md) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md).
+Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/architecture/ADR-0007-nestjs-api-scaffold.md) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) + [ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md).
 
 - [x] ~~**CC2 — CJS/ESM strategy re-evaluation**~~ — **RISOLTO 2026-05-13 (E1, ADR-0011)** via dual package strategy: `packages/db` torna ESM-native + `tsup` build step + `exports` conditional. apps/api consuma `dist/index.cjs` (zero modifiche), apps/web `dist/index.mjs`.
 - [ ] **CC1 — ts-node-dev → swc-node migration**: `ts-node-dev` v2.0.0 (~2022) è "stale repo". CC2 risolto ha abilitato in linea di principio anche la migration dev runner (con build step packages/db ora c'è). Re-evaluation differita, low priority finché ts-node-dev resta operativo. Workaround disponibili: loader Node `@swc-node/register` con nodemon, TS Project References (ADR-0006 opzione c). Monitor maintenance status ogni 6 mesi.
@@ -780,6 +813,12 @@ Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/archit
 - [ ] **TD-3 ADR-0011 — TypeScript 7.0 baseUrl deprecation**: carry-over da `tsconfig.base.json` (NON introdotto da E1). Trigger: bump TS a 7.0 (Q3 2026). Stima 30-45 min, migration meccanica a paths self-contained.
 - [ ] **TD-4 ADR-0011 — packages/db source-vs-dist asymmetry**: apps/api typecheck via src/, apps/web via dist/. Funziona oggi (2 consumer). Trigger: arrivo 3° workspace consumer (apps/kds probabile). Stima 30-60 min, decisione strategica "always-dist" vs "always-src".
 - [ ] **TD-5 ADR-0011 — shadcn manual scaffold update path**: 5 file shadcn scritti a mano in E1 (F4 discovery). Trigger: shadcn 5.x opt-out T3 flag OR breaking changes registry da prendere. Monitor CHANGELOG ogni 6 mesi.
+- [ ] **TD-1 ADR-0012 — Migration localStorage → httpOnly cookie**: JWT in localStorage XSS surface. Trigger: ANY production deployment OR introduction sensitive features (financial transactions, multi-user concurrent). Stima ~1.5h (backend cookie middleware + CSRF endpoint + frontend `credentials: 'include'`). `credentials: true` già in CORS config (E2 ready).
+- [ ] **TD-2 ADR-0012 — Multi-tenant tenant slug resolution**: oggi `TENANT_SLUG = 'demo'` hardcoded in `LoginPage`. Trigger: 2° tenant deve loggarsi via browser. Stima 1-2h. Opzioni: subdomain (`demo.gestionale.local`) OR path (`/t/demo/login`) OR query param.
+- [ ] **TD-3 ADR-0012 — Auto-refresh token prima scadenza**: access token 15min, user re-login forzato. Trigger: feedback UX "sessione scade durante uso". Stima ~1h. Pattern setInterval 14min + refresh in background + edge case tab inactive + multi-tab sync.
+- [ ] **TD-4 ADR-0012 — Setup Playwright E2E frontend CI**: oggi smoke browser manual Nicolò (no regression visiva auto-caught). Trigger: prima regression visiva non catturata da test unit OR 2° pagina critical. Stima 3-4h (Playwright + 5-10 test E2E + GitHub Actions).
+- [ ] **TD-5 ADR-0012 — shadcn CLI output cleanup pattern**: `shadcn add` può generare file che violano lint rules monorepo (E2 F2: 1 char `import type`). Trigger: ogni nuovo component. Stima 5-10 min per component. Memo CHANGELOG monitor.
+- [ ] **TD-6 ADR-0012 (backend) — Logout server-side via /auth/logout**: oggi `handleLogout` fa solo `clearTokens()` local. Session resta `is_active: true` in DB, token JWT continua a passare validate fino expiry. Trigger: security audit OR multi-device session management. Stima ~30 min (frontend apiPost + clearTokens always-executed + handle error gracefully). Backend endpoint già esiste.
 
 ### Qualità codice / processo (post Husky setup + typecheck monorepo)
 - [x] ~~**Strategia typecheck monorepo**~~ — RISOLTO 2026-05-13 (Macro-task C, ADR-0006). `pnpm typecheck` ora propaga via Turbo a tutti i workspace, CI valida `packages/db` e futuri.

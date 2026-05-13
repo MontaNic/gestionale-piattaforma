@@ -14,6 +14,15 @@ import { AppModule } from './app.module';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
+  // CORS (E2 discovery F6): primo client browser-based richiede l'header
+  // Access-Control-Allow-Origin. Origin SPECIFIC (no wildcard) via env per
+  // multi-env (dev/staging/prod). credentials:true preparato per futura
+  // migration localStorage -> httpOnly cookie (TD-1 ADR-0012).
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001',
+    credentials: true,
+  });
+
   // Versionamento URL (§C2 brief): tutti gli endpoint sotto /api/v1.
   // Health/root del macro-task D1 vengono auto-prefissati.
   app.setGlobalPrefix('api/v1');

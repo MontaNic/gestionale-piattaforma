@@ -15,21 +15,21 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione
 
 Vincolato dalla sezione A3 del brief.
 
-| Layer                   | Tecnologia                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| Frontend                | Next.js 15 (App Router) · React 18.3 · TypeScript · Tailwind 3.4 · shadcn/ui               |
-| Backend                 | NestJS · TypeScript · Prisma                                                               |
-| Database                | PostgreSQL 16+ (Row Level Security per multi-tenancy)                                      |
-| Cache / Queue / Pub-Sub | Redis 7+                                                                                   |
-| Real-time               | Socket.io                                                                                  |
-| Storage file            | MinIO                                                                                      |
-| Search                  | MeiliSearch                                                                                |
-| Reverse proxy           | Caddy (in container — vedi [ADR-0001](./docs/architecture/ADR-0001-caddy-as-container.md)) |
-| Container               | Docker · Docker Compose v2                                                                 |
-| Feature flags           | Unleash (self-hosted)                                                                      |
-| AI                      | Anthropic Claude API (via `packages/ai-tools`)                                             |
-| Testing                 | Vitest · Jest · Playwright                                                                 |
-| CI/CD                   | GitHub Actions                                                                             |
+| Layer                   | Tecnologia                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| Frontend                | Next.js 15 (App Router) · React 18.3 · TypeScript · Tailwind 3.4 · shadcn/ui · react-hook-form · zod |
+| Backend                 | NestJS · TypeScript · Prisma                                                                         |
+| Database                | PostgreSQL 16+ (Row Level Security per multi-tenancy)                                                |
+| Cache / Queue / Pub-Sub | Redis 7+                                                                                             |
+| Real-time               | Socket.io                                                                                            |
+| Storage file            | MinIO                                                                                                |
+| Search                  | MeiliSearch                                                                                          |
+| Reverse proxy           | Caddy (in container — vedi [ADR-0001](./docs/architecture/ADR-0001-caddy-as-container.md))           |
+| Container               | Docker · Docker Compose v2                                                                           |
+| Feature flags           | Unleash (self-hosted)                                                                                |
+| AI                      | Anthropic Claude API (via `packages/ai-tools`)                                                       |
+| Testing                 | Vitest · Jest · Playwright                                                                           |
+| CI/CD                   | GitHub Actions                                                                                       |
 
 ## Struttura monorepo
 
@@ -310,6 +310,8 @@ pnpm --filter @gestionale/db smoke:rls-e2e
 
 Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HTTP 503** (via `ServiceUnavailableException`) quando il DB è unreachable. Pattern production-ready per orchestrator (Kubernetes liveness/readiness, load balancer).
 
+**CORS** (E2 fix, [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md)): backend abilita CORS specifico via `CORS_ORIGIN` env var (default `http://localhost:3001`). Anti-pattern wildcard `*` evitato. `credentials: true` preparato per future httpOnly cookie migration (TD-1). Multi-origin futuro (es. apps/kds) tracciabile via array `[origin1, origin2]` o regex pattern.
+
 Razionale scaffold + 4 course corrections empiriche (tsx fail su decorator metadata, swc detour 13min, packages/db CJS tech debt, enableShutdownHooks): [ADR-0007](./docs/architecture/ADR-0007-nestjs-api-scaffold.md). **Update E1**: CC2 (packages/db CJS forzato) risolto via dual package strategy — vedi [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md).
 
 ### Frontend (`apps/web`)
@@ -327,9 +329,27 @@ pnpm --filter @gestionale/web build
 pnpm --filter @gestionale/web typecheck
 ```
 
-A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). E2 introdurrà il form di login + integrazione API.
+A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). **E2** ha sostituito la home con redirect client-side + introdotto `/login` + `/dashboard`.
 
 Stack version pinning + razionale (Tailwind 3.4 vs 4, React 18.3 vs 19, manual scaffold vs `create-next-app`): [ADR-0011 sezione Decisions](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md#decisions).
+
+#### Login flow (E2)
+
+Primo flow end-to-end frontend↔API via browser. Stack: App Router pages + `react-hook-form` + `zod` + shadcn `Form` components + localStorage JWT storage (pragmatic, tech debt esplicito).
+
+```bash
+# Avvia entrambi i dev server (2 terminali OR pnpm dev root)
+pnpm exec turbo run dev --filter=@gestionale/api    # → :3000
+pnpm exec turbo run dev --filter=@gestionale/web    # → :3001
+
+# Browser: http://localhost:3001 → /login automatico
+# Credenziali seedate: admin@demo.local / Admin123! (X-Tenant-Slug: demo hardcoded)
+# Post-login: /dashboard con Welcome <firstName> + 32 permessi badge + logout button
+```
+
+Pattern: 3 pages (`/login`, `/dashboard`, `/` redirect) + 3 lib (`api.ts` API client typed con `ApiError`, `auth.ts` token storage con SSR guards, `types.ts` matching empirico `/me` response). `router.replace` (NON `push`) per redirect — no history pollution. Error discrimination per `E_AUTH_INVALID_CREDENTIALS` → UX-friendly "Email o password non corrette".
+
+Razionale completo: [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) — 6 decisioni (localStorage vs cookie, RHF+zod, tenant slug hardcoded, pages structure, no auto-refresh, shadcn CLI add), 4 discoveries (testing limit Claude Code remoto, shadcn lint, **CORS missing backend ⭐**, cross-platform shortcuts), 6 tech debt (TD-1 → TD-6).
 
 **Entrypoint dev — anti-pattern noto**: `pnpm --filter @gestionale/web dev` **bypassa Turbo** (chiama lo script direttamente, salta `dependsOn`). Se `packages/db/dist/` non esiste fallisce con `Cannot find module`. Usa sempre uno di questi due:
 

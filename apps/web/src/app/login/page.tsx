@@ -1,0 +1,125 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { apiPost, ApiError } from '@/lib/api';
+import { setTokens } from '@/lib/auth';
+import type { LoginResponse } from '@/lib/types';
+
+// TODO: multi-tenant routing in future macro-task (subdomain/path detection)
+const TENANT_SLUG = 'demo';
+
+const loginSchema = z.object({
+  email: z.string().email('Email non valida'),
+  password: z.string().min(8, 'Password troppo corta (min 8 caratteri)'),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
+  async function onSubmit(values: LoginFormValues) {
+    setServerError(null);
+    try {
+      const response = await apiPost<LoginResponse>('/auth/login', values, {
+        'X-Tenant-Slug': TENANT_SLUG,
+      });
+      setTokens(response.data.accessToken, response.data.refreshToken);
+      router.push('/dashboard');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.errorCode === 'E_AUTH_INVALID_CREDENTIALS') {
+          setServerError('Email o password non corrette');
+        } else {
+          setServerError(`Errore: ${err.message}`);
+        }
+      } else {
+        setServerError('Errore di connessione al server');
+      }
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Accedi a Gestionale</CardTitle>
+          <CardDescription>Inserisci le tue credenziali per continuare</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        autoComplete="email"
+                        placeholder="admin@demo.local"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {serverError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{serverError}</AlertDescription>
+                </Alert>
+              )}
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Accesso in corso...' : 'Accedi'}
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
