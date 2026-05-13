@@ -18,7 +18,7 @@
  *   - header assente o non stringa
  *   - schema diverso da Bearer
  *   - token malformato (no 3 parti separate da `.`)
- *   - payload non-JSON o non-objct
+ *   - payload non-JSON o non-object
  *   - `sub` assente o non-stringa
  */
 export function extractSubFromAuthHeader(authHeader: unknown): string | undefined {

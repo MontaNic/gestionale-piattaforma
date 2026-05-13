@@ -7,7 +7,7 @@
 **Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio-sera-notte)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + **B1 Auth E2E hardening (rate limit + lockout)** completi. **Difesa brute-force attiva**: throttler Redis (5/min login, 3/h tenant-create userId-tracked) + account lockout (10 fail/15min → block 15min) + Retry-After 900 fissi (anti-enumeration) + audit `auth.account_locked`. **10 endpoint operativi** API a `:3000` + frontend `:3001`, **25/25 test Vitest verdi** (+17 vs E2) + RLS attivo.
 
-> ✅ **B1 chiuso**: rate limiting + lockout via Redis sliding window operativi. Smoke E2E 8/8 verdi (rate-limit auth-strict + tenant-create custom tracker + lockout login + lockout login-pin + reset doppio + isolation). Tech debt 14 nuove (TD-A → TD-N) tracciate in ADR-0013. Prossimo macro-task candidato: **B2 (email theft notification + rate-limit login-pin triplet + E2E full Nest bootstrap)** o da concordare. Vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (rate-limit + lockout).
+> ✅ **B1 chiuso + cleanup follow-up**: rate limiting + lockout via Redis sliding window operativi. Smoke E2E 8/8 verdi (rate-limit auth-strict + tenant-create custom tracker + lockout login + lockout login-pin + reset doppio + isolation). Tech debt 21 nuove (14 STOP TD-A → TD-N + 7 cleanup review TD-O → TD-U) tracciate in ADR-0013. Prossimo macro-task candidato: **B2 (email theft notification + rate-limit login-pin triplet + E2E full Nest bootstrap)** o da concordare. Vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (rate-limit + lockout).
 
 ---
 
@@ -816,9 +816,11 @@ Split di "B Auth E2E hardening" (carry-over [ADR-0008 §3](docs/architecture/ADR
 - **#20** `BaseExceptionFilter` APP_FILTER DI break con custom constructor → omettere constructor (NestJS risolve HttpAdapterHost automaticamente)
 - **#21** `ValidationPipe` filtra PRE-controller → lockout counter non incrementato per input malformati (validation errors non consumano bucket; attacker con password ben formata sì)
 
-**Tech debt nuovi (14 voci TD-A → TD-N)** — vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md):
+**Tech debt nuovi (21 voci: 14 STOP TD-A → TD-N + 7 cleanup review TD-O → TD-U)** — vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md):
 
-Categorie: Redis resilience (TD-A,B), Config consistency (TD-C), Docker port (TD-D), Security trade-off (TD-E,J), Throttler quirks (TD-F,G), Lockout key scope (TD-H,I,K), Filter pattern (TD-L), Test coverage (TD-M), Refactor minor (TD-N).
+Categorie STOP: Redis resilience (TD-A,B), Config consistency (TD-C), Docker port (TD-D), Security trade-off (TD-E,J), Throttler quirks (TD-F,G), Lockout key scope (TD-H,I,K), Filter pattern (TD-L), Test coverage (TD-M), Refactor minor (TD-N).
+
+Categorie cleanup review (emerse da check pre-merge Claude strategico): DevOps (TD-O), Lockout DoS (TD-P), Config validation (TD-Q), Redis TLS (TD-R), Observability (TD-S,U), Edge case IPv6 (TD-T). Tutti low-priority, F1 NOT-production-blocking.
 
 ## 🚧 In corso / Prossimo task
 
@@ -1037,7 +1039,7 @@ NON proporre, NON includere senza esplicito sblocco:
 
 ## 📝 Prompt operativo prossimo task — da definire
 
-> E2 completato (primo login browser funzionante, [ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso").
+> B1 completato (rate limiting + lockout via Redis sliding window, [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2 in cima).
 
 ---
 
