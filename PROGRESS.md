@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (notte fonda)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + **D4 Tenant bootstrap** completi. **9 endpoint funzionanti** (incluso POST /tenants), **8 test Vitest verdi** (6 auth + 2 hasPermission), RLS attivo + enforced runtime + smoke RLS E2E 7/7 PASS + smoke D4 5/5 PASS. Atomic transaction helpers introdotti in D4 (`withSystemContextAtomicTx` / `withTenantContextAtomicTx`).
+**Ultimo aggiornamento:** 13 maggio 2026 (mattina)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + **E1 Next.js scaffold + dual package strategy** completi. **10 endpoint operativi** API a `:3000` + **scaffold web a `:3001`** (Next 15 + React 18.3 + Tailwind 3.4 + shadcn/ui), **8 test Vitest verdi** + RLS attivo + enforced runtime + smoke RLS E2E 7/7 PASS + gate Fase 6 6/6 PASS. `packages/db` ora dual package (CJS+ESM+DTS) generato da `tsup`, consumer trasparente per apps/api (CJS) e apps/web (ESM).
 
-> ✅ **RLS Active + Tenant bootstrap operativo.** D3a + D3b + D4 completi. Cross-tenant lookup bloccato a livello DB anche con UUID esatto, app role NOSUPERUSER + FORCE RLS su 7 tabelle, endpoint POST /tenants atomic con permission check `sistema.tenant.gestisci`. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap). Prossimo macro-task candidato: **E1 Next.js scaffold** (frontend).
+> ✅ **RLS Active + Tenant bootstrap + Next.js scaffold operativo.** D3a + D3b + D4 + **E1** completi. Cross-tenant lookup bloccato a livello DB anche con UUID esatto, app role NOSUPERUSER + FORCE RLS su 7 tabelle, endpoint POST /tenants atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui via dual package exports**. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + **[ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold)**. Prossimo macro-task candidato: **E2 Login form UI + integrazione API**.
 
 ---
 
@@ -708,6 +708,38 @@ Endpoint `POST /api/v1/tenants` per creare nuovo tenant + bootstrap RBAC complet
 - **2026-05-13**: **Audit log `tenant.created` filtrato**: `afterValue = {slug, name, adminEmail}`. **NO password** (security leak — audit log readable da Super Admin + system queries).
 - **2026-05-13**: **Cleanup pattern lesson learned**: test script che creano dati DB richiedono cleanup verificato via DIRECT_URL (superuser bypass) OR tx rollback intenzionale. Pattern futuro per smoke scripts. Tech debt #2 ADR-0010.
 
+### E1 — Next.js scaffold + dual package strategy (Macro-task E1, 2026-05-13 mattina)
+
+Primo macro-task frontend. Trigger di CC2 ADR-0007 (CJS/ESM strategy) ora risolto via dual package professional. Scaffold `apps/web` Next.js 15 + React 18.3 + Tailwind 3.4 + shadcn/ui consumer di `@gestionale/db` via `exports.import → dist/index.mjs`. apps/api invariato (zero regression).
+
+- [x] **Fase 1 — `packages/db` dual package via `tsup`**: `package.json` con `type: module` + `exports` conditional (import/require + types nested ATTW-compliant) + `files: ["dist"]`. `tsup.config.ts` 12 LOC: CJS+ESM+DTS, `outExtension` esplicito (`.cjs`/`.mjs`), target node20, external `@prisma/client`. Build: 6 file dist/ (cjs/mjs + d.cts/d.ts + 2 sourcemap), ~10K cadauno. Smoke RLS 7/7 PASS post-build.
+- [x] **Fase 1 fix in-fase — 10 type errors latenti packages/db** (Discovery F1): `tsup --dts` ha rivelato errori non catchati da `tsc --noEmit` né da test runtime. Fix minimal in-place (`(Prisma as any).dmmf`, `tx: any` per `$executeRawUnsafe`, type annotations su lambda `.map()`). ZERO refactor, ZERO regression runtime. Commento motivazione runtime su ogni cast.
+- [x] **Fase 2 — apps/api consumer trasparente**: ZERO modifiche apps/api. `node -e "require.resolve('@gestionale/db')"` → `dist/index.cjs` (exports.require). 5 endpoint smoke OK: health 200, login 201+JWT pair, /me 200+32 perms, POST /tenants 201+payload completo, cleanup tenant via psql DIRECT_URL. Vitest 8/8 verde.
+- [x] **Fase 3 — Turbo build chain**: `turbo.json` `dev: dependsOn ["^build"]` + `typecheck: dependsOn ["^build"]` (Opzione A globale). Cache miss 4.8s, cache hit `>>> FULL TURBO` 119ms (ratio 40x). Dev chain validato: `pnpm exec turbo run dev --filter=@gestionale/api` → db:build prima, api:dev dopo.
+- [x] **Fase 4 — apps/web scaffold Next.js 15 manual**: 7 file (`package.json`, `tsconfig.json`, `next.config.mjs`, `.eslintrc.json`, `src/app/{layout,page}.tsx`, `src/app/globals.css`). Versioni `next@15.5.18`, `react@18.3.1`, `react-dom@18.3.1`. Smoke `:3001` HTTP 200, HTML con `<title>Gestionale</title>`, `<html lang="it">`, `<h1>Gestionale Platform</h1>`, `<p>F1 scaffold attivo</p>`.
+- [x] **Fase 5 — Tailwind 3.4 + shadcn/ui scaffold manuale**: `tailwindcss@3.4.19` + `postcss@8.5.14` + `autoprefixer@10.5.0`. 5 file shadcn manuali (T3-style, NO CLI): `components.json`, `src/lib/utils.ts` (cn helper), `src/components/ui/button.tsx` (cva 6 variants 4 sizes + Slot), `src/app/globals.css` (HSL CSS vars), `tailwind.config.ts` (theme.extend + plugin tailwindcss-animate). Button renderizzato styled (bg-primary, h-10 px-4 py-2, hover/focus/disabled states).
+- [x] **Fase 6 — Gate critico 6/6 PASS**: health 200 + web 200+Button + typecheck FULL TURBO 119ms 4/4 + lint clean (fix in-fase ignore `next-env.d.ts`) + Vitest 8/8 + smoke RLS 7/7. Entrambi i dev server in parallelo OK (api:3000 + web:3001).
+- [x] **Fase 7 — Docs**: [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (status, context, 5 decisions, 5 discoveries E1, considered alternatives, reversibility, 5 tech debt, security). ADR-0007 status update CC2 = Resolved. README Stack table + sezione "Frontend (apps/web)" + nota entrypoint dev pattern. PROGRESS questa sezione.
+
+#### Discoveries E1 (5 finding, tutti tracked in ADR-0011)
+
+- **F1 — 10 type errors latenti packages/db rivelati da tsup DTS** (STOP 1): `Prisma.dmmf` rimosso da `.d.ts` Prisma 6, `$executeRawUnsafe` strippato dal tipo `Tx` post-`$extends`, implicit any su lambda Prisma 6 narrowing. Cause: `noEmit: true` + nessun DTS emit pre-E1 nascondevano la fragilità. Fix in-place minimal con commenti motivazione runtime.
+- **F2 — `pnpm --filter <ws> <script>` bypassa Turbo `dependsOn`** (STOP 3): pnpm filter chiama lo script diretto, salta orchestration Turbo. Pattern corretto: `pnpm dev` (root) OR `pnpm exec turbo run dev --filter=<ws>`. Documentato in README + ADR-0011 F2.
+- **F3 — Path resolution asymmetry apps/api vs apps/web** (STOP 4): apps/api eredita base `paths` (alias to src/), apps/web override (resolve via node_modules + exports.import to dist/). Intentional, ma sorgente di confusione futura — tracked TD-4 ADR-0011.
+- **F4 — `shadcn@latest` (v4.7.0) pollution + Tailwind 4 default** (STOP 5): no opt-out flag T3 documentato, genera CSS oklch + `@import "tw-animate-css"` + crea file fuori workspace + auto-modifica layout.tsx. Manual scaffold 5 file è la SOLA via affidabile per T3.4 nel 2026.
+- **F5 — `next-env.d.ts` triple-slash refs viola ESLint** (STOP 6, in-fase): file auto-generato Next con `/// <reference types="next" />` rifiutato da `@typescript-eslint/triple-slash-reference`. Fix: aggiunto `**/next-env.d.ts` a `eslint.config.js` ignores + `next-env.d.ts` a `.gitignore` (pattern Next.js docs).
+
+#### Decisioni prese durante E1 (2026-05-13 mattina)
+
+- **2026-05-13**: **Dual package via tsup** (vs ESM-everywhere vs tsx workaround) — Opzione A di ADR-0007 CC2 scelta. tsup zero-config, build CJS+ESM+DTS in <2s, exports field ATTW-compliant.
+- **2026-05-13**: **tsup vs tsc puro**: tsup wraps esbuild + rollup-plugin-dts, 12 LOC config totali. tsc puro richiederebbe 2 build separati + scripting (~40+ LOC).
+- **2026-05-13**: **Tailwind 3.4 (NO 4)**: shadcn ecosystem 100% compat T3 oggi, T4 breaking (oklch + `@theme` directive). Migration tracked TD-1.
+- **2026-05-13**: **React 18.3 (NO 19)**: ecosystem (Radix, shadcn, libs third-party) full compat 18.3, parziale/sperimentale 19. Migration tracked TD-2.
+- **2026-05-13**: **Manual scaffold apps/web (NO create-next-app)**: pattern coerente con apps/api D1 manual scaffold. Auto-install pollution evitata, config divergence (eslint/tsconfig) evitata.
+- **2026-05-13**: **shadcn manual scaffold (NO CLI)**: F4 discovery — shadcn@4.7.0 defaulta T4 senza opt-out. 5 file standard T3 scritti a mano. Tracked TD-5.
+- **2026-05-13**: **path resolution F3 → `@/*: ["apps/web/src/*"]`** (path completo da workspace root baseUrl), NON `["./src/*"]` (resolverebbe contro workspace root). TS paths sono relativi a baseUrl ereditato, NON al file tsconfig.
+- **2026-05-13**: **next-env.d.ts → gitignore + eslint ignore** (F5): pattern Next.js docs raccomandato. File auto-generato non va committato.
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -716,7 +748,7 @@ Endpoint `POST /api/v1/tenants` per creare nuovo tenant + bootstrap RBAC complet
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **E1 Next.js scaffold** — `apps/web` con Next.js 14+ App Router + TypeScript + Tailwind + shadcn/ui (vedi stack §A3 brief). Trigger CC1/CC2 ADR-0007 (CJS/ESM strategy re-evaluation per `packages/db` consumer ESM-everywhere). Primo macro-task frontend.
+1. **E2 Login form UI + integrazione API** — `apps/web/src/app/login/page.tsx` con form email/password (shadcn Form + Input + Label), POST a `/api/v1/auth/login` con `X-Tenant-Slug: demo`, storage refresh in httpOnly cookie (vs localStorage trade-off), redirect post-login a una placeholder dashboard. Primo flow end-to-end frontend↔API.
 2. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo, email notification theft, rate limit `login-pin` + `POST /tenants`, E2E test (full Nest bootstrap + Testcontainers).
 3. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
 4. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
@@ -737,12 +769,17 @@ Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertur
 - [ ] **Rimuovere `/etc/sudoers.d/deploy-setup`** (NOPASSWD setup temporaneo) — la condizione "primo `docker compose up` funzionante" è ora soddisfatta (smoke test verdi il 2026-05-11 sera), quindi è il momento giusto. Operazione manuale di Nicolò (richiede password sudo). Comando: `sudo rm /etc/sudoers.d/deploy-setup` poi verifica `sudo -l` per confermare che NOPASSWD su apt/sysctl/systemctl non sia più presente.
 - [ ] ADR successivo (ADR-0005+) per strategia ACME quando arriverà un dominio reale (backup `caddy_data`, DNS vs HTTP challenge, wildcard policy)
 
-### Tech debt esplicito (NestJS scaffold D1)
+### Tech debt esplicito (NestJS scaffold D1 + E1)
 
-Tracking accentrato delle 2 course corrections più rilevanti. Dettagli in [ADR-0007](docs/architecture/ADR-0007-nestjs-api-scaffold.md) sezione "Tech Debt Accepted".
+Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/architecture/ADR-0007-nestjs-api-scaffold.md) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md).
 
-- [ ] **CC2 — CJS/ESM strategy re-evaluation**: `packages/db` ha perso `"type": "module"` per consentire interop CJS con `apps/api`. **Trigger**: arrivo `apps/web` (Next.js 14+ App Router, ESM-everywhere per design). Rischi: edge runtime, Server Components, future major version. **Stima rework**: 1-2h. Opzioni: (a) **dual package** via `exports` field con build step `dist/index.{cjs,mjs}` + project references; (b) **ESM-everywhere** con apps/api migrato a ESM + dev runner che supporta decorator metadata in ESM context. Da decidere strategicamente prima del primo macro-task Next.js.
-- [ ] **CC1 — ts-node-dev → swc-node migration**: `ts-node-dev` v2.0.0 (~2022) è "stale repo". Rivalutare **insieme a CC2** (decisione strategica unica). Workaround disponibili se serve switchare a swc prima: build step packages/db, loader Node `@swc-node/register` con nodemon, TS Project References (ADR-0006 opzione c). Monitor maintenance status ogni 6 mesi.
+- [x] ~~**CC2 — CJS/ESM strategy re-evaluation**~~ — **RISOLTO 2026-05-13 (E1, ADR-0011)** via dual package strategy: `packages/db` torna ESM-native + `tsup` build step + `exports` conditional. apps/api consuma `dist/index.cjs` (zero modifiche), apps/web `dist/index.mjs`.
+- [ ] **CC1 — ts-node-dev → swc-node migration**: `ts-node-dev` v2.0.0 (~2022) è "stale repo". CC2 risolto ha abilitato in linea di principio anche la migration dev runner (con build step packages/db ora c'è). Re-evaluation differita, low priority finché ts-node-dev resta operativo. Workaround disponibili: loader Node `@swc-node/register` con nodemon, TS Project References (ADR-0006 opzione c). Monitor maintenance status ogni 6 mesi.
+- [ ] **TD-1 ADR-0011 — Tailwind 3.4 → 4 migration**: ecosystem (shadcn registry, plugin) in transizione. Trigger: shadcn registry T4 completa + T4 plugins ecosystem maturo. Stima 2-3h.
+- [ ] **TD-2 ADR-0011 — React 18.3 → 19 migration**: ecosystem libs in assorbimento, peer dep warnings residui. Trigger: Radix+shadcn 100% R19 validato. Stima 1-2h.
+- [ ] **TD-3 ADR-0011 — TypeScript 7.0 baseUrl deprecation**: carry-over da `tsconfig.base.json` (NON introdotto da E1). Trigger: bump TS a 7.0 (Q3 2026). Stima 30-45 min, migration meccanica a paths self-contained.
+- [ ] **TD-4 ADR-0011 — packages/db source-vs-dist asymmetry**: apps/api typecheck via src/, apps/web via dist/. Funziona oggi (2 consumer). Trigger: arrivo 3° workspace consumer (apps/kds probabile). Stima 30-60 min, decisione strategica "always-dist" vs "always-src".
+- [ ] **TD-5 ADR-0011 — shadcn manual scaffold update path**: 5 file shadcn scritti a mano in E1 (F4 discovery). Trigger: shadcn 5.x opt-out T3 flag OR breaking changes registry da prendere. Monitor CHANGELOG ogni 6 mesi.
 
 ### Qualità codice / processo (post Husky setup + typecheck monorepo)
 - [x] ~~**Strategia typecheck monorepo**~~ — RISOLTO 2026-05-13 (Macro-task C, ADR-0006). `pnpm typecheck` ora propaga via Turbo a tutti i workspace, CI valida `packages/db` e futuri.

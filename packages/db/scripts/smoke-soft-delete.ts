@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   });
   assert(
     'findMany del cestino include il record soft-deleted',
-    trashed.some((t) => t.id === tenantId),
+    trashed.some((t: { id: string }) => t.id === tenantId),
   );
   console.log('');
 

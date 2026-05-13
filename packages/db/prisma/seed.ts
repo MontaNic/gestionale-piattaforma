@@ -418,10 +418,14 @@ async function main(): Promise<void> {
 
   // Lookup map (id by code/name) per evitare N+1 query in loop.
   const allPermissions = await prisma.permission.findMany();
-  const permIdByCode = new Map(allPermissions.map((p) => [p.code, p.id]));
+  const permIdByCode = new Map(
+    allPermissions.map((p: { code: string; id: string }) => [p.code, p.id]),
+  );
 
   const allTemplates = await prisma.systemRoleTemplate.findMany();
-  const tplIdByName = new Map(allTemplates.map((t) => [t.name, t.id]));
+  const tplIdByName = new Map(
+    allTemplates.map((t: { name: string; id: string }) => [t.name, t.id]),
+  );
 
   for (const t of ROLE_TEMPLATES) {
     const tplId = tplIdByName.get(t.name);

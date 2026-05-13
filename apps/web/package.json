@@ -1,0 +1,37 @@
+{
+  "name": "@gestionale/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Next.js 15 App Router frontend per la piattaforma Gestionale. Consumer di @gestionale/db via dual package (exports.import → dist/index.mjs).",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gestionale/db": "workspace:*",
+    "@radix-ui/react-slot": "^1.1",
+    "class-variance-authority": "^0.7",
+    "clsx": "^2.1",
+    "lucide-react": "^0.460",
+    "next": "^15.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^18.3",
+    "@types/react-dom": "^18.3",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9",
+    "eslint-config-next": "^15",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4",
+    "tailwindcss-animate": "^1.0",
+    "typescript": "^5"
+  }
+}

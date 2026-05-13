@@ -4,6 +4,6 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "prisma/seed.ts", "scripts/**/*.ts"],
+  "include": ["src/**/*.ts", "prisma/seed.ts", "scripts/**/*.ts", "tsup.config.ts"],
   "exclude": ["node_modules", "dist", "node_modules/.prisma"]
 }

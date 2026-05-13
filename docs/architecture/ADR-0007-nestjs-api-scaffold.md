@@ -139,6 +139,9 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 
 ### CC2: `packages/db` da ESM a CJS
 
+> **Status: Resolved via [ADR-0011](./ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) — Dual package strategy (2026-05-13, macro-task E1).**
+> `packages/db` torna ESM-native con `"type": "module"` + build step `tsup` che emette `dist/index.{cjs,mjs,d.cts,d.ts}` con `exports` conditional. apps/api (CJS) consuma trasparentemente via `exports.require → dist/index.cjs` (zero modifiche apps/api), apps/web (ESM Next) via `exports.import → dist/index.mjs`. Vedi ADR-0011 Decisions §1 + Discoveries F3.
+
 **Cosa**: rimosso `"type": "module"` da `packages/db/package.json` per permettere a `apps/api` (CJS) di `require()` il workspace.
 
 **Trigger di re-evaluation**: arrivo di `apps/web` (Next.js 14+ App Router). Next.js è ESM-everywhere per design (Server Components, Server Actions, edge runtime). Importare `@gestionale/db` CJS da Next.js può funzionare (Next.js fa transpilation), ma rischi:
@@ -155,6 +158,8 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 Decisione strategica: rivalutare quando D2/D3/D4 NestJS sono stabili e prima di iniziare il D-stream per `apps/web`.
 
 ### CC1: ts-node-dev maintenance status
+
+> **Status: Open (non risolto da E1).** ADR-0011 ha risolto CC2 (dual package) abilitando in linea di principio anche una switch a swc-node con build step minimo, ma la migration dev runner non è stata fatta in E1. ts-node-dev resta in uso per apps/api. Re-evaluation differita.
 
 **Cosa**: `ts-node-dev` v2.0.0 ultima major release ~2022. Repo attivo solo per patch, no roadmap pubblica per swc native support.
 
