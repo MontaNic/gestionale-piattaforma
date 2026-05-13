@@ -43,6 +43,13 @@ services:
     container_name: gestionale_redis
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec']
+    ports:
+      # Pattern simmetrico al postgres binding sopra: 127.0.0.1-only.
+      # apps/api gira sull'host (ts-node-dev) e deve raggiungere Redis via
+      # localhost per rate limiting + lockout (B1, ADR-0013). Quando l'API
+      # verra' containerizzata, il binding host potra' essere rimosso
+      # (parla via service name "redis" sulla network bridge).
+      - '127.0.0.1:6379:6379'
     volumes:
       - redis_data:/data
     networks:

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 
 import { CurrentTenant } from '../tenant/decorators/current-tenant.decorator';
+import { AuthStrict } from '../throttler/decorators/auth-strict.decorator';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -27,6 +28,7 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @AuthStrict()
   @Post('login')
   async login(
     @CurrentTenant() tenantId: string | undefined,
@@ -89,6 +91,7 @@ export class AuthController {
   // X-Tenant-Slug required (TenantMiddleware scoped a questo path).
   // PIN match via argon2.verify loop sui user del tenant + sessione POS.
   @Public()
+  @AuthStrict()
   @Post('login-pin')
   async loginPin(
     @CurrentTenant() tenantId: string | undefined,

@@ -120,6 +120,11 @@ describe('AuthService', () => {
     auditLog: { create: ReturnType<typeof vi.fn> };
   };
   let jwt: { signAsync: ReturnType<typeof vi.fn>; verifyAsync: ReturnType<typeof vi.fn> };
+  let lockout: {
+    checkLockout: ReturnType<typeof vi.fn>;
+    recordFailedAttempt: ReturnType<typeof vi.fn>;
+    resetAttempts: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     users = {
@@ -143,6 +148,14 @@ describe('AuthService', () => {
       signAsync: vi.fn().mockResolvedValue('eyJ.mocked.token'),
       verifyAsync: vi.fn(),
     };
+    // Lockout mock di compatibility: i 6 test pre-esistenti non sondano la
+    // lockout logic (quello e' STOP 4). Default: NON bloccato, NON promosso.
+    // Test specifici per LockoutService verranno in STOP 4.
+    lockout = {
+      checkLockout: vi.fn().mockResolvedValue(null),
+      recordFailedAttempt: vi.fn().mockResolvedValue({ promotedToLockout: false }),
+      resetAttempts: vi.fn().mockResolvedValue(undefined),
+    };
 
     // Manual instantiation: cast dei mock al tipo dei collaboratori reali.
     // Bypass del DI container Nest (vedi nota sopra su emitDecoratorMetadata).
@@ -150,6 +163,7 @@ describe('AuthService', () => {
       { prisma } as unknown as DbService,
       users as unknown as UsersService,
       jwt as unknown as JwtService,
+      lockout as unknown as import('./lockout.service').LockoutService,
     );
 
     vi.mocked(argon2.verify).mockReset();

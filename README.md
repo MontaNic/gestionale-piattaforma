@@ -207,6 +207,44 @@ curl -X POST http://localhost:3000/api/v1/auth/login-pin \
 
 Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt random di argon2id rende inutile un UNIQUE index su `pin_hash`). Vedi [ADR-0008 sezione D2b](./docs/architecture/ADR-0008-auth-module.md#d2b-implementation--pin-pos-login-2026-05-13-update) per decisioni e tech debt (HMAC lookup index in F2).
 
+#### Rate limiting & account lockout (B1)
+
+Difesa brute-force a 2 strati via Redis (vedi [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md)):
+
+**Strato 1 — Rate limiting** (`@nestjs/throttler` + Redis storage, 3 named throttlers env-driven):
+
+| Throttler       | Soglia default | Endpoint                                                       | Tracker                                 |
+| --------------- | -------------- | -------------------------------------------------------------- | --------------------------------------- |
+| `default`       | 60 req/min     | global fallback (tutti gli endpoint non opt-in)                | IP                                      |
+| `auth-strict`   | 5 req/min      | `/auth/login` + `/auth/login-pin` (opt-in via `@AuthStrict()`) | IP                                      |
+| `tenant-create` | 3 req/h        | `POST /tenants` (opt-in via `@TenantCreate()`)                 | **userId** via JWT decode (fallback IP) |
+
+Custom tracker `userId` per `tenant-create` impedisce IP rotation di un attacker autenticato. Tuning via env: `THROTTLE_DEFAULT_TTL_MS/LIMIT`, `THROTTLE_AUTH_TTL_MS/LIMIT`, `THROTTLE_TENANT_CREATE_TTL_MS/LIMIT`.
+
+**Strato 2 — Account lockout** (`LockoutService` Redis sliding window):
+
+- 10 tentativi falliti in 15min → blocco 15min (env: `LOCKOUT_THRESHOLD`, `LOCKOUT_WINDOW_MS`, `LOCKOUT_DURATION_MS`)
+- Chiavi lockout: `email:<email>` per `/auth/login` (TD-H: per-tenant post multi-tenant slug), `pin:tenant:<tenantId>:device:<deviceId>` per `/auth/login-pin` (D2b §8)
+- Check PRE-DB lookup (anti-timing-leak utenti esistenti vs non)
+- `Retry-After: 900` **fissi** anti user-enumeration (TD-J)
+- Audit `auth.account_locked` su transizione → locked (PII masked: `afterValue.lockoutKeyHash` = sha256[0:8])
+- Reset doppio su success: Redis (`resetAttempts`) + DB (`users.failed_login_attempts: 0`)
+- Fail-open su Redis down: rate limit/lockout disattivati ma auth continua a funzionare (warn log)
+
+```bash
+# Esempio: lockout dopo N fail
+for i in {1..10}; do
+  curl -X POST http://localhost:3000/api/v1/auth/login \
+    -H "X-Tenant-Slug: demo" \
+    -H "Content-Type: application/json" \
+    -d '{"email":"victim@x.com","password":"WrongPass1!"}'
+done
+# 11° (post-lockout):
+# HTTP/1.1 429 Too Many Requests
+# Retry-After: 900
+# {"statusCode":429,"code":"E_AUTH_ACCOUNT_LOCKED","message":"Account temporaneamente bloccato..."}
+```
+
 #### Tenant bootstrap (D4) — POST /tenants
 
 Endpoint protetto per creare un nuovo tenant + bootstrap RBAC completo (vedi [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md)). Richiede JWT valido + permission `sistema.tenant.gestisci` (Super Admin del proprio tenant ce l'ha by default — vedi seed).
