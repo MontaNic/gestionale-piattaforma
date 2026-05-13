@@ -5,9 +5,9 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 13 maggio 2026 (notte fonda)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + **D3a RLS framework** completi. **8 endpoint funzionanti, 6 test verdi**, RLS framework operativo (ALS context + Prisma extension + Interceptor + middleware refactor), smoke limited 4/4 scenari verdi con role temp.
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + **D3b RLS activation** completi. **8 endpoint funzionanti, 6 test Vitest verdi**, **RLS attivo e enforced runtime** (app role NOSUPERUSER + 7 policy reali con FORCE + dual-URL Prisma + docker init bootstrap), **smoke E2E full 7/7 PASS**, cross-tenant lookup bloccato a livello DB anche con UUID esatto.
 
-> 🚨 **PROSSIMO TASK = D3b PREREQUISITO SECURITY.** D3a fornisce il framework, ma le policy DB sono ancora placeholder `USING(true)` e l'app si connette come postgres (superuser → bypassa RLS). **Multi-tenant isolation NON enforced fino a D3b** (app role non-superuser + DIRECT_URL pattern + migration `replace_rls_placeholder_with_real`). **Non deployare in produzione senza D3b.** Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md).
+> ✅ **RLS Active — multi-tenant isolation enforced runtime.** D3a + D3b completi. App role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), policy `<table>_tenant_isolation` su 7 tabelle, FORCE ROW LEVEL SECURITY, pattern dual-URL (DATABASE_URL=app, DIRECT_URL=postgres). Smoke E2E 7/7 PASS. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md). Prossimo macro-task candidato: **D4 Bootstrap tenant logic** (non più prerequisito security).
 
 ---
 
@@ -650,27 +650,43 @@ Framework Row Level Security operativo a livello applicativo. **NON attiva il en
 - **2026-05-13**: Naming policy reali D3b: `<table>_tenant_isolation` (vs placeholder `<table>_policy`). Permette future policy multiple per tabella.
 - **2026-05-13**: `tenant_id` policy = text comparison (no cast `::uuid`): scoperto a STOP 1 che `tenant_id` è TEXT in DB (Prisma String mapping). Le policy D3b useranno text comparison senza cast.
 
+### D3b — RLS activation (Macro-task D3b, 2026-05-13 notte fonda)
+
+RLS attivo e enforced runtime. App role non-superuser + policy reali + FORCE ROW LEVEL SECURITY + pattern dual-URL Prisma + docker init bootstrap + smoke E2E full.
+
+- [x] **Migration `create_app_role_and_grants`**: `CREATE ROLE gestionale_app` IF NOT EXISTS con placeholder password (`'PLACEHOLDER_MUST_BE_ROTATED'`, ruotata via separato `ALTER ROLE` post-apply) + attributi `LOGIN NOSUPERUSER NOBYPASSRLS` + `GRANT USAGE/SELECT/INSERT/UPDATE/DELETE` su schema+tables+sequences + `ALTER DEFAULT PRIVILEGES FOR ROLE postgres` per future tabelle.
+- [x] **Schema Prisma dual-URL**: `directUrl = env("DIRECT_URL")` mappato in `packages/db/prisma/schema.prisma`. Prisma 5+ usa DIRECT_URL automaticamente per DDL (migrate/generate), DATABASE_URL per runtime queries. Nessun swap manuale `.env` necessario.
+- [x] **`.env` + `.env.example`**: aggiunti `APP_DB_PASSWORD` (raw base64), `DATABASE_URL` (app role con password URL-encoded — pattern `=`→`%3D`, `+`→`%2B`, `/`→`%2F`), `DIRECT_URL` (postgres). `.env.example` con placeholder, `.env` reale gitignored.
+- [x] **Migration `replace_rls_placeholder_with_real`**: DROP `<table>_policy` × 7 + CREATE `<table>_tenant_isolation` × 7 con pattern `is_super_admin OR tenant_id = current_setting('app.tenant_id', true)`. user_roles/sessions usano EXISTS join. `tenants` usa colonna `id`. NO cast `::uuid` (tenant_id è TEXT). + ALTER TABLE FORCE ROW LEVEL SECURITY × 7.
+- [x] **Migration `tighten_app_role_attributes`** (defense in depth aggiunto a STOP 7 per simmetria con docker init script): `ALTER ROLE gestionale_app NOCREATEDB NOCREATEROLE NOINHERIT`. Idempotente.
+- [x] **Seed esteso con `seedDevTenant(params)` helper**: refactor del bootstrap tenant dev in funzione riusabile. Aggiunto 2° tenant `acme` (slug 'acme', name 'Pizzeria Acme') + sede `Sede Centro` Roma + user `manager@acme.local` / `Manager123!` + role Super Admin tenant-scoped + 32 role_permissions. Idempotente (0 created al re-run).
+- [x] **Smoke E2E full** `packages/db/scripts/smoke-rls-e2e.ts` (script committato, read-only, idempotente): 7 scenari (5 mandatory + 2 extra coverage): tenant demo isolation (count=1), tenant acme isolation (count=1), cross-tenant block via UUID-known lookup (null), system context bypass (count=2), super admin context (bypass via is_super_admin), roles table isolation (count=1), audit_logs equivalence (`demo_ctx_count == system_filter_demo_count`). Wrapper `pnpm smoke:rls-e2e`. **7/7 PASS** prima e seconda esecuzione.
+- [x] **Docker compose ensure role bootstrap**: `infra/postgres/init/01-create-app-role.sh` idempotente con `format(%L)` injection-safe, `set -euo pipefail`, guard env var. `docker-compose.dev.yml` con `APP_DB_PASSWORD` env propagata al service postgres + mount `./infra/postgres/init:/docker-entrypoint-initdb.d:ro`. Gira SOLO al primo bootstrap del volume.
+- [x] **Post-D3a finding**: `JwtStrategy.validate()` faceva query Prisma al guard stage (prima dell'Interceptor) → `RlsNoContextError`. Latente in D3a perchè policy era `USING(true)` + test mock-based. Fix con wrap in `runInTenantContext(payload.tenantId, false)` (defense in depth) + refactor `validate/validateInContext`. Pattern analogo a `AuthService.refresh`.
+- [x] **ADR-0009 v2**: aggiunte sezioni "Status finale", "D3b — Activation completed", "Post-D3a findings", "Considered Alternatives D3b", "Reversibility estesa", "Tech debt aggiornato" (10 voci), "Security considerations finale". Status: Accepted (D3a + D3b complete).
+- [x] **README**: callout SUCCESS RLS Active sostituisce il vecchio warning, sezione "Database setup (D3b RLS Active)" con runbook 5-step (genera password / configura URL / migrate / ALTER ROLE / seed), sezione "Multi-tenant isolation (D3a + D3b)" con componenti DB + comando smoke + caveat.
+
+#### Decisioni prese durante D3b (2026-05-13 notte fonda)
+
+- **2026-05-13**: **R9 scoperto a STOP 1 D3a → risolto in D3b**. Postgres user superuser+BYPASSRLS bypassa RLS. Senza app role non-superuser, framework è no-op. Split D3a/D3b deciso a STOP 1 D3a, completato a D3b.
+- **2026-05-13**: **Pattern dual-URL Prisma** (DATABASE_URL=app role / DIRECT_URL=postgres) scelto rispetto a swap manuale del singolo URL. Prisma 5+ usa DIRECT_URL automaticamente per migrate/generate quando definito in schema.
+- **2026-05-13**: **FORCE ROW LEVEL SECURITY obbligatorio**: senza, il table owner (postgres come migration runner) bypassa policy. Senza ALTER TABLE FORCE, gestionale_app vede filtrato ma postgres no → asimmetria pericolosa.
+- **2026-05-13**: **EXISTS join policy per user_roles + sessions**: tabelle senza colonna `tenant_id` diretta. user_roles → `roles.tenant_id`, sessions → `users.tenant_id`. Index PK rende sub-select O(log n). Denormalizzazione tenant_id rimandata (tech debt F1+ se profiling lo giustifica).
+- **2026-05-13**: **Password placeholder + ALTER ROLE post-migrate** (pattern non ideale): migration committata in git non puo' contenere password reale. Soluzione: `'PLACEHOLDER_MUST_BE_ROTATED'` + step manuale post-apply documentato in README + warning ASCII box prominente in migration SQL. Tech debt #8 ADR-0009: secret manager (Vault) per F2.
+- **2026-05-13**: **Refactor `seedDevTenant(params)` helper** durante STEP 4: il bootstrap tenant inline avrebbe creato duplicazione demo+acme. Helper riusabile single source of truth. Non decisione architetturale macro (refactor pulito), menzione solo in commit message.
+- **2026-05-13**: **JwtStrategy.validate wrap** (post-D3a finding emerso a STEP 2): query Prisma dentro `validate()` (guard stage) prima dell'Interceptor. Fix con `runInTenantContext(payload.tenantId)` (defense in depth, RLS filtra session.findUnique sul tenantId del JWT).
+- **2026-05-13**: **Migration immutability** (regola interna nata da STEP 3 checksum drift): MAI modificare SQL/comment di migration applicate. Per fix/refinement post-apply → nuova migration `<ts>_fix_<topic>.sql`. Esempio: `tighten_app_role_attributes` aggiunge attributi role senza toccare `create_app_role_and_grants`.
+- **2026-05-13**: **Docker init script + migration coesistenti**: docker init per fresh volume (password reale at-bootstrap), migration per existing volumes (placeholder + ALTER ROLE post). Coerente con docker-entrypoint-initdb.d semantics (one-shot).
+
 ---
 
 ## 🚧 In corso / Prossimo task
 
-### 🚨 D3b — RLS activation (PREREQUISITO SECURITY, ~4h30)
+**Macro-task: da concordare nella prossima sessione.**
 
-**Senza D3b, RLS è no-op**: postgres bypassa policy, le policy sono placeholder `USING(true)`. **Non deployare in produzione senza D3b.**
+Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-Scope (vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) sezione "R9"):
-
-1. Migration `<ts>_create_app_role_and_grants`: `CREATE ROLE gestionale_app LOGIN PASSWORD '<APP_DB_PASSWORD>' NOSUPERUSER NOBYPASSRLS` + `GRANT USAGE/SELECT/INSERT/UPDATE/DELETE` su schema/tables/sequences + `ALTER DEFAULT PRIVILEGES` per future tabelle.
-2. `schema.prisma`: aggiungere `directUrl = env("DIRECT_URL")` per il pattern dual-URL.
-3. `.env` + `.env.example`: `APP_DB_PASSWORD`, `DATABASE_URL` (runtime app role), `DIRECT_URL` (migration postgres).
-4. Migration `<ts>_replace_rls_placeholder_with_real`: DROP placeholder + CREATE reale su 7 tabelle (tenants/sedi/users/roles/user_roles/sessions/audit_logs) con pattern `current_setting('app.is_super_admin', true) = 'true' OR tenant_id = current_setting('app.tenant_id', true)`. user_roles + sessions: EXISTS join.
-5. Seed esteso: 2° tenant `acme` (slug 'acme', Pizzeria Acme) + admin `manager@acme.local` / `Manager123!` + role Super Admin tenant-scoped.
-6. Smoke E2E full: 5 scenari (tenant A isolation, tenant B isolation, JWT cross-tenant attempt, system seed visibility, super_admin cross-tenant via script).
-7. Docker compose: ensure script per creare il role al bootstrap.
-
-### Altri candidate post-D3b
-
-1. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+1. **D4 Bootstrap tenant logic** (~1h) — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`. Ora che RLS è enforced, questo flusso e' naturalmente tenant-scoped via context.
 2. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, rate limit dedicato `login-pin` per `(tenantId, deviceId, ip)`, E2E test (full Nest bootstrap + Testcontainers).
 3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
 4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.

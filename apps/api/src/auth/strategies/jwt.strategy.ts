@@ -4,10 +4,18 @@
 // Per ogni request autenticato: decoda JWT, verifica session attiva in DB,
 // carica user. Costo: 1-2 query Prisma per request. F1 acceptable, ADR-0008
 // tech debt per Redis cache TTL=30s.
+//
+// D3b RLS: JwtStrategy.validate() fires al guard stage (PRIMA del
+// TenantContextInterceptor che setta ALS al controller stage). Senza wrap
+// esplicito, le query Prisma qui dentro lanciano RlsNoContextError. Soluzione:
+// wrap del body in `runInTenantContext(payload.tenantId, false)`. Defense in
+// depth: RLS filtra session.findUnique sul tenantId del JWT, quindi un
+// attaccante che forge JWT con tenantId diverso vede 0 sessions -> 401.
 // =============================================================================
 
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
+import { runInTenantContext } from '@gestionale/db';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import { DbService } from '../../db/db.service';
@@ -43,6 +51,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('E_AUTH_INVALID_TOKEN_TYPE');
     }
 
+    // RLS context wrap: JwtStrategy fires al guard stage (prima dell'Interceptor
+    // globale). Le query Prisma qui dentro hanno bisogno di ALS context, sennò
+    // RlsNoContextError. Wrap su payload.tenantId con isSuperAdmin:false ->
+    // defense in depth (vedi header del file).
+    return runInTenantContext({ tenantId: payload.tenantId, isSuperAdmin: false }, () =>
+      this.validateInContext(req, payload),
+    );
+  }
+
+  /**
+   * Body della validate(), gira sempre dentro ALS tenant context (vedi sopra).
+   * Estratto come metodo privato per leggibilita'.
+   */
+  private async validateInContext(
+    req: AuthenticatedRequest,
+    payload: JwtPayload,
+  ): Promise<AuthenticatedUser> {
     const session = await this.db.prisma.session.findUnique({
       where: { id: payload.sessionId },
     });

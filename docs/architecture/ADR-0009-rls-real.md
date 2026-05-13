@@ -1,15 +1,19 @@
 # ADR-0009 — RLS reali (tenant isolation runtime)
 
-- **Status:** Accepted (D3a complete, D3b pending activation)
+- **Status:** Accepted (D3a + D3b complete — RLS active and enforced)
 - **Date:** 2026-05-13
 - **Deciders:** Nicolò (owner), Claude (AI partner)
 - **Related:** [ADR-0005](./ADR-0005-prisma-data-layer.md) (data layer, RLS placeholder), [ADR-0007](./ADR-0007-nestjs-api-scaffold.md) (NestJS scaffold), [ADR-0008](./ADR-0008-auth-module.md) (auth module, tenant resolution)
 
-## 🚨 Status critico
+## ✅ Status finale
 
-**D3a status (questa PR): framework RLS operativo a livello applicativo, ma policy DB ancora placeholder `USING(true)`.** Significa: l'AsyncLocalStorage context e la Prisma extension funzionano end-to-end, ma le policy reali sul DB e l'app role non-superuser arrivano in **D3b**.
+**D3b completato: RLS attivo e enforced runtime.**
 
-**Senza D3b, il framework e' no-op**: postgres user (superuser) bypassa RLS sempre, le policy sono `USING(true)`. **D3b OBBLIGATORIO prima di production deploy.**
+- App role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOINHERIT) usato come connection runtime (`DATABASE_URL`).
+- Superuser `postgres` riservato a migration/admin via `DIRECT_URL` (pattern dual-URL Prisma con `directUrl` in `schema.prisma`).
+- 7 policy reali `<table>_tenant_isolation` + `FORCE ROW LEVEL SECURITY` su 7 tabelle (tenants/sedi/users/roles/user_roles/sessions/audit_logs).
+- Smoke E2E full 7/7 PASS (vedi sezione "D3b — Activation completed").
+- Docker init script per bootstrap fresh volume + migration con placeholder + README runbook per esistenti.
 
 ## Context
 
@@ -240,3 +244,134 @@ Conferma empirica: extension + ALS funzionano end-to-end. F1 fallback risolve R3
 - `$queryRaw` / `$executeRawUnsafe` bypassano l'extension by design (Prisma `$allOperations` intercetta solo model operations). Chiamanti responsabili: documentati nel docstring di `rls.ts`.
 - `current_setting('app.tenant_id', true)` ritorna NULL se non settato; NULL = anything → NULL → false → row excluded. Fail-safe by PostgreSQL semantics, non serve fallback policy.
 - `tenant_id = text` policy (no `::uuid` cast): scoperto a STOP 1 — `tenant_id` e' TEXT in DB (Prisma String mapping), no cast necessario. Le policy reali in D3b useranno text comparison.
+
+## D3b — Activation completed (2026-05-13)
+
+D3b chiude il loop di security activation iniziato da D3a. Output operativo:
+
+### Componenti aggiunti (D3b)
+
+| Componente             | Path                                                                                 | Scopo                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App role migration     | `packages/db/prisma/migrations/<ts>_create_app_role_and_grants/migration.sql`        | `CREATE ROLE gestionale_app IF NOT EXISTS` con placeholder password + GRANT USAGE/SELECT/INSERT/UPDATE/DELETE su schema/tables/sequences + ALTER DEFAULT PRIVILEGES per future tabelle |
+| Policy reali migration | `packages/db/prisma/migrations/<ts>_replace_rls_placeholder_with_real/migration.sql` | DROP `<table>_policy` × 7 + CREATE `<table>_tenant_isolation` × 7 (pattern standard / EXISTS join user_roles+sessions / `tenants` su `id`) + ALTER TABLE FORCE ROW LEVEL SECURITY × 7  |
+| Tighten role migration | `packages/db/prisma/migrations/<ts>_tighten_app_role_attributes/migration.sql`       | ALTER ROLE NOCREATEDB NOCREATEROLE NOINHERIT (defense in depth, simmetria con docker init)                                                                                             |
+| Schema Prisma dual-URL | `packages/db/prisma/schema.prisma`                                                   | `directUrl = env("DIRECT_URL")` mappato — Prisma 5+ usa DIRECT_URL per DDL (migrate/generate) automaticamente                                                                          |
+| Seed esteso            | `packages/db/prisma/seed.ts`                                                         | Refactor con helper `seedDevTenant(params)` + 2° tenant `acme` (Pizzeria Acme + `manager@acme.local`) per smoke RLS                                                                    |
+| Smoke E2E              | `packages/db/scripts/smoke-rls-e2e.ts`                                               | 7 scenari read-only idempotenti: tenant isolation × 2, cross-tenant block, system bypass, super admin, roles isolation, audit_logs isolation. Wrapper `pnpm smoke:rls-e2e`             |
+| Docker init script     | `infra/postgres/init/01-create-app-role.sh`                                          | Bootstrap fresh-volume con `CREATE ROLE IF NOT EXISTS` + password reale da `$APP_DB_PASSWORD`. Idempotente, format(%L) injection-safe                                                  |
+| Docker compose         | `docker-compose.dev.yml`                                                             | `APP_DB_PASSWORD` env propagata al service postgres + mount `./infra/postgres/init:/docker-entrypoint-initdb.d:ro`                                                                     |
+| .env / .env.example    | `/.env*`                                                                             | `APP_DB_PASSWORD` (raw base64) + `DATABASE_URL` (gestionale_app con password URL-encoded) + `DIRECT_URL` (postgres)                                                                    |
+
+### Smoke E2E 7/7 PASS (read-only, idempotent)
+
+```
+[S1] tenant demo isolation: user.count == 1         PASS
+[S2] tenant acme isolation: user.count == 1         PASS
+[S3] cross-tenant block: demo ctx + manager acme    PASS (null returned)
+[S4] system context visibility: user.count == 2     PASS (bypass via is_super_admin)
+[S5] super admin context: demo tenantId + super_admin=true -> 2  PASS
+[S6] roles isolation: demo ctx -> role.count == 1   PASS
+[S7] audit_logs isolation: demo ctx == system filter on tenant_id=demo  PASS
+```
+
+`audit_logs` S7 confronta `count(demo_ctx) == count(system, where tenant_id=demoId)`: equivalenza robust-to-time (non count assoluto).
+
+### Verifica empirica post-activation
+
+- `login admin@demo + GET /me` ✅ (HTTP 201 + 200, 32 permissions)
+- `login manager@acme + GET /me` ✅ (HTTP 201 + 200, returns acme user + acme Super Admin role only)
+- `pg_user current_user`: `gestionale_app` con `usesuper=false, usebypassrls=false`
+- 7 policies + `relforcerowsecurity=true` su 7 tabelle (verificato via `pg_class JOIN pg_policies`)
+
+## Post-D3a findings (scoperti durante D3b)
+
+### F1 — JwtStrategy validate() outside ALS context
+
+`JwtStrategy.validate()` esegue `session.findUnique` + `user.findUnique` + `session.update`. Queste query fired al **guard stage** (prima del `TenantContextInterceptor` che setta ALS al interceptor stage). In D3a, latente perche':
+
+- Policy DB erano `USING(true)` (sempre permissive)
+- 6 test Vitest mockano `@gestionale/db` (bypassano DB reale)
+
+Emerso a STEP 2 D3b quando `DATABASE_URL` passa a `gestionale_app` (NOSUPERUSER): la prima richiesta `/me` con Bearer token throwa `RlsNoContextError: 'Session.findUnique' executed outside any tenant context`.
+
+**Fix applicato (pattern analogo a `AuthService.refresh`):** wrap del body di `validate()` in `runInTenantContext({tenantId: payload.tenantId, isSuperAdmin: false})`. Refactor in metodo privato `validateInContext()` per leggibilita'. Defense in depth: RLS filtra `session.findUnique` sul tenantId del JWT — attaccante che forge JWT con tenantId diverso vede 0 sessions → 401.
+
+### F2 — Migration immutability vs comment-only changes
+
+Durante D3b, dopo l'apply della migration `create_app_role_and_grants`, ho aggiornato il commento SQL (chiarimento password rotation, ASCII art warning) per maggiore visibilita'. Prisma ha rilevato checksum drift al successivo `migrate dev --create-only`. Risolto con script one-off che ha aggiornato `_prisma_migrations.checksum`.
+
+**Tech debt + regola futura** (vedi sezione "Tech debt registrato"): in ambienti shared (staging/prod), MAI modificare migration applicate. Per cambiamenti SQL/comment post-apply → nuova migration `<ts>_fix_<topic>.sql` (esempio concreto: `tighten_app_role_attributes` D3b aggiunge attributi role senza toccare la migration originale).
+
+### F3 — Pattern dual-URL Prisma 5+ comportamento automatico
+
+Verificato empiricamente: con `directUrl = env("DIRECT_URL")` in `schema.prisma`, `prisma migrate dev/deploy` usa **automaticamente** DIRECT_URL per le operazioni DDL (CREATE/DROP POLICY, ALTER TABLE FORCE, CREATE ROLE). DATABASE_URL (= `gestionale_app`, NOSUPERUSER) resta per le query runtime. Nessun swap manuale di `.env` necessario tra migration e runtime — Prisma sceglie l'URL giusto per il tipo di operazione.
+
+## Considered Alternatives (D3b)
+
+| Decisione          | Alternativa                                                         | Esito         | Razionale                                                                                                   |
+| ------------------ | ------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| Role bootstrap     | Solo migration con password reale                                   | Rejected      | Migration SQL committato in git → non safe embed password reale                                             |
+| Role bootstrap     | Solo docker init script (no migration)                              | Rejected      | Non copre ambienti dev con volume esistente                                                                 |
+| Pattern adottato   | Migration con placeholder + ALTER ROLE post + docker init per fresh | **Chosen**    | Copre entrambi i percorsi (fresh + existing) safely                                                         |
+| URL Prisma         | Singolo DATABASE_URL swappato fra migration e runtime               | Rejected      | Manuale, error-prone, rompe `prisma migrate deploy` automatico in CI                                        |
+| URL Prisma         | DATABASE_URL + DIRECT_URL via Prisma `directUrl`                    | **Chosen**    | Pattern Prisma 5+ standard, behavior automatico                                                             |
+| Force RLS          | Solo policy reali senza FORCE                                       | Rejected      | Table owner (postgres) bypassa RLS senza FORCE. Postgres-as-owner+postgres-as-migration-runner = pericoloso |
+| Force RLS          | FORCE + role app non-owner                                          | **Chosen**    | postgres rimane owner (necessario per migration). gestionale_app non-owner → policy enforced                |
+| Role attribute set | LOGIN NOSUPERUSER NOBYPASSRLS solo                                  | Rejected      | Defense in depth carente                                                                                    |
+| Role attribute set | + NOCREATEDB NOCREATEROLE NOINHERIT                                 | **Chosen**    | Minimum privilege principle, role applicativo non deve poter creare DB/role/ereditare gruppi                |
+| Seed pattern       | Inline duplicato demo + acme                                        | Rejected      | DRY violato, manutenibile peggio                                                                            |
+| Seed pattern       | Helper `seedDevTenant(params)`                                      | **Chosen**    | Single source of truth per il bootstrap tenant dev                                                          |
+| audit_logs policy  | Considera tenant_id nullable                                        | Rejected      | Verificato schema: `tenant_id` NOT NULL. Policy semplice come le altre                                      |
+| Smoke E2E          | Vitest E2E con Testcontainers                                       | Rejected (F1) | Setup ~2h. Macro-task "Auth E2E hardening" futuro                                                           |
+| Smoke E2E          | Script TS dedicato read-only                                        | **Chosen**    | Riusabile per CI, no DB side effects, idempotente                                                           |
+
+## Reversibility (estesa D3b)
+
+### Disabilitare RLS reale (tornare a D3a placeholder)
+
+1. **Reverse migration `replace_rls_placeholder_with_real`**: nuova migration con DROP `<table>_tenant_isolation` × 7 + CREATE `<table>_policy USING(true)` × 7 + ALTER TABLE NO FORCE ROW LEVEL SECURITY × 7. Comment di reference disponibile in `replace_rls_placeholder_with_real/migration.sql`.
+2. **Tornare a connection postgres**: in `.env`, swap `DATABASE_URL` da `gestionale_app` a `postgres`. App ricomincia a usare superuser → RLS bypassata.
+3. **(Opzionale) Rimuovere app role**: nuova migration con `REVOKE ALL` + `DROP OWNED BY gestionale_app` + `DROP ROLE gestionale_app`. Solo se si abbandona definitivamente il pattern.
+
+Costo rimozione totale: ~30min, downtime trascurabile (app continua a funzionare durante la rotazione).
+
+### Disabilitare RLS framework D3a (rimane disponibile da D3a sezione "Reversibility")
+
+Rimuovere `.$extends(rlsExtension())` da `createPrismaClient` in `packages/db/src/index.ts`. Tutto il resto continua a girare (i wrap `runInTenantContext` / `withSystemContext` diventano no-op rispetto al DB). Costo: ~5min.
+
+## Tech debt registrato (aggiornato D3b)
+
+1. ~~**R9 D3b — app role + DIRECT_URL pattern**~~ ✅ **RISOLTO in D3b**.
+2. **HTTP-scoped tx (S3) future eval**: profilare quando il throughput auth diventera' bottleneck. Per-operation tx overhead misurabile post-D3b activation.
+3. **Composite index `(tenant_id, deleted_at)`** sulle tabelle con soft-delete: profilare EXPLAIN. Index attuale solo `(tenant_id)`.
+4. **PgBouncer transaction mode incompatibile con SET LOCAL cross-statement**: documentato. Limita pooling a session mode fino a F2.
+5. **CI grep guard "no $queryRaw outside packages/db"** per evitare bypass involontari del framework RLS.
+6. **HMAC PIN lookup index** (carry over da ADR-0008): non correlato D3 ma rivalutare insieme F2.
+7. **E2E full con Testcontainers**: Vitest setup E2E rimandato a macro-task "Auth E2E hardening".
+8. **Password rotation post-migration deploy** (nuovo D3b): la migration `create_app_role_and_grants` crea il role con placeholder password. Step manuale `ALTER ROLE ... PASSWORD '$APP_DB_PASSWORD'` richiesto post-`prisma migrate deploy` in ogni nuovo ambiente. Mitigazione: documentato in README "Database setup" + commento prominente in migration SQL + bootstrap docker per fresh volumes. **Alternativa F2: secret manager (Vault / AWS Secrets Manager / k8s Sealed Secrets)** per leggere password al deploy + iniettare via init container o operator hook. Rischio attuale: ambienti nuovi con role placeholder se nessuno ricorda lo step → app non parte (visibile, non silente).
+9. **Migration immutability** (nuovo D3b): pattern regola interna `MAI modificare SQL/comment di migration applicate`. Per fix/refinement post-apply → nuova migration `<ts>_fix_<topic>.sql`. Esempio concreto in D3b: `tighten_app_role_attributes` aggiunge attributi role NOCREATEDB/NOCREATEROLE/NOINHERIT senza toccare la migration `create_app_role_and_grants` originale. In dev locale single-dev, lo script one-off di checksum update e' accettabile come escape valve. In staging/prod = bandito.
+10. **Drift attributi role doc** (nuovo D3b): docker init script e migration ora simmetrici (6 attributi negativi). Se in futuro si aggiunge un altro attributo, aggiornare ENTRAMBI source-of-truth simultaneamente (con migration tighten dedicata).
+
+## Security considerations (finale D3b)
+
+### Cosa è ENFORCED runtime
+
+- **Multi-tenant data isolation**: tutte le 7 tabelle multi-tenant filtrate da policy `<table>_tenant_isolation` con FORCE attivo. `gestionale_app` (NOSUPERUSER, NOBYPASSRLS) non puo' bypassare.
+- **Cross-tenant lookup block**: anche conoscendo l'UUID esatto di un record di altro tenant, `findUnique` ritorna `null`. Verificato S3 smoke E2E.
+- **Insert protection**: la USING clause vale anche per WITH CHECK (default Prisma). INSERT di un record con `tenant_id` diverso dal context → policy violation → error.
+- **Cross-table JOIN isolation**: `user_roles` filtrato via `roles.tenant_id`, `sessions` via `users.tenant_id`. Sub-select EXISTS O(log n) tramite index PK.
+- **Fail-fast no context**: extension RLS throwa `RlsNoContextError` se query parte fuori da context. Bug architetturali catchati immediatamente in dev.
+- **Defense in depth JwtStrategy** (post-D3a finding): `validate()` wrappato in `runInTenantContext(payload.tenantId)`. JWT forged con tenantId errato → session lookup ritorna null → 401.
+
+### Cosa NON è enforced (tech debt F2)
+
+- **Rate limiting auth endpoints**: nessun limit su `/auth/login`, `/auth/login-pin`, `/auth/refresh`. Macro-task "Auth hardening" futuro (`@nestjs/throttler` + Redis bucket).
+- **Audit log su tenant_isolation_violated**: la policy filtra silenziosamente (null/empty result). Non logghiamo "qualcuno ha tentato cross-tenant access". Tech debt: aggiungere INSERT trigger su DELETE/SELECT con counter + audit. Considerazione: rumore se utenti normali fanno lookup di ID inesistenti.
+- **Password rotation automatica**: D3b accetta il pattern manuale `ALTER ROLE` post-migrate. Tech debt #8.
+- **PgBouncer transaction mode compat**: SET LOCAL cross-statement incompatibile. Limita pool a session mode F1. Tech debt #4.
+
+### Cosa è ASSENTE in F1 (per design, non tech debt)
+
+- **Platform super admin user** (decisione S5 D3a): nessun JWT-based bypass RLS in F1. Bypass solo server-side via `withSystemContext`/`withSuperAdminContext`. Concetto rimandato a macro-task dedicato.
+- **PostgreSQL row-level encryption**: cifratura dati a riposo a livello disco (LUKS / cloud KMS) e' fuori scope F1.

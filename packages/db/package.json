@@ -17,6 +17,7 @@
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
     "prisma:format": "prisma format",
     "smoke:soft-delete": "dotenv -e ../../.env -- tsx scripts/smoke-soft-delete.ts",
+    "smoke:rls-e2e": "dotenv -e ../../.env -- tsx scripts/smoke-rls-e2e.ts",
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
     "typecheck": "tsc --noEmit"
   },

@@ -22,8 +22,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // url (runtime queries): app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS).
+  // RLS enforcement passes attraverso questa connection.
+  url       = env("DATABASE_URL")
+  // directUrl (DDL: migrate, db push, introspect): superuser `postgres`.
+  // Prisma 5+ usa directUrl per migrazioni quando definita. Vedi ADR-0009 D3b.
+  directUrl = env("DIRECT_URL")
 }
 
 // =============================================================================

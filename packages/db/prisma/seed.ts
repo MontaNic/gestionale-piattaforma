@@ -233,6 +233,122 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helper: seed di un tenant dev completo (tenant + sede + user + role + assignments)
+// Idempotente: re-run safe. D3b extension per supportare N tenant dev (demo, acme).
+// ─────────────────────────────────────────────────────────────────────────────
+interface SeedDevTenantParams {
+  tenant: { slug: string; name: string };
+  sede: { name: string; address: string; city: string; postalCode: string };
+  user: { email: string; password: string; firstName: string; lastName: string };
+  superAdminTplId: string;
+  superAdminTplDescription: string;
+  tplPermissions: { permissionId: string }[];
+}
+
+async function seedDevTenant(params: SeedDevTenantParams): Promise<void> {
+  const { tenant: tenantInfo, sede: sedeInfo, user: userInfo } = params;
+
+  // 1. Tenant
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: tenantInfo.slug },
+    create: { id: id(), name: tenantInfo.name, slug: tenantInfo.slug, isActive: true },
+    update: { name: tenantInfo.name, isActive: true },
+  });
+  console.log(`  Tenant '${tenantInfo.slug}': ${tenant.id}`);
+
+  // 2. Sede (no UNIQUE su tenant_id+name nello schema, manual findFirst+create)
+  let sede = await prisma.sede.findFirst({
+    where: { tenantId: tenant.id, name: sedeInfo.name },
+  });
+  if (!sede) {
+    sede = await prisma.sede.create({
+      data: {
+        id: id(),
+        tenantId: tenant.id,
+        name: sedeInfo.name,
+        address: sedeInfo.address,
+        city: sedeInfo.city,
+        postalCode: sedeInfo.postalCode,
+      },
+    });
+  }
+  console.log(`  Sede '${sedeInfo.name}': ${sede.id}`);
+
+  // 3. User con password argon2id
+  const passwordHash = await argon2.hash(userInfo.password, { type: argon2.argon2id });
+  const user = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: tenant.id, email: userInfo.email } },
+    create: {
+      id: id(),
+      tenantId: tenant.id,
+      email: userInfo.email,
+      passwordHash,
+      firstName: userInfo.firstName,
+      lastName: userInfo.lastName,
+      isActive: true,
+    },
+    update: {
+      passwordHash,
+      firstName: userInfo.firstName,
+      lastName: userInfo.lastName,
+      isActive: true,
+    },
+  });
+  console.log(`  User '${userInfo.email}': ${user.id}`);
+
+  // 4. Role Super Admin tenant-scoped (clone dal template)
+  const superAdminRole = await prisma.role.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: 'Super Admin' } },
+    create: {
+      id: id(),
+      tenantId: tenant.id,
+      name: 'Super Admin',
+      description: params.superAdminTplDescription,
+      isSystem: true,
+    },
+    update: { description: params.superAdminTplDescription, isSystem: true },
+  });
+  console.log(`  Role 'Super Admin' (tenant '${tenantInfo.slug}'): ${superAdminRole.id}`);
+
+  // 5. Copia mappings template -> role_permissions
+  let rolePermCreated = 0;
+  let rolePermSkipped = 0;
+  for (const tp of params.tplPermissions) {
+    const existing = await prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: { roleId: superAdminRole.id, permissionId: tp.permissionId },
+      },
+    });
+    if (existing) {
+      rolePermSkipped++;
+    } else {
+      await prisma.rolePermission.create({
+        data: { roleId: superAdminRole.id, permissionId: tp.permissionId },
+      });
+      rolePermCreated++;
+    }
+  }
+  console.log(
+    `  role_permissions (Super Admin ${tenantInfo.slug}): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
+  );
+
+  // 6. Assignment user -> Super Admin tenant-wide (sede_id NULL).
+  // Lo unique index parziale "user_roles_tenant_wide_unique" garantisce no
+  // duplicati su (user_id, role_id) WHERE sede_id IS NULL.
+  const existingAssignment = await prisma.userRole.findFirst({
+    where: { userId: user.id, roleId: superAdminRole.id, sedeId: null },
+  });
+  if (!existingAssignment) {
+    await prisma.userRole.create({
+      data: { id: id(), userId: user.id, roleId: superAdminRole.id, sedeId: null },
+    });
+    console.log(`  user_roles: ${userInfo.email} -> Super Admin (tenant-wide) created`);
+  } else {
+    console.log(`  user_roles: ${userInfo.email} -> Super Admin (tenant-wide) already exists`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
@@ -332,122 +448,67 @@ async function main(): Promise<void> {
   console.log(`  -> ${mapCreated} created, ${mapUpdated} re-affirmed, ${mapTotal} total\n`);
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Dev tenant + admin (opt-out via NODE_ENV=production)
+  // Dev tenants + admin (opt-out via NODE_ENV=production)
   // ───────────────────────────────────────────────────────────────────────────
-  // Crea un tenant "demo" + sede + user admin@demo.local + clone del template
-  // Super Admin in `roles` + mapping in `role_permissions` + assegnazione
-  // tenant-wide (sede_id NULL) all'admin. Solo per dev locale (D2a auth).
-  // Per skippare: NODE_ENV=production prisma db seed.
+  // Crea 2 tenant dev:
+  //   - demo  (admin@demo.local / Admin123!)        — esistente da D2a
+  //   - acme  (manager@acme.local / Manager123!)   — nuovo D3b per smoke RLS
+  //
+  // Per ogni tenant: sede + user + clone Super Admin template + role_permissions
+  // + assignment tenant-wide. Idempotente: re-run safe.
+  //
+  // Solo dev locale. Per skippare: NODE_ENV=production prisma db seed.
   // ───────────────────────────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== 'production') {
     console.log('Dev data (NODE_ENV != "production"):');
 
-    // 1. Tenant
-    const tenant = await prisma.tenant.upsert({
-      where: { slug: 'demo' },
-      create: { id: id(), name: 'Demo Pizzeria', slug: 'demo', isActive: true },
-      update: { name: 'Demo Pizzeria', isActive: true },
-    });
-    console.log(`  Tenant 'demo': ${tenant.id}`);
-
-    // 2. Sede (UNIQUE su (tenant_id, name) non esiste nello schema, uso findFirst+upsert manuale)
-    let sede = await prisma.sede.findFirst({
-      where: { tenantId: tenant.id, name: 'Sede Principale' },
-    });
-    if (!sede) {
-      sede = await prisma.sede.create({
-        data: {
-          id: id(),
-          tenantId: tenant.id,
-          name: 'Sede Principale',
-          address: 'Via Roma 1',
-          city: 'Milano',
-          postalCode: '20100',
-        },
-      });
-    }
-    console.log(`  Sede 'Sede Principale': ${sede.id}`);
-
-    // 3. Admin user
-    const adminPasswordHash = await argon2.hash('Admin123!', { type: argon2.argon2id });
-    const admin = await prisma.user.upsert({
-      where: { tenantId_email: { tenantId: tenant.id, email: 'admin@demo.local' } },
-      create: {
-        id: id(),
-        tenantId: tenant.id,
-        email: 'admin@demo.local',
-        passwordHash: adminPasswordHash,
-        firstName: 'Admin',
-        lastName: 'Demo',
-        isActive: true,
-      },
-      update: {
-        passwordHash: adminPasswordHash,
-        firstName: 'Admin',
-        lastName: 'Demo',
-        isActive: true,
-      },
-    });
-    console.log(`  User 'admin@demo.local': ${admin.id}`);
-
-    // 4. Clone Super Admin template -> role tenant-scoped
+    // Carica una volta il template Super Admin (riusato per tutti i tenant)
     const superAdminTpl = await prisma.systemRoleTemplate.findUnique({
       where: { name: 'Super Admin' },
     });
     if (!superAdminTpl) throw new Error("System template 'Super Admin' missing");
-
-    const superAdminRole = await prisma.role.upsert({
-      where: { tenantId_name: { tenantId: tenant.id, name: 'Super Admin' } },
-      create: {
-        id: id(),
-        tenantId: tenant.id,
-        name: 'Super Admin',
-        description: superAdminTpl.description,
-        isSystem: true,
-      },
-      update: { description: superAdminTpl.description, isSystem: true },
-    });
-    console.log(`  Role 'Super Admin' (tenant 'demo'): ${superAdminRole.id}`);
-
-    // 5. Copia mappings da template -> role_permissions
     const tplPermissions = await prisma.systemRoleTemplatePermission.findMany({
       where: { templateId: superAdminTpl.id },
     });
-    let rolePermCreated = 0;
-    let rolePermSkipped = 0;
-    for (const tp of tplPermissions) {
-      const existing = await prisma.rolePermission.findUnique({
-        where: {
-          roleId_permissionId: { roleId: superAdminRole.id, permissionId: tp.permissionId },
-        },
-      });
-      if (existing) {
-        rolePermSkipped++;
-      } else {
-        await prisma.rolePermission.create({
-          data: { roleId: superAdminRole.id, permissionId: tp.permissionId },
-        });
-        rolePermCreated++;
-      }
-    }
-    console.log(
-      `  role_permissions (Super Admin demo): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
-    );
 
-    // 6. Assegnazione admin -> Super Admin tenant-wide (sede_id NULL)
-    // Lo unique index parziale "user_roles_tenant_wide_unique" garantisce no
-    // duplicati su (user_id, role_id) WHERE sede_id IS NULL.
-    const existingAssignment = await prisma.userRole.findFirst({
-      where: { userId: admin.id, roleId: superAdminRole.id, sedeId: null },
+    await seedDevTenant({
+      tenant: { slug: 'demo', name: 'Demo Pizzeria' },
+      sede: {
+        name: 'Sede Principale',
+        address: 'Via Roma 1',
+        city: 'Milano',
+        postalCode: '20100',
+      },
+      user: {
+        email: 'admin@demo.local',
+        password: 'Admin123!',
+        firstName: 'Admin',
+        lastName: 'Demo',
+      },
+      superAdminTplId: superAdminTpl.id,
+      superAdminTplDescription: superAdminTpl.description,
+      tplPermissions,
     });
-    if (!existingAssignment) {
-      await prisma.userRole.create({
-        data: { id: id(), userId: admin.id, roleId: superAdminRole.id, sedeId: null },
-      });
-      console.log(`  user_roles: admin -> Super Admin (tenant-wide) created`);
-    } else {
-      console.log(`  user_roles: admin -> Super Admin (tenant-wide) already exists`);
-    }
+
+    await seedDevTenant({
+      tenant: { slug: 'acme', name: 'Pizzeria Acme' },
+      sede: {
+        name: 'Sede Centro',
+        address: 'Via Garibaldi 1',
+        city: 'Roma',
+        postalCode: '00100',
+      },
+      user: {
+        email: 'manager@acme.local',
+        password: 'Manager123!',
+        firstName: 'Manager',
+        lastName: 'Acme',
+      },
+      superAdminTplId: superAdminTpl.id,
+      superAdminTplDescription: superAdminTpl.description,
+      tplPermissions,
+    });
+
     console.log('');
   } else {
     console.log('Dev data: SKIPPED (NODE_ENV=production)\n');
@@ -461,7 +522,9 @@ async function main(): Promise<void> {
   console.log(`  Role templates:        ${ROLE_TEMPLATES.length}`);
   console.log(`  Total mappings:        ${mapTotal}`);
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`  Dev tenant:            demo (admin@demo.local / Admin123!)`);
+    console.log(`  Dev tenants:`);
+    console.log(`    - demo  (admin@demo.local / Admin123!)`);
+    console.log(`    - acme  (manager@acme.local / Manager123!)`);
   }
   console.log('  ✅ Seed completato (idempotente).');
 }
