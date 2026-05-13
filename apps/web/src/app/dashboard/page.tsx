@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { apiGet, ApiError } from '@/lib/api';
+import { apiGet, apiPost, ApiError } from '@/lib/api';
 import { clearTokens, getAccessToken } from '@/lib/auth';
 import type { MeResponse } from '@/lib/types';
 
@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -41,10 +42,26 @@ export default function DashboardPage() {
       });
   }, [router]);
 
-  function handleLogout() {
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    const token = getAccessToken();
+
+    if (token) {
+      try {
+        await apiPost<void>('/auth/logout', {}, { Authorization: `Bearer ${token}` });
+      } catch (err) {
+        // Decision 1A ADR-0012: error silente + log, always clearTokens anche su fail.
+        // Sessione backend potrebbe restare orphan fino a scadenza naturale JWT (15 min).
+        console.warn(
+          'Logout server-side failed (session may remain orphan until JWT expiry):',
+          err,
+        );
+      }
+    }
+
     clearTokens();
     router.replace('/login');
-  }
+  };
 
   if (loading) {
     return (
@@ -95,8 +112,13 @@ export default function DashboardPage() {
               ))}
             </div>
           </section>
-          <Button onClick={handleLogout} variant="outline" className="w-full">
-            Esci
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="w-full"
+            disabled={isLoggingOut}
+          >
+            {isLoggingOut ? 'Uscita...' : 'Esci'}
           </Button>
         </CardContent>
       </Card>

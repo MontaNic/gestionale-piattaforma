@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio)
+**Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio-sera)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + **E2 Login form UI + integrazione API** completi. **Primo login browser funzionante**: `http://localhost:3001/login` → admin@demo.local + Admin123! → `/dashboard` con Welcome Admin Demo + 32 permessi (smoke 9/9 PASS, screenshot verificato). **10 endpoint operativi** API a `:3000` (CORS abilitato in E2 per primo client browser-based) + frontend `:3001` con `/login` + `/dashboard` + `/` redirect, **8 test Vitest verdi** + RLS attivo + smoke RLS E2E 7/7 PASS.
 
 > ✅ **Primo login browser end-to-end funzionante.** E1 + **E2** completi. Form login `/login` (react-hook-form + zod + shadcn Form) → POST `/auth/login` → localStorage JWT → `/dashboard` GET `/me` → render Welcome + 32 permessi + logout. Backend CORS abilitato (discovery E2 F3 critical), session JWT 15min + refresh 7d con rotation invariati. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + **[ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2)**. Prossimo macro-task candidato: **da concordare nella prossima sessione**.
@@ -780,13 +780,12 @@ Primo flow end-to-end frontend↔API via browser. Form login `/login` (react-hoo
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
 1. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo, email notification theft, rate limit `login-pin` + `POST /tenants`, E2E test (full Nest bootstrap + Testcontainers).
-2. **Logout server-side completo** (TD-6 ADR-0012) — `apps/web/src/app/dashboard/page.tsx#handleLogout` deve chiamare `POST /api/v1/auth/logout` PRIMA di clearTokens. Backend endpoint già esiste (D2a). Stima ~30 min.
-3. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Stima 1-2h.
-4. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
-5. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
-6. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
-7. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-8. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+2. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Stima 1-2h.
+3. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
+4. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
+5. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+6. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+7. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
@@ -818,7 +817,7 @@ Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/archit
 - [ ] **TD-3 ADR-0012 — Auto-refresh token prima scadenza**: access token 15min, user re-login forzato. Trigger: feedback UX "sessione scade durante uso". Stima ~1h. Pattern setInterval 14min + refresh in background + edge case tab inactive + multi-tab sync.
 - [ ] **TD-4 ADR-0012 — Setup Playwright E2E frontend CI**: oggi smoke browser manual Nicolò (no regression visiva auto-caught). Trigger: prima regression visiva non catturata da test unit OR 2° pagina critical. Stima 3-4h (Playwright + 5-10 test E2E + GitHub Actions).
 - [ ] **TD-5 ADR-0012 — shadcn CLI output cleanup pattern**: `shadcn add` può generare file che violano lint rules monorepo (E2 F2: 1 char `import type`). Trigger: ogni nuovo component. Stima 5-10 min per component. Memo CHANGELOG monitor.
-- [ ] **TD-6 ADR-0012 (backend) — Logout server-side via /auth/logout**: oggi `handleLogout` fa solo `clearTokens()` local. Session resta `is_active: true` in DB, token JWT continua a passare validate fino expiry. Trigger: security audit OR multi-device session management. Stima ~30 min (frontend apiPost + clearTokens always-executed + handle error gracefully). Backend endpoint già esiste.
+- [x] ~~**TD-6 ADR-0012 (backend) — Logout server-side via /auth/logout**~~: **RISOLTO 2026-05-13** in questa PR. Frontend handleLogout async chiama POST /auth/logout PRE clearTokens + always-executed clearTokens su error (silent log) + loading state UX. Discovery collaterale: apiPost lib 204 No Content handling fix (+3 LOC riusabile per DELETE F1). Vedi [ADR-0012 sezione TD-6 Resolution](./docs/architecture/ADR-0012-frontend-auth-flow.md).
 
 ### Qualità codice / processo (post Husky setup + typecheck monorepo)
 - [x] ~~**Strategia typecheck monorepo**~~ — RISOLTO 2026-05-13 (Macro-task C, ADR-0006). `pnpm typecheck` ora propaga via Turbo a tutti i workspace, CI valida `packages/db` e futuri.

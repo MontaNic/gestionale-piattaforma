@@ -35,6 +35,9 @@ export async function apiPost<T>(
   });
 
   if (!res.ok) throw await parseError(res);
+  // 204 No Content: pattern NestJS @HttpCode(NO_CONTENT) per logout/delete/update.
+  // Caller dovrebbe usare apiPost<void>(...) e non leggere il return value.
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
