@@ -4,8 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (notte tardi)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + **D2b PIN POS login** completi. **8 endpoint funzionanti, 6 test verdi**, theft detection E2E verificato (revoke all + audit forense) + smoke E2E 8 scenari PIN verdi. Prossimo macro-task candidato: **D3 RLS reali** (middleware tenant context + sostituzione policy `USING (true)` con i 3 pattern ADR-0005).
+**Ultimo aggiornamento:** 13 maggio 2026 (notte fonda)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + **D3a RLS framework** completi. **8 endpoint funzionanti, 6 test verdi**, RLS framework operativo (ALS context + Prisma extension + Interceptor + middleware refactor), smoke limited 4/4 scenari verdi con role temp.
+
+> 🚨 **PROSSIMO TASK = D3b PREREQUISITO SECURITY.** D3a fornisce il framework, ma le policy DB sono ancora placeholder `USING(true)` e l'app si connette come postgres (superuser → bypassa RLS). **Multi-tenant isolation NON enforced fino a D3b** (app role non-superuser + DIRECT_URL pattern + migration `replace_rls_placeholder_with_real`). **Non deployare in produzione senza D3b.** Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md).
 
 ---
 
@@ -621,19 +623,57 @@ Auth completata con flusso PIN dedicato ai terminali POS. Scope: 2 endpoint + un
 - **2026-05-13**: Single error code `E_AUTH_INVALID_CREDENTIALS` per PIN wrong / no match. No info leak (stesso pattern login email/password).
 - **2026-05-13**: Smoke test PIN `4827` (random non-pattern) invece di `5678` originalmente proposto (sequenziale, sarebbe stato rifiutato dal validator).
 
+### D3a — RLS framework (Macro-task D3a, 2026-05-13 notte fonda)
+
+Framework Row Level Security operativo a livello applicativo. **NON attiva il enforcement reale** (policy DB ancora placeholder, postgres user bypassa RLS). Necessario D3b per security activation.
+
+- [x] **AsyncLocalStorage context** (`packages/db/src/rls.ts`): `TenantContext` type + ALS singleton + helpers `getTenantContext`, `runInTenantContext(ctx, fn)`, `withSystemContext(fn)`, `withSuperAdminContext(tenantId, fn)`.
+- [x] **rlsExtension factory** (`packages/db/src/rls.ts`): Prisma extension `$allOperations` wrappa ogni query in `$transaction` interactive con `SET LOCAL app.tenant_id` + `SET LOCAL app.is_super_admin`. Fail-fast `RlsNoContextError` se context mancante.
+- [x] **R3 fix F1 + re-entrancy guard**: scoperto empiricamente a STOP 1 che `query(args)` non eredita il tx context di Prisma. Workaround: `(tx as any)[modelLower][operation](args)` + `inflightStorage` ALS guard per recursion. Documentato in rls.ts + ADR-0009.
+- [x] **Wire extension** in `packages/db/src/index.ts`: chain `softDeleteExtension` → `rlsExtension`. Re-export RLS API.
+- [x] **TenantContextInterceptor** (`apps/api/src/context/tenant-context.interceptor.ts`): NestJS Interceptor globale registrato via `APP_INTERCEPTOR`, wrappa handler in `runInTenantContext({tenantId: req.tenantId, isSuperAdmin: false})` via Observable/Promise bridge (firstValueFrom). Skip per Public senza tenant.
+- [x] **TenantMiddleware refactor**: slug lookup in `withSystemContext`, resolve → `runInTenantContext` wrappa il `next()` per propagare ALS al resto della chain.
+- [x] **AuthService.refresh wrap**: `/auth/refresh` non passa per middleware tenant → wrap interno con `runInTenantContext({tenantId: payload.tenantId, false})` dopo JWT decode. Refactor `refresh` + `refreshInContext`.
+- [x] **Health service wrap** in `withSystemContext` (anche se `$queryRaw` bypassa extension: leggibilita' intent + safety futura).
+- [x] **Seed + smoke-soft-delete wrap** in `withSystemContext` (script ops = system context per design).
+- [x] **6 test essential** continuano a passare: mock `@gestionale/db` esteso con `runInTenantContext`, `withSystemContext`, `withSuperAdminContext` (passthrough fn).
+- [x] **Smoke "limited" 4/4 scenari verdi** (script `/tmp/d3a-smoke-limited.ts` non committato): role temp non-superuser + policy reale temp su `users` only; BASELINE/SCEN1/SCEN2 (tenant random=0)/SCEN3 (super_admin=tutti)/SCEN4 (no context throws) tutti PASS.
+- [x] **ADR-0009 v1**: 15 decisioni + R3 fix + R9 deferred + considered alternatives + reversibility + tech debt + security considerations.
+
+#### Decisioni prese durante D3a (2026-05-13 notte fonda)
+
+- **2026-05-13**: Pattern S2 (per-operation tx + Prisma extension) vs S3 (HTTP-scoped tx) — S3 scartato per R5 (argon2 verify blocca pool connection ~150ms). S2 overhead 2-3ms/query localhost accettabile F1.
+- **2026-05-13**: ALS instance singleton di modulo in `packages/db/src/rls.ts` (non in apps/api). Seed.ts e altri script in packages/db possono importare senza dipendenza inversa cross-package. Decisione architetturale chiarita a STOP 0.
+- **2026-05-13**: **R3 manifesto a STOP 1**: `query(args)` dentro `$transaction(async tx => ...)` non eredita il tx context (verificato empiricamente). Fix F1: `tx[modelLower][operation](args)` + re-entrancy guard. Pattern testato 4/4 scenari verdi.
+- **2026-05-13**: **R9 scoperto a STOP 1**: postgres user (DATABASE_URL) è superuser + BYPASSRLS, bypassa RLS by design. Senza app role non-superuser, RLS è no-op. Split D3a/D3b deciso: D3a chiude con framework, D3b attiva con role + GRANT + DIRECT_URL + migration policy reali.
+- **2026-05-13**: **S5 clarification**: `isSuperAdmin = false` SEMPRE da JWT in F1. Tenant-scoped "Super Admin" role del seed e' solo bundle di permessi, NON RLS bypass. Concetto "platform super admin user" rimandato a macro-task futuro.
+- **2026-05-13**: Naming policy reali D3b: `<table>_tenant_isolation` (vs placeholder `<table>_policy`). Permette future policy multiple per tabella.
+- **2026-05-13**: `tenant_id` policy = text comparison (no cast `::uuid`): scoperto a STOP 1 che `tenant_id` è TEXT in DB (Prisma String mapping). Le policy D3b useranno text comparison senza cast.
+
 ---
 
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: da concordare nella prossima sessione.**
+### 🚨 D3b — RLS activation (PREREQUISITO SECURITY, ~4h30)
 
-Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
+**Senza D3b, RLS è no-op**: postgres bypassa policy, le policy sono placeholder `USING(true)`. **Non deployare in produzione senza D3b.**
 
-1. **D3 Middleware tenant context + RLS reali** — middleware NestJS che fa `SET app.tenant_id = '<uuid>'` su transaction Prisma. Sostituzione policy `USING (true)` con i 3 pattern di ADR-0005 (tenant_id diretto, EXISTS join, tenants con bypass Super Admin). Migration `replace_rls_placeholder_with_real`.
-2. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
-3. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, rate limit dedicato `login-pin` per `(tenantId, deviceId, ip)`, E2E test (full Nest bootstrap + Testcontainers).
-4. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-5. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+Scope (vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) sezione "R9"):
+
+1. Migration `<ts>_create_app_role_and_grants`: `CREATE ROLE gestionale_app LOGIN PASSWORD '<APP_DB_PASSWORD>' NOSUPERUSER NOBYPASSRLS` + `GRANT USAGE/SELECT/INSERT/UPDATE/DELETE` su schema/tables/sequences + `ALTER DEFAULT PRIVILEGES` per future tabelle.
+2. `schema.prisma`: aggiungere `directUrl = env("DIRECT_URL")` per il pattern dual-URL.
+3. `.env` + `.env.example`: `APP_DB_PASSWORD`, `DATABASE_URL` (runtime app role), `DIRECT_URL` (migration postgres).
+4. Migration `<ts>_replace_rls_placeholder_with_real`: DROP placeholder + CREATE reale su 7 tabelle (tenants/sedi/users/roles/user_roles/sessions/audit_logs) con pattern `current_setting('app.is_super_admin', true) = 'true' OR tenant_id = current_setting('app.tenant_id', true)`. user_roles + sessions: EXISTS join.
+5. Seed esteso: 2° tenant `acme` (slug 'acme', Pizzeria Acme) + admin `manager@acme.local` / `Manager123!` + role Super Admin tenant-scoped.
+6. Smoke E2E full: 5 scenari (tenant A isolation, tenant B isolation, JWT cross-tenant attempt, system seed visibility, super_admin cross-tenant via script).
+7. Docker compose: ensure script per creare il role al bootstrap.
+
+### Altri candidate post-D3b
+
+1. **D4 Bootstrap tenant logic** — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`.
+2. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, rate limit dedicato `login-pin` per `(tenantId, deviceId, ip)`, E2E test (full Nest bootstrap + Testcontainers).
+3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 

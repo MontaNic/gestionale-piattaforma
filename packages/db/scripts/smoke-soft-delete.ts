@@ -14,7 +14,7 @@
 //   DELETE FROM tenants WHERE slug='smoke-test';
 // =============================================================================
 
-import { id, prisma } from '../src/index';
+import { id, prisma, withSystemContext } from '../src/index';
 
 const TEST_SLUG = 'smoke-test';
 const TEST_NAME = 'Smoke Test Tenant';
@@ -139,7 +139,9 @@ async function main(): Promise<void> {
   console.log('  🎉 Tutti gli scenari verdi.');
 }
 
-main()
+// Wrap in system context: RLS framework D3a richiede tenant context per ogni
+// query. Smoke gira come ops/script -> system bypass via is_super_admin=true.
+withSystemContext(() => main())
   .catch(async (err) => {
     console.error('\n❌ Smoke test failure:', err);
     process.exitCode = 1;

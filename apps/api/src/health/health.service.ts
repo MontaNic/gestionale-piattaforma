@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { withSystemContext } from '@gestionale/db';
 
 import { DbService } from '../db/db.service';
 import type { HealthDto } from './health.dto';
@@ -12,9 +13,13 @@ export class HealthService {
   async check(): Promise<HealthDto> {
     const timestamp = new Date().toISOString();
     try {
-      // $queryRaw bypass policy RLS attive: serve solo a verificare che la
-      // connessione TCP + auth Postgres sia healthy. Niente PII letta.
-      await this.db.prisma.$queryRaw`SELECT 1`;
+      // $queryRaw bypassa l'extension RLS (intercetta solo model operations),
+      // ma wrappa in withSystemContext per:
+      // (a) coerenza con le altre code path che dichiarano intent esplicito
+      // (b) safety se in futuro l'extension RLS coprira' anche $queryRaw
+      // (c) leggibilita': il health check e' system context per design.
+      // Niente PII letta, solo connection ping.
+      await withSystemContext(() => this.db.prisma.$queryRaw`SELECT 1`);
       return { status: 'ok', db: 'connected', timestamp };
     } catch (err) {
       this.logger.error('Healthcheck DB ping failed', err instanceof Error ? err.stack : err);

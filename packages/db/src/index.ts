@@ -8,14 +8,21 @@
 // - `createPrismaClient()` factory (per NestJS DI / test isolati)
 // - `prisma` singleton lazy (istanza eager, connessione DB lazy — vedi ADR-0005)
 // - `PrismaClient`, `Prisma` re-export per consumer che servono i tipi base
+// - RLS API: `runInTenantContext`, `withSystemContext`, `withSuperAdminContext`,
+//   `getTenantContext`, `TenantContext`, `RlsNoContextError` (vedi ADR-0009)
 //
-// La extension `softDeleteExtension` (auto-detect modelli con `deletedAt`,
-// forceDelete via $executeRawUnsafe, escape semantics) e' applicata
-// automaticamente al client. Dettagli: ./soft-delete.ts + ADR-0005.
+// Extension chain applicata al client:
+// 1. `softDeleteExtension` — auto-detect modelli con `deletedAt`, escape
+//    semantics, forceDelete via $executeRawUnsafe (./soft-delete.ts + ADR-0005)
+// 2. `rlsExtension` — wrappa ogni query in $transaction interactive con
+//    SET LOCAL app.tenant_id / app.is_super_admin (./rls.ts + ADR-0009).
+//    OUTER: intercetta prima di softDelete, propaga il context a tutta la
+//    catena. Per-operation tx (pattern S2, decisione 1 ADR-0009).
 
 import { PrismaClient, Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 
+import { rlsExtension } from './rls';
 import { softDeleteExtension } from './soft-delete';
 
 /**
@@ -28,11 +35,17 @@ export const id = (): string => uuidv7();
 export { uuidv7 };
 
 /**
- * Crea una nuova istanza PrismaClient con la `softDeleteExtension` applicata.
- * Usare per dependency injection (NestJS) o test isolati. Per script one-off
- * e codice applicativo "shared" preferire il singleton `prisma` esportato.
+ * Crea una nuova istanza PrismaClient con la extension chain completa:
+ * `softDeleteExtension` + `rlsExtension`. Usare per dependency injection
+ * (NestJS) o test isolati. Per script one-off e codice applicativo "shared"
+ * preferire il singleton `prisma` esportato.
+ *
+ * IMPORTANTE: ogni query Prisma su questo client lancia `RlsNoContextError`
+ * se chiamata fuori da `runInTenantContext` / `withSystemContext` /
+ * `withSuperAdminContext`. Fail-fast by design (ADR-0009 decisione 11).
  */
-export const createPrismaClient = () => new PrismaClient().$extends(softDeleteExtension);
+export const createPrismaClient = () =>
+  new PrismaClient().$extends(softDeleteExtension).$extends(rlsExtension());
 
 export type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
 
@@ -49,3 +62,20 @@ export type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
 export const prisma: ExtendedPrismaClient = createPrismaClient();
 
 export { PrismaClient, Prisma };
+
+// -----------------------------------------------------------------------------
+// RLS API re-exports (ALS context + helpers + error type)
+// -----------------------------------------------------------------------------
+
+export {
+  getTenantContext,
+  runInTenantContext,
+  withSystemContext,
+  withSuperAdminContext,
+  RLS_NO_CONTEXT,
+  RlsNoContextError,
+  RLS_PG_SETTING_TENANT,
+  RLS_PG_SETTING_SUPER_ADMIN,
+} from './rls';
+
+export type { TenantContext } from './rls';

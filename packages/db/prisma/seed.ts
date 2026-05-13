@@ -22,7 +22,7 @@
 
 import argon2 from 'argon2';
 
-import { id, prisma } from '../src/index';
+import { id, prisma, withSystemContext } from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Permission catalog (32 atomici)
@@ -466,7 +466,11 @@ async function main(): Promise<void> {
   console.log('  ✅ Seed completato (idempotente).');
 }
 
-main()
+// Seed gira in system context: is_super_admin=true bypassa RLS policy
+// (placeholder USING(true) in D3a, super_admin OR match in D3b). Tutte le
+// upsert / create / findUnique downstream ereditano l'ALS via async_hooks.
+// Vedi ADR-0009.
+withSystemContext(() => main())
   .catch(async (err) => {
     console.error('\n❌ Seed failure:', err);
     process.exitCode = 1;
