@@ -205,6 +205,46 @@ curl -X POST http://localhost:3000/api/v1/auth/login-pin \
 
 Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt random di argon2id rende inutile un UNIQUE index su `pin_hash`). Vedi [ADR-0008 sezione D2b](./docs/architecture/ADR-0008-auth-module.md#d2b-implementation--pin-pos-login-2026-05-13-update) per decisioni e tech debt (HMAC lookup index in F2).
 
+#### Tenant bootstrap (D4) — POST /tenants
+
+Endpoint protetto per creare un nuovo tenant + bootstrap RBAC completo (vedi [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md)). Richiede JWT valido + permission `sistema.tenant.gestisci` (Super Admin del proprio tenant ce l'ha by default — vedi seed).
+
+```bash
+# Login admin@demo (ha sistema.tenant.gestisci via Super Admin role)
+ACCESS=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-Slug: demo" \
+  -d '{"email":"admin@demo.local","password":"Admin123!"}' | jq -r .data.accessToken)
+
+# Crea nuovo tenant
+curl -X POST http://localhost:3000/api/v1/tenants \
+  -H "Authorization: Bearer $ACCESS" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Pizzeria Esempio",
+    "slug": "pizzeria-esempio",
+    "adminEmail": "admin@pizzeria.local",
+    "adminPassword": "Esempio123!",
+    "adminFirstName": "Mario",
+    "adminLastName": "Rossi"
+  }'
+# → 201 + {data: {tenant, sede, admin, superAdminRole}}
+```
+
+Una singola chiamata bootstrap-a 8 entità atomic (tutto in 1 transaction Prisma via [`withSystemContextAtomicTx`](./docs/architecture/ADR-0009-rls-real.md#d3b--activation-completed-2026-05-13)):
+
+1. Tenant (slug uniqueness check + create)
+2. Sede default (`Sede Principale, Milano, 20100` se non override)
+3. Admin user (argon2 hashed password)
+4. Clone 6 `system_role_templates` → 6 roles tenant-scoped (Super Admin, Admin sede, Direzione, Cassiere, Cameriere, Cucina/Bar)
+5. 104 role_permissions (32+31+24+10+4+3 cloned mappings)
+6. Assignment admin → Super Admin tenant-wide (sede_id NULL)
+7. Audit log `tenant.created` con `{slug, name, adminEmail}` (NO password)
+
+Error codes: `401` (no JWT), `403 E_AUTH_INSUFFICIENT_PERMISSIONS`, `400 E_TENANT_SLUG_INVALID_FORMAT`/`E_TENANT_SLUG_RESERVED`, `409 E_TENANT_SLUG_EXISTS`.
+
+Forbidden slugs (anti-collision route): `api, www, admin, system, app, public, static, health, auth, me, tenants`.
+
 **Env vars** (`.env`):
 
 - `PORT` (default 3000)
@@ -240,13 +280,17 @@ Multi-tenant isolation enforced runtime via PostgreSQL Row Level Security (vedi 
 - **7 policy reali** `<table>_tenant_isolation` + `FORCE ROW LEVEL SECURITY` su 7 tabelle multi-tenant (tenants/sedi/users/roles/user_roles/sessions/audit_logs). Pattern: `is_super_admin OR tenant_id = current_setting(app.tenant_id)`. user_roles/sessions usano EXISTS join (no tenant_id diretta).
 - **Bootstrap fresh volume**: `infra/postgres/init/01-create-app-role.sh` crea il role con password reale al primo avvio del container Postgres.
 
-3 modalità di accesso DB:
+5 modalità di accesso DB (3 single-op + 2 atomic multi-statement, vedi ADR-0010 sezione "Discoveries F2" per il perché degli Atomic helpers):
 
-| Modalità                 | Quando                                                           | Helper                                      |
-| ------------------------ | ---------------------------------------------------------------- | ------------------------------------------- |
-| Tenant-scoped (99%)      | Request post-auth + pre-auth con tenant slug                     | `runInTenantContext({tenantId, false}, fn)` |
-| System                   | Seed, jobs, bootstrap, health check, slug pre-tenant             | `withSystemContext(fn)`                     |
-| Super Admin cross-tenant | Script ops manuali (no JWT-based super admin in F1, vedi ADR-S5) | `withSuperAdminContext(tenantId, fn)`       |
+| Modalità                  | Quando                                                           | Helper                                                         |
+| ------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| Tenant-scoped (99%)       | Request post-auth + pre-auth con tenant slug                     | `runInTenantContext({tenantId, false}, fn)`                    |
+| System                    | Seed, jobs, bootstrap, health check, slug pre-tenant             | `withSystemContext(fn)`                                        |
+| Super Admin cross-tenant  | Script ops manuali (no JWT-based super admin in F1, vedi ADR-S5) | `withSuperAdminContext(tenantId, fn)`                          |
+| **System atomic tx (D4)** | Multi-statement atomic in system context (es. createTenant)      | `withSystemContextAtomicTx(prisma, async tx => ...)`           |
+| **Tenant atomic tx (D4)** | Multi-statement atomic in tenant context (es. bulk update)       | `withTenantContextAtomicTx(prisma, tenantId, async tx => ...)` |
+
+Gli Atomic helper sono necessari perché un `prisma.$transaction(async tx => ...)` esplicito **non e' atomico** quando le operazioni passano per l'extension RLS (l'extension auto-wrappa ogni op in un tx separato). Pattern: SET LOCAL una volta sull'inizio tx + `inflightStorage=true` guard previene re-wrap dell'extension. Vedi [ADR-0010 sezione "Discoveries F2"](./docs/architecture/ADR-0010-tenant-bootstrap.md#f2--transaction-esplicito-non-atomico-con-rls-extension).
 
 Smoke E2E full (read-only, idempotente, riusabile per CI futura):
 

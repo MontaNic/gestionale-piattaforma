@@ -9,10 +9,11 @@ import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
 import { TenantModule } from './tenant/tenant.module';
+import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [DbModule, TenantModule, UsersModule, AuthModule, MeModule, HealthModule],
+  imports: [DbModule, TenantModule, UsersModule, AuthModule, MeModule, HealthModule, TenantsModule],
   controllers: [AppController],
   providers: [
     // TenantContextInterceptor registrato globale: wrappa ogni handler in

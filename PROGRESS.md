@@ -5,9 +5,9 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 13 maggio 2026 (notte fonda)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + **D3b RLS activation** completi. **8 endpoint funzionanti, 6 test Vitest verdi**, **RLS attivo e enforced runtime** (app role NOSUPERUSER + 7 policy reali con FORCE + dual-URL Prisma + docker init bootstrap), **smoke E2E full 7/7 PASS**, cross-tenant lookup bloccato a livello DB anche con UUID esatto.
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + **D4 Tenant bootstrap** completi. **9 endpoint funzionanti** (incluso POST /tenants), **8 test Vitest verdi** (6 auth + 2 hasPermission), RLS attivo + enforced runtime + smoke RLS E2E 7/7 PASS + smoke D4 5/5 PASS. Atomic transaction helpers introdotti in D4 (`withSystemContextAtomicTx` / `withTenantContextAtomicTx`).
 
-> ✅ **RLS Active — multi-tenant isolation enforced runtime.** D3a + D3b completi. App role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), policy `<table>_tenant_isolation` su 7 tabelle, FORCE ROW LEVEL SECURITY, pattern dual-URL (DATABASE_URL=app, DIRECT_URL=postgres). Smoke E2E 7/7 PASS. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md). Prossimo macro-task candidato: **D4 Bootstrap tenant logic** (non più prerequisito security).
+> ✅ **RLS Active + Tenant bootstrap operativo.** D3a + D3b + D4 completi. Cross-tenant lookup bloccato a livello DB anche con UUID esatto, app role NOSUPERUSER + FORCE RLS su 7 tabelle, endpoint POST /tenants atomic con permission check `sistema.tenant.gestisci`. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap). Prossimo macro-task candidato: **E1 Next.js scaffold** (frontend).
 
 ---
 
@@ -678,6 +678,36 @@ RLS attivo e enforced runtime. App role non-superuser + policy reali + FORCE ROW
 - **2026-05-13**: **Migration immutability** (regola interna nata da STEP 3 checksum drift): MAI modificare SQL/comment di migration applicate. Per fix/refinement post-apply → nuova migration `<ts>_fix_<topic>.sql`. Esempio: `tighten_app_role_attributes` aggiunge attributi role senza toccare `create_app_role_and_grants`.
 - **2026-05-13**: **Docker init script + migration coesistenti**: docker init per fresh volume (password reale at-bootstrap), migration per existing volumes (placeholder + ALTER ROLE post). Coerente con docker-entrypoint-initdb.d semantics (one-shot).
 
+### D4 — Bootstrap tenant logic (Macro-task D4, 2026-05-13 notte fonda)
+
+Endpoint `POST /api/v1/tenants` per creare nuovo tenant + bootstrap RBAC completo in 1 chiamata atomic. Apre il pattern "ops multi-statement atomic" per macro-task futuri.
+
+- [x] **Endpoint `POST /api/v1/tenants`** (`apps/api/src/tenants/tenants.controller.ts`): protetto by `JwtAuthGuard` globale, body `CreateTenantDto`, defense-in-depth check `user` undefined.
+- [x] **`TenantsService.createTenant(dto, createdBy)`** (~190 LOC): permission check FUORI tx → `withSystemContextAtomicTx` atomic → 8 operations (slug check, tenant.create, sede.create, argon2.hash, user.create, 6× role+rolePermissions clone da template, userRole.create con assignedById, auditLog 'tenant.created').
+- [x] **`UsersService.hasPermission(userId, code)`** (`apps/api/src/users/users.service.ts`): query Prisma `findFirst` con chain `roles.some → role.permissions.some → permission.code` + `select: {id: true}`. Lazy lookup coerente con ADR-0008 decisione 7. 2 test essential mock-based (8/8 Vitest totali).
+- [x] **DTO `CreateTenantDto`** (`apps/api/src/tenants/dto/create-tenant.dto.ts`): @IsString/@MinLength/@MaxLength/@Matches/@IsEmail/@IsNotIn(FORBIDDEN_SLUGS). Default sede service-side via `??`. Test DTO via Vitest temporaneo 9/9 PASS (S1 valid, S2-S6 slug rejections, S7 password, S8 email, S9 postal code).
+- [x] **`FORBIDDEN_SLUGS`** (`apps/api/src/tenants/dto/forbidden-slugs.ts`): 11 voci hardcoded (`api/www/admin/system/app/public/static/health/auth/me/tenants`). Pattern simmetrico a `FORBIDDEN_PINS` D2b.
+- [x] **TenantsModule** + import in `AppModule.imports`: DI `UsersModule` per `usersService.hasPermission`.
+- [x] **Audit action enum** esteso (totale 10): `+'tenant.created'` con `afterValue: {slug, name, adminEmail}` — NO password.
+- [x] **2 Atomic helpers in `packages/db/src/rls.ts`**: `withSystemContextAtomicTx(client, fn)` + `withTenantContextAtomicTx(client, tenantId, fn)`. ~110 LOC. Bypass auto-wrap dell'extension RLS via `inflightStorage` re-entry guard (esposto come export internal). SET LOCAL una volta sull'inizio del tx via helper privato `setLocalRlsContext`.
+- [x] **Atomicity test 4/4 PASS** (script `/tmp/d4-atomicity-test.ts`, one-shot non committato): S1 system+throw rollback, S2 system happy create, S3 tenant ctx RLS attivo, S4 tenant+throw rollback.
+- [x] **Smoke E2E 5/5 PASS** (script `/tmp/d4-smoke.sh`, one-shot non committato): S1 no auth=401, S2 valid slug=201+delta DB esatto (+1 tenant/+1 user/+6 roles/+104 rolePermissions/+1 userRole/+1 auditTenantCreated/+1 sede), S3 dup slug=409+E_TENANT_SLUG_EXISTS, S4 'admin' slug=400+E_TENANT_SLUG_RESERVED, S5 login nuovo admin + /me=32 perms.
+- [x] **STEP 0 fix `$queryRaw` regression** in `rls.ts`: pass-through `$allOperations` con `model=undefined` (raw queries arrivano qui in Prisma 6.19.3). 5 LOC. Health check tornato 200 (era 503 dopo swap a NOSUPERUSER DATABASE_URL).
+- [x] **ADR-0010** (nuovo): 7 decisioni + 3 discoveries (F1 $queryRaw, F2 $transaction atomicity, F3 forceDelete+RLS bypass), considered alternatives, reversibility, tech debt (4 voci), security considerations.
+- [x] **README**: sezione "Tenant bootstrap (D4) — POST /tenants" con curl esempio; tabella "modalità accesso DB" estesa da 3 a 5 (aggiunti 2 Atomic helpers).
+- [x] **ADR-0009 v3 Notes**: 2 caveat aggiunti (raw queries pass-through scoperto empiricamente F1; explicit `$transaction` non atomico → usa Atomic helpers F2).
+
+#### Decisioni prese durante D4 (2026-05-13 notte fonda)
+
+- **2026-05-13**: **F1 fix $queryRaw regression** scoperto al pre-flight D4. Bug latente in D3a/D3b mascherato da smoke read-only + test mock-based. Health check funzionava finche' DATABASE_URL=postgres (superuser bypass), rotto al swap a NOSUPERUSER. Fix 5 LOC: early-return pass-through nell'extension RLS quando `model === undefined`.
+- **2026-05-13**: **F2 fix $transaction atomicity** scoperto pre-implementazione TenantsService. Verifica empirica: `prisma.$transaction(async tx => tx.tenant.create(...) + throw)` → tenant NON rollback (orphan). Root cause: RLS extension auto-wrappa ogni op in `client.$transaction(...)` separato (closure `client` e' BASE, non userTx). Fix architetturale: 2 Atomic helpers (`withSystemContextAtomicTx` + `withTenantContextAtomicTx`) che fanno SET LOCAL una volta + `inflightStorage` guard per bypass auto-wrap nelle ops dentro al tx.
+- **2026-05-13**: **F3 forceDelete + RLS bypass in `withSystemContext`** scoperto durante regression check post-smoke D4. `forceDelete` usa `$executeRawUnsafe` → bypassa extension → SET LOCAL non applicato → policy filtra → DELETE 0 rows. Workaround D4: cleanup ops via `DIRECT_URL` (postgres superuser bypassa RLS by design). Fix proper futuro: `withSystemContextRaw` helper. Tech debt #1 ADR-0010.
+- **2026-05-13**: **Permission check FUORI tx + inline (no Guard generico)**: D4 ha 1 endpoint. Inline `usersService.hasPermission` sufficient. Generic `@RequirePermissions(...)` rimandato a macro-task RBAC enforcement futuro.
+- **2026-05-13**: **Slug forbidden list hardcoded** (pattern simmetrico FORBIDDEN_PINS D2b): no fetch DB/rete, revocabile/estendibile in-source.
+- **2026-05-13**: **Default sede service-side** (vs `@Transform` DTO): default validi anche se `createTenant` chiamato da seed/CLI bypassando DTO. Single source of truth.
+- **2026-05-13**: **Audit log `tenant.created` filtrato**: `afterValue = {slug, name, adminEmail}`. **NO password** (security leak — audit log readable da Super Admin + system queries).
+- **2026-05-13**: **Cleanup pattern lesson learned**: test script che creano dati DB richiedono cleanup verificato via DIRECT_URL (superuser bypass) OR tx rollback intenzionale. Pattern futuro per smoke scripts. Tech debt #2 ADR-0010.
+
 ---
 
 ## 🚧 In corso / Prossimo task
@@ -686,10 +716,12 @@ RLS attivo e enforced runtime. App role non-superuser + policy reali + FORCE ROW
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **D4 Bootstrap tenant logic** (~1h) — endpoint `POST /tenants` (Super Admin only): crea tenant + clona i 6 `system_role_templates` con `isDefault: true` → `roles` tenant-scoped + copia mapping `system_role_template_permissions` → `role_permissions`. Ora che RLS è enforced, questo flusso e' naturalmente tenant-scoped via context.
-2. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo dopo N tentativi, email notification su theft, rate limit dedicato `login-pin` per `(tenantId, deviceId, ip)`, E2E test (full Nest bootstrap + Testcontainers).
-3. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-4. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **E1 Next.js scaffold** — `apps/web` con Next.js 14+ App Router + TypeScript + Tailwind + shadcn/ui (vedi stack §A3 brief). Trigger CC1/CC2 ADR-0007 (CJS/ESM strategy re-evaluation per `packages/db` consumer ESM-everywhere). Primo macro-task frontend.
+2. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo, email notification theft, rate limit `login-pin` + `POST /tenants`, E2E test (full Nest bootstrap + Testcontainers).
+3. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
+4. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 

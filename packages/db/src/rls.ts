@@ -22,6 +22,12 @@
 //   accettare responsabilita' esplicita.
 // - PgBouncer transaction mode incompatibile con SET LOCAL cross-statement
 //   (tech debt F2).
+// - **Explicit `$transaction` NON e' atomico se le operazioni passano per
+//   l'extension RLS** (scoperto a STEP 2a D4): l'extension apre un tx separato
+//   per ogni operazione via il closure `client` (non il `tx` dell'utente),
+//   quindi la rollback del tx esterno non propaga. Per operazioni
+//   multi-statement atomic, usa `withSystemContextAtomicTx(fn)` o
+//   `withTenantContextAtomicTx(tenantId, fn)` (vedi sotto).
 // =============================================================================
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -110,6 +116,120 @@ export function withSuperAdminContext<T>(tenantId: string, fn: () => Promise<T> 
 }
 
 // -----------------------------------------------------------------------------
+// Atomic transaction helpers (D4)
+// -----------------------------------------------------------------------------
+// Pattern: opera multi-statement atomic con RLS context. Necessario perche'
+// l'extension RLS auto-wrappa ogni operazione in un tx separato (closure
+// client base != user's tx), rompendo atomicity di un `$transaction` esplicito.
+//
+// Strategia:
+//   1. withXxxContext per settare l'ALS ctx (cosi' altre query fuori dal tx
+//      vedono il ctx corretto se serve)
+//   2. inflightStorage.run(true, ...) per fare in modo che le operazioni
+//      dentro al tx bypassino l'auto-wrap (re-entry guard fires)
+//   3. prisma.$transaction(async (tx) => ...) - single tx atomic
+//   4. SET LOCAL una volta sull'inizio del tx (visibile a tutte le ops
+//      successive che girano sulla stessa connection del tx)
+//   5. fn(tx) - le ops dell'utente girano sul tx, sono atomic (rollback se
+//      qualcosa throwa)
+//
+// Vedi ADR-0010 sezione "Atomicity" per la considerazione architetturale
+// e ADR-0009 v3 Notes per il caveat sulla composizione $transaction + extension.
+// -----------------------------------------------------------------------------
+
+// Tipo minimo richiesto dai client (Prisma client extended, tx client):
+// solo `$transaction` con callback (interactive form). Generico su TX cosi'
+// l'autocomplete sul body di `fn` funziona col tipo reale (Prisma.TransactionClient
+// extended con le nostre extension).
+interface AtomicTxClient<TX> {
+  $transaction: <R>(fn: (tx: TX) => Promise<R>) => Promise<R>;
+}
+
+// Helper interno: setta SET LOCAL via il tx.$executeRawUnsafe (raw query
+// bypassa l'extension grazie alla guard `model=undefined` post-STEP 0 D4).
+// Cast minimo: il tx esposto dai client Prisma reali ha $executeRawUnsafe.
+type TxRawExec = { $executeRawUnsafe: (sql: string) => Promise<unknown> };
+async function setLocalRlsContext(tx: TxRawExec, ctx: TenantContext): Promise<void> {
+  const tenantIdSql = ctx.tenantId === null ? '' : ctx.tenantId;
+  const isSuperAdminSql = ctx.isSuperAdmin ? 'true' : 'false';
+  await tx.$executeRawUnsafe(`SET LOCAL ${RLS_PG_SETTING_TENANT} = '${tenantIdSql}'`);
+  await tx.$executeRawUnsafe(`SET LOCAL ${RLS_PG_SETTING_SUPER_ADMIN} = '${isSuperAdminSql}'`);
+}
+
+/**
+ * Esegue `fn(tx)` in un singolo `$transaction` Prisma atomic, sotto system
+ * context (`is_super_admin = true`, `tenant_id` vuoto). Tutti gli statement
+ * dentro `fn` vedono i SET LOCAL e sono atomic — rollback automatico se `fn`
+ * throwa.
+ *
+ * Usa per bootstrap pre-tenant (D4 createTenant), seed multi-statement
+ * idempotenti, jobs cross-tenant che richiedono atomicity.
+ *
+ * Esempio:
+ * ```
+ * const result = await withSystemContextAtomicTx(prisma, async (tx) => {
+ *   const tenant = await tx.tenant.create({ data: { ... } });
+ *   const sede = await tx.sede.create({ data: { ... tenantId: tenant.id } });
+ *   return { tenant, sede };
+ * });
+ * ```
+ */
+export function withSystemContextAtomicTx<TX, T>(
+  client: AtomicTxClient<TX>,
+  fn: (tx: TX) => Promise<T>,
+): Promise<T> {
+  return withSystemContext(() =>
+    inflightStorage.run(true, () =>
+      client.$transaction(async (tx) => {
+        // SET LOCAL una volta sul tx. inflight guard previene re-wrap dell'
+        // extension sulle ops dentro fn(tx) (passano through query(args)).
+        await setLocalRlsContext(tx as unknown as TxRawExec, {
+          tenantId: null,
+          isSuperAdmin: true,
+        });
+        return fn(tx);
+      }),
+    ),
+  );
+}
+
+/**
+ * Esegue `fn(tx)` in un singolo `$transaction` Prisma atomic, sotto tenant
+ * context (`is_super_admin = false`, `tenant_id = <tenantId>`). RLS attivo:
+ * le query dentro `fn` filtrate dal tenantId. Atomic: rollback se `fn` throwa.
+ *
+ * Usa per operazioni runtime multi-statement tenant-scoped: aggiornamento
+ * sede + utenti + audit in un colpo, bulk import, ecc.
+ *
+ * Esempio:
+ * ```
+ * await withTenantContextAtomicTx(prisma, tenantId, async (tx) => {
+ *   await tx.sede.update({ where: { id }, data: { ... } });
+ *   await tx.user.updateMany({ where: { sedeId: id }, data: { ... } });
+ *   await tx.auditLog.create({ data: { action: 'sede.bulk_update', ... } });
+ * });
+ * ```
+ */
+export function withTenantContextAtomicTx<TX, T>(
+  client: AtomicTxClient<TX>,
+  tenantId: string,
+  fn: (tx: TX) => Promise<T>,
+): Promise<T> {
+  assertValidUuid(tenantId);
+  return runInTenantContext({ tenantId, isSuperAdmin: false }, () =>
+    inflightStorage.run(true, () =>
+      client.$transaction(async (tx) => {
+        await setLocalRlsContext(tx as unknown as TxRawExec, {
+          tenantId,
+          isSuperAdmin: false,
+        });
+        return fn(tx);
+      }),
+    ),
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Error codes
 // -----------------------------------------------------------------------------
 
@@ -186,8 +306,14 @@ function assertValidUuid(uuid: string): void {
  * RLS-wrapped". Quando `tx[model][operation](args)` retrigge $allOperations
  * sul tx client (perche' tx ha tutte le extension applicate), il guard
  * evita di aprire un secondo $transaction nested.
+ *
+ * **Internal**: usato da Atomic helpers (`withSystemContextAtomicTx`,
+ * `withTenantContextAtomicTx`) per fare in modo che le operazioni dentro al
+ * `$transaction` user-side bypassino l'auto-wrap della extension (atomicity
+ * preserved). NON chiamare direttamente da fuori `packages/db` — pattern
+ * convenzione "internal" Go-style.
  */
-const inflightStorage = new AsyncLocalStorage<true>();
+export const inflightStorage = new AsyncLocalStorage<true>();
 
 export function rlsExtension() {
   return Prisma.defineExtension((client) => {
@@ -198,6 +324,15 @@ export function rlsExtension() {
           // Re-entry: chiamata interna su tx, il SET LOCAL e' gia' attivo.
           // Esegui la query normalmente senza wrap extra.
           if (inflightStorage.getStore()) {
+            return query(args);
+          }
+
+          // Raw queries: $queryRaw / $executeRaw / $queryRawUnsafe / $executeRawUnsafe
+          // arrivano a $allOperations con `model=undefined` (Prisma 6.19.3, verificato
+          // a STEP 0 D4). Per design (caveat documentato nel file header + ADR-0009 sezione
+          // "Notes"), bypassano l'extension RLS: il chiamante e' responsabile del proprio
+          // context. Pass-through senza wrap + niente fail-fast.
+          if (!model) {
             return query(args);
           }
 
@@ -222,11 +357,8 @@ export function rlsExtension() {
           // via `tx[modelLower][operation](args)`. La re-entry sul tx fa
           // ritriggerare $allOperations ma il guard inflightStorage la
           // riconosce e lascia passare query(args) senza nuovo wrap.
-          if (!model) {
-            // Operazioni non-model (es. raw, $executeRaw) non sono qui:
-            // $allOperations le filtra. Se arrivasse, fail-safe.
-            throw new Error('RLS: $allOperations received empty model name');
-          }
+          // Nota: model qui e' garantito non-undefined per la guard early-return
+          // su raw queries sopra.
           const modelLower = model.charAt(0).toLowerCase() + model.slice(1);
 
           return inflightStorage.run(true, () =>
