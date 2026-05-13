@@ -8,8 +8,8 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
 
-> 🚨 **SECURITY — RLS NON ANCORA ATTIVATO (D3b PENDING).**
-> Il framework Row Level Security (AsyncLocalStorage context + Prisma extension) è operativo dal Macro-task D3a, ma le **policy DB sono ancora placeholder `USING(true)`** e l'app si connette come `postgres` (superuser). Multi-tenant isolation **NON enforced runtime** fino al merge di D3b (app role non-superuser + migration policy reali). **Non deployare in produzione senza D3b.** Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md).
+> ✅ **RLS Active — multi-tenant isolation enforced runtime.**
+> Macro-task **D3a + D3b** completati: AsyncLocalStorage context + Prisma extension + policy DB reali con `FORCE ROW LEVEL SECURITY` + app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS). Connection runtime via app role, migration via superuser (`DIRECT_URL`). Cross-tenant lookup bloccato a livello DB anche con UUID esatto. Smoke E2E 7/7 PASS. Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md).
 
 ## Stack
 
@@ -81,6 +81,35 @@ Razionale completo: [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md).
 ### Database layer (`packages/db`)
 
 Schema multi-tenant, migrations, seed e Prisma client tipizzato (con soft-delete extension applicata) in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script `prisma:*`, `db:seed`, `smoke:*` usano `dotenv-cli` per puntarlo).
+
+#### Database setup (D3b RLS Active) — pattern dual-URL + post-migration password rotation
+
+**Da fare UNA volta** quando arriva un nuovo dev clone o si deploya su un nuovo ambiente:
+
+1. **Genera password app role**:
+   ```bash
+   echo "APP_DB_PASSWORD=$(openssl rand -base64 32)" >> .env
+   ```
+2. **Configura `DATABASE_URL` / `DIRECT_URL`** in `.env` (segui `.env.example`):
+   - `DATABASE_URL`: connection string del role `gestionale_app` (runtime, NOSUPERUSER, NOBYPASSRLS). Password URL-encoded.
+   - `DIRECT_URL`: connection string del role `postgres` (superuser, per migration + admin ops).
+3. **Applica le migration**:
+   ```bash
+   pnpm --filter @gestionale/db prisma:migrate:deploy
+   ```
+   La migration `create_app_role_and_grants` crea il role `gestionale_app` con una password **placeholder non funzionale** (`'PLACEHOLDER_MUST_BE_ROTATED'`), perché il SQL committato non può contenere la password reale.
+4. **Ruota la password al valore reale** (CRITICO — senza questo step, l'app non parte):
+   ```bash
+   psql "$DIRECT_URL" -c "ALTER ROLE gestionale_app PASSWORD '$APP_DB_PASSWORD'"
+   ```
+5. **Seed dati base** (idempotente):
+   ```bash
+   pnpm --filter @gestionale/db db:seed
+   ```
+
+Per fresh bootstrap docker (volume nuovo): lo script [`infra/postgres/init/01-create-app-role.sh`](./infra/postgres/init/01-create-app-role.sh) crea il role con la password reale da `$APP_DB_PASSWORD` al primo avvio del container, prima che la migration giri (l'`IF NOT EXISTS` la rende no-op). In quel caso lo step 4 è no-op.
+
+Tech debt F2 documentata in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) sezione "Tech debt registrato": integrare secret manager (Vault / AWS Secrets Manager) per evitare il pattern placeholder-then-rotate in staging/prod.
 
 ```bash
 # Applica migrations pendenti (dev)
@@ -191,17 +220,25 @@ Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt ran
 - **Sessioni stateful** in tabella `sessions` con lifecycle (refresh rotation → vecchia `is_active: false`, nuova creata)
 - **Audit log** best-effort su login/logout in tabella `audit_logs`
 
-#### RLS Framework (D3a)
+#### Multi-tenant isolation (D3a + D3b) — RLS Active
 
-Framework di multi-tenant isolation operativo a livello applicativo (vedi [ADR-0009](./docs/architecture/ADR-0009-rls-real.md)). Vedi callout di sicurezza in cima al README: D3a fornisce il framework, **D3b è obbligatorio per l'attivazione reale**.
+Multi-tenant isolation enforced runtime via PostgreSQL Row Level Security (vedi [ADR-0009](./docs/architecture/ADR-0009-rls-real.md)).
 
-Componenti (D3a):
+**Componenti applicativi (D3a)**:
 
 - **AsyncLocalStorage context** (`packages/db/src/rls.ts`): ALS singleton + helpers `runInTenantContext`, `withSystemContext`, `withSuperAdminContext`. Propaga `(tenantId, isSuperAdmin)` lungo l'intera chain async.
 - **Prisma extension RLS** (`rlsExtension`): wrappa ogni operazione model in `$transaction` interactive con `SET LOCAL app.tenant_id` + `SET LOCAL app.is_super_admin`. Fail-fast: throw `RLS_NO_CONTEXT` se la query parte fuori da context.
 - **TenantContextInterceptor** (`apps/api/src/context/tenant-context.interceptor.ts`): globale post-JwtAuthGuard, wrappa handler in `runInTenantContext({tenantId: req.tenantId, isSuperAdmin: false})`. Skip per route Public senza tenant (root, /health, /auth/refresh).
 - **TenantMiddleware** (refactor D3a): slug lookup in `withSystemContext`, dopo resolve `runInTenantContext(...)` per il resto della chain. Pre-auth routes (login, login-pin).
 - **AuthService.refresh wrap**: `/auth/refresh` non passa per middleware tenant → wrap interno con tenantId dal payload JWT.
+- **JwtStrategy.validate wrap** (post-D3a finding emerso a STEP 2 D3b): query Prisma dentro `validate()` runnano al guard stage, prima dell'Interceptor. Wrap in `runInTenantContext(payload.tenantId)` per defense in depth.
+
+**Componenti DB (D3b)**:
+
+- **App role** `gestionale_app` (NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOINHERIT) usato come connection runtime.
+- **Pattern dual-URL Prisma**: `DATABASE_URL` = app role (runtime), `DIRECT_URL` = postgres superuser (migration via `directUrl` in `schema.prisma`).
+- **7 policy reali** `<table>_tenant_isolation` + `FORCE ROW LEVEL SECURITY` su 7 tabelle multi-tenant (tenants/sedi/users/roles/user_roles/sessions/audit_logs). Pattern: `is_super_admin OR tenant_id = current_setting(app.tenant_id)`. user_roles/sessions usano EXISTS join (no tenant_id diretta).
+- **Bootstrap fresh volume**: `infra/postgres/init/01-create-app-role.sh` crea il role con password reale al primo avvio del container Postgres.
 
 3 modalità di accesso DB:
 
@@ -211,11 +248,19 @@ Componenti (D3a):
 | System                   | Seed, jobs, bootstrap, health check, slug pre-tenant             | `withSystemContext(fn)`                     |
 | Super Admin cross-tenant | Script ops manuali (no JWT-based super admin in F1, vedi ADR-S5) | `withSuperAdminContext(tenantId, fn)`       |
 
+Smoke E2E full (read-only, idempotente, riusabile per CI futura):
+
+```bash
+pnpm --filter @gestionale/db smoke:rls-e2e
+```
+
+7 scenari (5 mandatory + 2 extra coverage): tenant demo isolation, tenant acme isolation, cross-tenant block (UUID-known lookup → null), system bypass, super admin context, roles table isolation, audit_logs equivalence check.
+
 **Caveat noti** (documentati in ADR-0009):
 
 - `$queryRaw` / `$executeRawUnsafe` bypassano l'extension (intercetta solo model operations). Chiamanti devono usare `withSystemContext` o accettare bypass.
-- D3a fix R3: `query(args)` dentro $transaction NON eredita il tx context. Workaround: `tx[model][operation](args)` + re-entrancy guard. Verificato empiricamente.
-- D3b deferred (R9): postgres user è superuser+BYPASSRLS, bypassa RLS sempre. **Senza app role non-superuser, framework è no-op.**
+- D3a fix R3: `query(args)` dentro `$transaction` NON eredita il tx context. Workaround: `tx[model][operation](args)` + re-entrancy guard.
+- La migration `create_app_role_and_grants` crea il role con placeholder password — `ALTER ROLE ... PASSWORD '$APP_DB_PASSWORD'` richiesto post-migration su ogni nuovo ambiente (vedi sezione "Database setup" sopra + ADR-0009 tech debt #8).
 
 Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HTTP 503** (via `ServiceUnavailableException`) quando il DB è unreachable. Pattern production-ready per orchestrator (Kubernetes liveness/readiness, load balancer).
 
