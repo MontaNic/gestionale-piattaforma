@@ -8,8 +8,8 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
 
-> ✅ **RLS Active — multi-tenant isolation enforced runtime.**
-> Macro-task **D3a + D3b** completati: AsyncLocalStorage context + Prisma extension + policy DB reali con `FORCE ROW LEVEL SECURITY` + app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS). Connection runtime via app role, migration via superuser (`DIRECT_URL`). Cross-tenant lookup bloccato a livello DB anche con UUID esatto. Smoke E2E 7/7 PASS. Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md).
+> ✅ **RLS Active + Tenant bootstrap + Next.js scaffold operativo.**
+> Macro-task **D3a + D3b + D4 + E1** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports. Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, web stub a `:3001`. Smoke E2E 7/7 + 8/8 Vitest + 6/6 gate Fase 6. Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold).
 
 ## Stack
 
@@ -17,7 +17,7 @@ Vincolato dalla sezione A3 del brief.
 
 | Layer                   | Tecnologia                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------------ |
-| Frontend                | Next.js 14+ (App Router) · TypeScript · Tailwind · shadcn/ui                               |
+| Frontend                | Next.js 15 (App Router) · React 18.3 · TypeScript · Tailwind 3.4 · shadcn/ui               |
 | Backend                 | NestJS · TypeScript · Prisma                                                               |
 | Database                | PostgreSQL 16+ (Row Level Security per multi-tenancy)                                      |
 | Cache / Queue / Pub-Sub | Redis 7+                                                                                   |
@@ -80,7 +80,9 @@ Razionale completo: [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md).
 
 ### Database layer (`packages/db`)
 
-Schema multi-tenant, migrations, seed e Prisma client tipizzato (con soft-delete extension applicata) in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script `prisma:*`, `db:seed`, `smoke:*` usano `dotenv-cli` per puntarlo).
+Schema multi-tenant, migrations, seed e Prisma client tipizzato (con soft-delete + RLS extension applicate) in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script `prisma:*`, `db:seed`, `smoke:*` usano `dotenv-cli` per puntarlo).
+
+Da E1 (2026-05-13) `packages/db` ha **build step via `tsup`** ([ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)): emette `dist/index.{cjs,mjs,d.cts,d.ts}` con `exports` conditional. Consumer CJS (apps/api) carica `dist/index.cjs`, consumer ESM (apps/web, futuro worker/kds) carica `dist/index.mjs`. `pnpm --filter @gestionale/db build` produce gli artifact; Turbo `dependsOn: ["^build"]` orchestra la build automaticamente quando si lancia `pnpm dev` (root) o `pnpm exec turbo run dev --filter=<consumer>`.
 
 #### Database setup (D3b RLS Active) — pattern dual-URL + post-migration password rotation
 
@@ -308,7 +310,33 @@ pnpm --filter @gestionale/db smoke:rls-e2e
 
 Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HTTP 503** (via `ServiceUnavailableException`) quando il DB è unreachable. Pattern production-ready per orchestrator (Kubernetes liveness/readiness, load balancer).
 
-Razionale scaffold + 4 course corrections empiriche (tsx fail su decorator metadata, swc detour 13min, packages/db CJS tech debt, enableShutdownHooks): [ADR-0007](./docs/architecture/ADR-0007-nestjs-api-scaffold.md).
+Razionale scaffold + 4 course corrections empiriche (tsx fail su decorator metadata, swc detour 13min, packages/db CJS tech debt, enableShutdownHooks): [ADR-0007](./docs/architecture/ADR-0007-nestjs-api-scaffold.md). **Update E1**: CC2 (packages/db CJS forzato) risolto via dual package strategy — vedi [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md).
+
+### Frontend (`apps/web`)
+
+Next.js 15 App Router + React 18.3 + Tailwind 3.4 + shadcn/ui. Scaffold E1 in [`apps/web/`](./apps/web/), consumer di `@gestionale/db` via **dual package exports** (CJS+ESM+DTS generato da `tsup` — vedi [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)).
+
+```bash
+# Dev server (via Turbo — auto-build packages/db prima di avviare Next)
+pnpm exec turbo run dev --filter=@gestionale/web   # → http://localhost:3001
+
+# Build production
+pnpm --filter @gestionale/web build
+
+# Typecheck
+pnpm --filter @gestionale/web typecheck
+```
+
+A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). E2 introdurrà il form di login + integrazione API.
+
+Stack version pinning + razionale (Tailwind 3.4 vs 4, React 18.3 vs 19, manual scaffold vs `create-next-app`): [ADR-0011 sezione Decisions](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md#decisions).
+
+**Entrypoint dev — anti-pattern noto**: `pnpm --filter @gestionale/web dev` **bypassa Turbo** (chiama lo script direttamente, salta `dependsOn`). Se `packages/db/dist/` non esiste fallisce con `Cannot find module`. Usa sempre uno di questi due:
+
+- `pnpm dev` (root, Turbo orchestra l'intera build chain dev di tutti i workspace)
+- `pnpm exec turbo run dev --filter=<workspace>` (filtra a un workspace ma mantiene la chain)
+
+Vedi [ADR-0011 Discoveries F2](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md#f2--pnpm---filter-ws-script-bypassa-turbo-orchestration).
 
 ### Testing (Vitest)
 

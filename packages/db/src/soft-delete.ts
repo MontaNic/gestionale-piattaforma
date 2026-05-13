@@ -29,15 +29,26 @@ import { Prisma } from '@prisma/client';
 // -----------------------------------------------------------------------------
 // Auto-detect modelli con campo `deletedAt`
 // -----------------------------------------------------------------------------
+// `Prisma.dmmf` esiste a runtime ma in Prisma 6 e' stato rimosso dai .d.ts
+// pubblici (vedi @prisma/client 6 changelog). Cast esplicito per accedere allo
+// schema introspection: pattern documentato finche' Prisma non riesporra' un
+// typed accessor.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const prismaDmmf = (Prisma as any).dmmf as {
+  datamodel: {
+    models: Array<{ name: string; dbName?: string | null; fields: Array<{ name: string }> }>;
+  };
+};
+
 const modelsWithDeletedAt = new Set(
-  Prisma.dmmf.datamodel.models
+  prismaDmmf.datamodel.models
     .filter((m) => m.fields.some((f) => f.name === 'deletedAt'))
     .map((m) => m.name),
 );
 
 // Lookup tableName (snake_case @@map) per `$executeRawUnsafe` in forceDelete.
 const modelToTableName = new Map<string, string>(
-  Prisma.dmmf.datamodel.models.map((m) => [m.name, m.dbName ?? m.name]),
+  prismaDmmf.datamodel.models.map((m) => [m.name, m.dbName ?? m.name]),
 );
 
 // -----------------------------------------------------------------------------

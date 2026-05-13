@@ -362,13 +362,16 @@ export function rlsExtension() {
           const modelLower = model.charAt(0).toLowerCase() + model.slice(1);
 
           return inflightStorage.run(true, () =>
-            client.$transaction(async (tx) => {
+            // Extended client (post-$extends) strippa `$executeRawUnsafe` dal
+            // tipo Tx; runtime ce l'ha sempre. Cast unico per entrambi gli
+            // accessi raw + l'invocazione dinamica per modello/operation.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            client.$transaction(async (tx: any) => {
               await tx.$executeRawUnsafe(`SET LOCAL ${RLS_PG_SETTING_TENANT} = '${tenantIdSql}'`);
               await tx.$executeRawUnsafe(
                 `SET LOCAL ${RLS_PG_SETTING_SUPER_ADMIN} = '${isSuperAdminSql}'`,
               );
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return (tx as any)[modelLower][operation](args);
+              return tx[modelLower][operation](args);
             }),
           );
         },
