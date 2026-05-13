@@ -72,6 +72,8 @@ export {
   runInTenantContext,
   withSystemContext,
   withSuperAdminContext,
+  withSystemContextAtomicTx,
+  withTenantContextAtomicTx,
   RLS_NO_CONTEXT,
   RlsNoContextError,
   RLS_PG_SETTING_TENANT,

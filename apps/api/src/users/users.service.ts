@@ -85,6 +85,42 @@ export class UsersService {
   }
 
   /**
+   * Check se l'utente possiede un dato permission code via QUALSIASI dei suoi
+   * role assignments (`user.roles → role.permissions → permission.code`).
+   *
+   * Usato per permission check on-demand (D4: bootstrap tenant, futuri Guard
+   * generici @RequirePermissions). Lazy per design (ADR-0008 decisione 7: JWT
+   * payload minimal, lookup runtime SOLO per endpoint che servono il check).
+   *
+   * Query Prisma con `some` su tutti i nested → PostgreSQL genera EXISTS
+   * sub-select, stop al primo match (cheap, ~5ms localhost). `select: {id}`
+   * minimizza la projection. Niente caching in F1 (premature optimization,
+   * tech debt F2 se profiling lo giustifica).
+   */
+  async hasPermission(userId: string, permissionCode: string): Promise<boolean> {
+    const result = await this.db.prisma.user.findFirst({
+      where: {
+        id: userId,
+        roles: {
+          some: {
+            role: {
+              permissions: {
+                some: {
+                  permission: {
+                    code: permissionCode,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    return result !== null;
+  }
+
+  /**
    * Carica profilo completo per /me. Esegue query joinate per rispettare
    * isolamento tenant + escludere soft-deleted. Permissions sono il flat
    * set di tutti i codes dei role assegnati (tenant-wide o per-sede).
