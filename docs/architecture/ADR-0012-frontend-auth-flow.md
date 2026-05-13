@@ -17,6 +17,7 @@
 - Smoke browser **9/9 PASS** (Nicolò manuale, screenshot Welcome Admin Demo verificato)
 - Backend zero regression: 8/8 Vitest + 7/7 smoke RLS + typecheck 4/4 + lint clean
 - **Bug fix collaterale E2 (F3)**: CORS abilitato sul backend NestJS (`app.enableCors`) — gap esposto dal primo client browser-based
+- **TD-6 risolto 2026-05-13** (in questa PR): `handleLogout` ora chiama `POST /auth/logout` PRE `clearTokens()`, session backend correttamente revocata (`is_active=false`) invece di restare orphan fino a JWT expiry.
 
 ## Context
 
@@ -279,7 +280,7 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 
 **Stima rework**: 5-10 min per component. Pattern: post-`add`, run `pnpm lint` immediato, fix `import type` / formatting / unused vars, commit. Memo CHANGELOG: tracciare quando shadcn fixa upstream questi pattern.
 
-### TD-6 (backend): Logout server-side via `/auth/logout`
+### TD-6 (backend): Logout server-side via `/auth/logout` — ✅ RESOLVED 2026-05-13
 
 **Cosa carry-over discovery E2**: `apps/web/src/app/dashboard/page.tsx#handleLogout` fa solo `clearTokens()` local. NON chiama `POST /api/v1/auth/logout` per invalidare la session backend.
 
@@ -292,6 +293,15 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 - Production deployment
 
 **Stima rework**: ~30 min. Frontend: chiamata `apiPost` a `/auth/logout` con header `Authorization: Bearer <token>`, `.catch()` gracefully, e `clearTokens()` always-executed anche su error. Backend endpoint `/auth/logout` già esistente ([D2a](./ADR-0008-auth-module.md)).
+
+**Resolution** (2026-05-13, in questa PR):
+
+- Frontend: `apps/web/src/app/dashboard/page.tsx#handleLogout` ora async, chiama `apiPost<void>('/auth/logout', {}, {Authorization: Bearer <token>})` PRIMA di `clearTokens()` + `router.replace('/login')`
+- Error handling: silent `console.warn` su fail, `clearTokens()` always-executed anche su error (Decision 1A architecture review)
+- Loading state: `useState<boolean> isLoggingOut`, button `disabled={isLoggingOut}` + testo "Uscita..." durante apiPost (Decision 3A)
+- Discovery collaterale: `apiPost` libreria non gestiva 204 No Content (`res.json()` su body vuoto → SyntaxError). Fix +3 LOC in `apps/web/src/lib/api.ts` con early-return `if (res.status === 204) return undefined as T`. Pattern riusabile per DELETE endpoint F1 futuri.
+- Backend zero modifiche: endpoint `/auth/logout` già esistente da D2a (ADR-0008)
+- LOC finali: 37 totali (+34 / -5) su 2 file. Stima rework ~30 min: rispettata.
 
 ## Consequences
 
@@ -308,7 +318,7 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 ### Negative / Trade-off
 
 - **XSS surface accettata** (localStorage): tracked TD-1. Mitigations: no third-party script in `apps/web`, no `dangerouslySetInnerHTML`. CSP futuro.
-- **Logout client-only**: tracked TD-6. Mitigations: session JWT scade comunque dopo 15 min, refresh rotation invalida vecchio refresh.
+- **~~Logout client-only~~** (RISOLTO TD-6 2026-05-13): logout ora chiama `POST /auth/logout` PRE clearTokens. Session backend correttamente revocata.
 - **Single-tenant frontend**: tracked TD-2. Backend è già multi-tenant ready, gap è solo nel come frontend lo scopre.
 - **No browser headless CI**: tracked TD-4. Mitigations: smoke manual Nicolò + screenshot verificato + 9/9 PASS documentati.
 
