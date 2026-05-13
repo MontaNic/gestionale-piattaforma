@@ -20,7 +20,7 @@
 
 ## Context
 
-Pre-E2: stack completo ma disconnesso. Backend [`apps/api`](../../apps/api/) :3000 con 11 endpoint funzionanti ([ADR-0008](./ADR-0008-auth-module.md) D2a/D2b + [ADR-0010](./ADR-0010-tenant-bootstrap.md) D4). Frontend [`apps/web`](../../apps/web/) :3001 con scaffold E1 ([ADR-0011](./ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)) = homepage statica + Button shadcn. **Nessuna chiamata HTTP attraversava i due workspace**.
+Pre-E2: stack completo ma disconnesso. Backend [`apps/api`](../../apps/api/) :3000 con 10 endpoint funzionanti ([ADR-0008](./ADR-0008-auth-module.md) D2a/D2b + [ADR-0010](./ADR-0010-tenant-bootstrap.md) D4). Frontend [`apps/web`](../../apps/web/) :3001 con scaffold E1 ([ADR-0011](./ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)) = homepage statica + Button shadcn. **Nessuna chiamata HTTP attraversava i due workspace**.
 
 E2 è il primo macro-task end-to-end frontend↔API. Obiettivo: utente apre `:3001` → form login → JWT → dashboard "Welcome <firstName>". Primo "vero" flow utente del progetto.
 
@@ -291,7 +291,7 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 - Multi-device session management (vedi tutte le sessioni attive)
 - Production deployment
 
-**Stima rework**: ~30 min. Frontend: `apiPost('/auth/logout', {}, { Authorization: \`Bearer ${token}\` })`con`.catch()`gracefully +`clearTokens()`always-executed (anche su error). Backend endpoint`/auth/logout` già esistente ([D2a](./ADR-0008-auth-module.md)).
+**Stima rework**: ~30 min. Frontend: chiamata `apiPost` a `/auth/logout` con header `Authorization: Bearer <token>`, `.catch()` gracefully, e `clearTokens()` always-executed anche su error. Backend endpoint `/auth/logout` già esistente ([D2a](./ADR-0008-auth-module.md)).
 
 ## Consequences
 
@@ -353,4 +353,4 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
   8. Cmd+R su `/dashboard` → resta loggato ✓
   9. Logout → Cmd+R → `/login` (clean) ✓
 - Curl OPTIONS preflight CORS post-fix F3 verified empiricamente (4 header attesi presenti: Allow-Origin, Allow-Credentials, Allow-Methods, Allow-Headers)
-- 12 endpoint API totali oggi (10 pre-E2 + `/api/v1/auth/logout` già esistente ma non usato da frontend + CORS ora abilitato è cross-endpoint)
+- 10 endpoint API invariati pre/post E2 (E2 non aggiunge endpoint; abilita CORS config cross-endpoint per il primo client browser-based)
