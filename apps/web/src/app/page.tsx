@@ -1,11 +1,24 @@
-import { Button } from '@/components/ui/button';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+import { isAuthenticated } from '@/lib/auth';
 
 export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      router.replace('/dashboard');
+    } else {
+      router.replace('/login');
+    }
+  }, [router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 gap-4">
-      <h1 className="text-4xl font-bold">Gestionale Platform</h1>
-      <p className="text-lg text-muted-foreground">F1 scaffold attivo</p>
-      <Button>Click me (shadcn working)</Button>
+    <main className="flex min-h-screen items-center justify-center">
+      <p className="text-muted-foreground">Reindirizzamento...</p>
     </main>
   );
 }
