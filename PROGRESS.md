@@ -5,7 +5,7 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + **E2 Login form UI + integrazione API** completi. **Primo login browser funzionante**: `http://localhost:3001/login` → admin@demo.local + Admin123! → `/dashboard` con Welcome Admin Demo + 32 permessi (smoke 9/9 PASS, screenshot verificato). **12 endpoint operativi** API a `:3000` (inclusi CORS abilitato + logout già esistente) + frontend `:3001` con `/login` + `/dashboard` + `/` redirect, **8 test Vitest verdi** + RLS attivo + smoke RLS E2E 7/7 PASS.
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + **E2 Login form UI + integrazione API** completi. **Primo login browser funzionante**: `http://localhost:3001/login` → admin@demo.local + Admin123! → `/dashboard` con Welcome Admin Demo + 32 permessi (smoke 9/9 PASS, screenshot verificato). **10 endpoint operativi** API a `:3000` (CORS abilitato in E2 per primo client browser-based) + frontend `:3001` con `/login` + `/dashboard` + `/` redirect, **8 test Vitest verdi** + RLS attivo + smoke RLS E2E 7/7 PASS.
 
 > ✅ **Primo login browser end-to-end funzionante.** E1 + **E2** completi. Form login `/login` (react-hook-form + zod + shadcn Form) → POST `/auth/login` → localStorage JWT → `/dashboard` GET `/me` → render Welcome + 32 permessi + logout. Backend CORS abilitato (discovery E2 F3 critical), session JWT 15min + refresh 7d con rotation invariati. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + **[ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2)**. Prossimo macro-task candidato: **da concordare nella prossima sessione**.
 
@@ -991,7 +991,7 @@ NON proporre, NON includere senza esplicito sblocco:
 
 ## 📝 Prompt operativo prossimo task — da definire
 
-> Il prompt operativo dettagliato per il prossimo macro-task (**setup CI/CD base con GitHub Actions**) verrà preparato da Nicolò all'apertura della prossima sessione. Il presente PROGRESS.md contiene già lo scope di alto livello nella sezione "🚧 In corso" sopra: Claude Code (sessione successiva) può partire da lì + lettura sezioni brief C7 (CI/CD) e C12 (convenzioni codice/branch).
+> E2 completato (primo login browser funzionante, [ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso").
 
 ---
 
