@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio-sera)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + **E2 Login form UI + integrazione API** completi. **Primo login browser funzionante**: `http://localhost:3001/login` → admin@demo.local + Admin123! → `/dashboard` con Welcome Admin Demo + 32 permessi (smoke 9/9 PASS, screenshot verificato). **10 endpoint operativi** API a `:3000` (CORS abilitato in E2 per primo client browser-based) + frontend `:3001` con `/login` + `/dashboard` + `/` redirect, **8 test Vitest verdi** + RLS attivo + smoke RLS E2E 7/7 PASS.
+**Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio-sera-notte)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + **B1 Auth E2E hardening (rate limit + lockout)** completi. **Difesa brute-force attiva**: throttler Redis (5/min login, 3/h tenant-create userId-tracked) + account lockout (10 fail/15min → block 15min) + Retry-After 900 fissi (anti-enumeration) + audit `auth.account_locked`. **10 endpoint operativi** API a `:3000` + frontend `:3001`, **25/25 test Vitest verdi** (+17 vs E2) + RLS attivo.
 
-> ✅ **Primo login browser end-to-end funzionante.** E1 + **E2** completi. Form login `/login` (react-hook-form + zod + shadcn Form) → POST `/auth/login` → localStorage JWT → `/dashboard` GET `/me` → render Welcome + 32 permessi + logout. Backend CORS abilitato (discovery E2 F3 critical), session JWT 15min + refresh 7d con rotation invariati. Vedi [ADR-0009](docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + **[ADR-0012](docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2)**. Prossimo macro-task candidato: **da concordare nella prossima sessione**.
+> ✅ **B1 chiuso**: rate limiting + lockout via Redis sliding window operativi. Smoke E2E 8/8 verdi (rate-limit auth-strict + tenant-create custom tracker + lockout login + lockout login-pin + reset doppio + isolation). Tech debt 14 nuove (TD-A → TD-N) tracciate in ADR-0013. Prossimo macro-task candidato: **B2 (email theft notification + rate-limit login-pin triplet + E2E full Nest bootstrap)** o da concordare. Vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (rate-limit + lockout).
 
 ---
 
@@ -773,14 +773,61 @@ Primo flow end-to-end frontend↔API via browser. Form login `/login` (react-hoo
 
 ---
 
+### B1 — Auth E2E hardening parte 1: rate limit + lockout (Sessione 8, 2026-05-13 sera-notte)
+
+**Branch**: `feature/auth-e2e-hardening-b1` · **Status**: completato, PR merge pending · **ADR**: [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md)
+
+Split di "B Auth E2E hardening" (carry-over [ADR-0008 §3](docs/architecture/ADR-0008-auth-module.md) + [ADR-0010 #4](docs/architecture/ADR-0010-tenant-bootstrap.md) + ADR-0012 Security gap): B1 = rate-limit + lockout, B2 = email theft + E2E full bootstrap programmato sessione 9.
+
+**Deliverables**:
+
+- `ThrottlerModule.forRootAsync` global + Redis storage (`@nestjs/throttler@6.5.0` + `@nest-lab/throttler-storage-redis@1.2.0` + `ioredis@5.10.1`)
+- 3 named throttlers env-driven: `default` (60/min global), `auth-strict` (5/min `/auth/login` + `/auth/login-pin` opt-in via `@AuthStrict()`), `tenant-create` (3/h `POST /tenants` opt-in via `@TenantCreate()`)
+- `AppThrottlerGuard` custom tracker **userId-or-IP** per `tenant-create` (JWT decode minimale dall'Authorization header pre-JwtAuthGuard ordering — anti IP rotation)
+- `RedisModule` `@Global` shared (1 connection pool ioredis riusabile per Throttler + Lockout + futuro cache/session)
+- `LockoutService` Redis sliding window (ZADD/ZREMRANGEBYSCORE/ZCARD/SET pipeline atomico): threshold=10, window=15min, duration=15min env-driven
+- `AuthService.login` + `loginPin`: check lockout PRE-DB lookup (anti-timing-leak). Reset doppio (Redis + DB `failedLoginAttempts`) su success.
+- `LockoutExceptionFilter` (extends `BaseExceptionFilter`, APP_FILTER): `Retry-After: 900` **fissi** anti user-enumeration (real retryAfterSec solo in log)
+- Nuovo audit action `auth.account_locked` (totale 11, **no migration** necessaria — `audit_logs.action` è String text-based)
+- `@nestjs/config@4.0.4` retrofit incrementale (solo nuovi moduli, legacy `process.env` invariato)
+- Helper utility estratti per testability: `apps/api/src/throttler/utils/jwt-decode.util.ts` (`extractSubFromAuthHeader`) + `skip-if-metadata.util.ts` (higher-order builder)
+- 17 nuovi test Vitest (8 LockoutService + 9 throttler helpers) → **25/25 totali PASS** (~681ms), zero regression
+- `docker-compose.dev.yml`: port mapping `127.0.0.1:6379:6379` per ts-node-dev sull'host (simmetrico Postgres)
+
+**Smoke E2E verificati (A-H, 8/8)**:
+
+| # | Scenario | Verdetto |
+|---|---|---|
+| A | Rate-limit `/auth/login`: 5x 401 + 6° 429 | ✅ |
+| B | Rate-limit `/auth/login-pin`: 5x 401 + 6° 429 (bucket distinto per route) | ✅ |
+| C | Custom tracker `tenant-create`: 3x 400 + 4° 429, Redis key `user:019e1e40-...` via JWT decode (NON IP fallback) | ✅ |
+| D | Cross-endpoint isolation: `/health` 200 dopo lockout `/auth/login` | ✅ |
+| E | Lockout `/auth/login` (THRESHOLD=3 temp): 2x 401 + 3° 429 promosso in-flight + 4°+ `Retry-After: 900` + audit `auth.account_locked` | ✅ |
+| F | Reset doppio: 2 fail → ZCARD=2 + DB counter=2 → login OK → ZCARD=0 + DB counter=0 | ✅ |
+| G | Lockout `/auth/login-pin`: key `pin:tenant:<uuid>:device:smoke-pin-device` + NO DB counter increment (D2b §8 carry-over confermato) | ✅ |
+| H | Key isolation: A blocked, B (email diversa) → 401 NOT 429 | ✅ |
+
+**Empirical discoveries (#16-21, +6 cumulative → totale 21)**:
+
+- **#16** Throttler v6 named throttlers globali by default (fix: skipIf metadata opt-in pattern)
+- **#17** Container Redis docker-compose non host-exposed di default (fix: `ports: ['127.0.0.1:6379:6379']`)
+- **#18** `req.user` undefined in APP_GUARD ThrottlerGuard (pre-JwtAuthGuard ordering) — fix: JWT decode minimale Authorization header (no verify)
+- **#19** `@nestjs/throttler@6.5.0` `getTracker(req)` single-arg (no context) — fix: override `handleRequest(requestProps)` con `customGetTracker` wrappato
+- **#20** `BaseExceptionFilter` APP_FILTER DI break con custom constructor → omettere constructor (NestJS risolve HttpAdapterHost automaticamente)
+- **#21** `ValidationPipe` filtra PRE-controller → lockout counter non incrementato per input malformati (validation errors non consumano bucket; attacker con password ben formata sì)
+
+**Tech debt nuovi (14 voci TD-A → TD-N)** — vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md):
+
+Categorie: Redis resilience (TD-A,B), Config consistency (TD-C), Docker port (TD-D), Security trade-off (TD-E,J), Throttler quirks (TD-F,G), Lockout key scope (TD-H,I,K), Filter pattern (TD-L), Test coverage (TD-M), Refactor minor (TD-N).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: da concordare nella prossima sessione.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **Auth E2E hardening** — rate limiting `@nestjs/throttler` + Redis storage, lockout temporaneo, email notification theft, rate limit `login-pin` + `POST /tenants`, E2E test (full Nest bootstrap + Testcontainers).
-2. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Stima 1-2h.
+1. **B2 — Auth E2E hardening parte 2** (carry-over B1): email notification on theft + account_locked (`nodemailer` + MailHog dev MTA), rate-limit `/auth/login-pin` per `(tenantId, deviceId, ip)` triplet (D2b §8 carry-over completo), E2E test full Nest bootstrap (primo del progetto) con Testcontainers Postgres + Redis reale, verify TD-B empiricamente (Redis down mid-request behaviour). Stima 3-4h.
+2. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Sblocca TD-H lockout key per-tenant. Stima 1-2h.
 3. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
 4. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
 5. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.

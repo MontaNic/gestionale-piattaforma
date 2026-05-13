@@ -16,9 +16,13 @@
 // la stessa exception per evitare info leak (timing attack residuo accettato F1).
 // =============================================================================
 
+import crypto from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -32,6 +36,7 @@ import { UsersService } from '../users/users.service';
 import type { AuthTokensPayload } from './dto/auth-response.dto';
 import type { PinLoginDeviceType } from './dto/login-pin.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
+import { LockoutService } from './lockout.service';
 import { validatePin } from './utils/pin-validator';
 
 // Costanti TTL — coerenti con §B1 brief.
@@ -48,7 +53,9 @@ type AuditAction =
   | 'auth.pin.setup' // first-time PIN setup (user.pinHash era null)
   | 'auth.pin.reset' // PIN overwrite (user.pinHash !== null pre-call)
   | 'auth.login_pin.success'
-  | 'auth.login_pin.failure';
+  | 'auth.login_pin.failure'
+  // B1 (sessione 8) — lockout transition:
+  | 'auth.account_locked'; // promoted to lockout: count >= threshold
 
 @Injectable()
 export class AuthService {
@@ -58,7 +65,34 @@ export class AuthService {
     private readonly db: DbService,
     private readonly users: UsersService,
     private readonly jwt: JwtService,
+    private readonly lockout: LockoutService,
   ) {}
+
+  // Lockout key helpers (B1 STOP 3, decisione strategica TD-H / D2b §8).
+  // Prefix per namespacing: garantisce isolamento tra login (email) e login-pin
+  // (tenant+device) sui buckets Redis senza collisione fortuita.
+  private readonly LOCKOUT_KEY_LOGIN = (email: string): string => `email:${email}`;
+  private readonly LOCKOUT_KEY_LOGIN_PIN = (tenantId: string, deviceId: string): string =>
+    `pin:tenant:${tenantId}:device:${deviceId}`;
+
+  // Hash sha256 (8 char) della lockout key per audit/log: l'audit afterValue
+  // e' leggibile da Super Admin, mai esporre l'email/deviceId plain text.
+  private lockoutKeyDigest(key: string): string {
+    return crypto.createHash('sha256').update(key).digest('hex').slice(0, 8);
+  }
+
+  private throwAccountLocked(): never {
+    // 429 (NOT 401): distinguibile lato client per UX e auto-retry policy.
+    // Body code dedicato letto da LockoutExceptionFilter per Retry-After: 900.
+    throw new HttpException(
+      {
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        code: 'E_AUTH_ACCOUNT_LOCKED',
+        message: 'Account temporaneamente bloccato per troppi tentativi falliti',
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // LOGIN — email + password (tenantId pre-risolto da TenantMiddleware)
@@ -69,11 +103,20 @@ export class AuthService {
     password: string,
     meta: { ip?: string; userAgent?: string },
   ): Promise<AuthTokensPayload> {
+    // (B1 STOP 3) Lockout check PRIMA del DB lookup: evita timing leak fra
+    // utenti esistenti e non. Key email-only (TD-H: futuro `${tenantId}:${email}`
+    // dopo TD-2 ADR-0012 multi-tenant slug resolution).
+    const lockoutKey = this.LOCKOUT_KEY_LOGIN(email);
+    if (await this.lockout.checkLockout(lockoutKey)) {
+      this.throwAccountLocked();
+    }
+
     const user = await this.users.findByTenantEmail(tenantId, email);
 
     // Single exception per email-non-trovata + password-errata + utente-disabilitato:
     // no info leak su esistenza account, no enumeration attack.
     if (!user || !user.isActive) {
+      const result = await this.lockout.recordFailedAttempt(lockoutKey);
       await this.recordAudit({
         tenantId,
         userId: user?.id,
@@ -81,12 +124,26 @@ export class AuthService {
         meta,
         payload: { reason: 'user_not_found_or_inactive' },
       });
+      if (result.promotedToLockout) {
+        await this.recordAudit({
+          tenantId,
+          userId: user?.id,
+          action: 'auth.account_locked',
+          meta,
+          payload: { source: 'login', lockoutKeyHash: this.lockoutKeyDigest(lockoutKey) },
+        });
+        // Promosso a lockout DA QUESTA chiamata: la prossima request sara'
+        // bloccata da checkLockout(). Per coerenza UX su QUESTA chiamata
+        // (l'utente vede 429 invece di 401) rispondiamo subito con 429.
+        this.throwAccountLocked();
+      }
       throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
     }
 
     const ok = await argon2.verify(user.passwordHash, password);
     if (!ok) {
       await this.users.incrementFailedAttempts(user.id);
+      const result = await this.lockout.recordFailedAttempt(lockoutKey);
       await this.recordAudit({
         tenantId,
         userId: user.id,
@@ -94,9 +151,22 @@ export class AuthService {
         meta,
         payload: { reason: 'wrong_password' },
       });
+      if (result.promotedToLockout) {
+        await this.recordAudit({
+          tenantId,
+          userId: user.id,
+          action: 'auth.account_locked',
+          meta,
+          payload: { source: 'login', lockoutKeyHash: this.lockoutKeyDigest(lockoutKey) },
+        });
+        this.throwAccountLocked();
+      }
       throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
     }
 
+    // Success: reset Redis counter + DB counter (recordSuccessfulLogin lo
+    // azzera + aggiorna lastLoginAt).
+    await this.lockout.resetAttempts(lockoutKey);
     await this.users.recordSuccessfulLogin(user.id);
     return this.issueTokensAndCreateSession(user.id, tenantId, meta);
   }
@@ -301,6 +371,15 @@ export class AuthService {
     deviceType: PinLoginDeviceType,
     meta: { ip?: string; userAgent?: string },
   ): Promise<AuthTokensPayload> {
+    // (B1 STOP 3) Lockout check PRIMA del candidates scan. Key tenant+device
+    // (ADR-0008 D2b §8). Anti-DoS sul device legittimo: un attacker che
+    // conosce deviceId puo' bloccarlo, ma il lockout 15min e' time-limited.
+    // NB: NO DB counter increment per login-pin per design D2b §8 (TD-K).
+    const lockoutKey = this.LOCKOUT_KEY_LOGIN_PIN(tenantId, deviceId);
+    if (await this.lockout.checkLockout(lockoutKey)) {
+      this.throwAccountLocked();
+    }
+
     const candidates = await this.users.findAllWithPinByTenant(tenantId);
 
     let matchedUserId: string | null = null;
@@ -314,6 +393,7 @@ export class AuthService {
     }
 
     if (!matchedUserId) {
+      const result = await this.lockout.recordFailedAttempt(lockoutKey);
       await this.recordAudit({
         tenantId,
         userId: undefined,
@@ -321,9 +401,25 @@ export class AuthService {
         meta,
         payload: { reason: 'no_pin_match', deviceId, deviceType },
       });
+      if (result.promotedToLockout) {
+        await this.recordAudit({
+          tenantId,
+          userId: undefined,
+          action: 'auth.account_locked',
+          meta,
+          payload: {
+            source: 'login-pin',
+            deviceId,
+            deviceType,
+            lockoutKeyHash: this.lockoutKeyDigest(lockoutKey),
+          },
+        });
+        this.throwAccountLocked();
+      }
       throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
     }
 
+    await this.lockout.resetAttempts(lockoutKey);
     await this.users.recordSuccessfulLogin(matchedUserId);
 
     const tokens = await this.issueTokensAndCreateSession(matchedUserId, tenantId, meta, null, {
