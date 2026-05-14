@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "prepare": "husky"

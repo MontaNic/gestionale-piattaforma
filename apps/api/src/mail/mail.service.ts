@@ -1,4 +1,10 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 
@@ -51,7 +57,8 @@ export class MailService implements OnModuleInit, OnModuleDestroy {
   private readonly transporter: Transporter;
   private readonly from: string;
 
-  constructor(config: ConfigService) {
+  // @Inject esplicito (vedi RedisService — Discovery #29 B2b).
+  constructor(@Inject(ConfigService) config: ConfigService) {
     const host = config.get<string>('SMTP_HOST') ?? '127.0.0.1';
     const port = Number(config.get<string>('SMTP_PORT') ?? '1025');
     const secure = config.get<string>('SMTP_SECURE') === 'true';

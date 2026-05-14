@@ -8,8 +8,8 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
 
-> ✅ **Primo login browser funzionante + Auth E2E hardening completo.**
-> Macro-task **D3a + D3b + D4 + E1 + E2 + B1 + B2a** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports, **frontend con `/login` + `/dashboard`** (primo login browser end-to-end), **rate limiting Redis (4 throttler) + account lockout sliding window + email notification Mailpit + per-tenant rate-limit `/auth/login-pin`**. Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, **CORS abilitato (E2 fix)**, frontend `:3001`. Smoke E2E 7/7 + 8/8 + 8/8 + 25/25 Vitest + 9/9 smoke browser. Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2) + [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (B1 rate limit + lockout) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md) (B2a email + login-pin per-tenant).
+> ✅ **Primo login browser funzionante + Auth E2E hardening 100% completo (B1 + B2a + B2b).**
+> Macro-task **D3a + D3b + D4 + E1 + E2 + B1 + B2a + B2b** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports, **frontend con `/login` + `/dashboard`** (primo login browser end-to-end), **rate limiting Redis (4 throttler) + account lockout sliding window + email notification Mailpit + per-tenant rate-limit `/auth/login-pin` + ThrottlerGuard fail-open verified Redis DOWN end-to-end** (TD-AD RESOLVED). **E2E test framework attivo** (`@testcontainers/postgresql` + `@testcontainers/redis` + supertest, Vitest projects array unit/e2e split). Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, **CORS abilitato**, frontend `:3001`. **29/29 test verdi** (25 unit + 4 e2e). Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2) + [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (B1 rate limit + lockout) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md) (B2a email + login-pin per-tenant) + [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md) (B2b E2E + TD-AD fix).
 
 ## Stack
 
@@ -207,9 +207,9 @@ curl -X POST http://localhost:3000/api/v1/auth/login-pin \
 
 Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt random di argon2id rende inutile un UNIQUE index su `pin_hash`). Vedi [ADR-0008 sezione D2b](./docs/architecture/ADR-0008-auth-module.md#d2b-implementation--pin-pos-login-2026-05-13-update) per decisioni e tech debt (HMAC lookup index in F2).
 
-#### Rate limiting & account lockout (B1 + B2a)
+#### Rate limiting & account lockout (B1 + B2a + B2b fail-open)
 
-Difesa brute-force a 2 strati via Redis (vedi [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)):
+Difesa brute-force a 2 strati via Redis (vedi [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md) + [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md) per fail-open Redis DOWN):
 
 **Strato 1 — Rate limiting** (`@nestjs/throttler` + Redis storage, 4 named throttlers env-driven):
 
@@ -230,7 +230,7 @@ Custom tracker `userId` per `tenant-create` impedisce IP rotation di un attacker
 - `Retry-After: 900` **fissi** anti user-enumeration (TD-J)
 - Audit `auth.account_locked` su transizione → locked (PII masked: `afterValue.lockoutKeyHash` = sha256[0:8])
 - Reset doppio su success: Redis (`resetAttempts`) + DB (`users.failed_login_attempts: 0`)
-- Fail-open su Redis down: rate limit/lockout disattivati ma auth continua a funzionare (warn log)
+- **Fail-open su Redis down** (TD-AD RESOLVED B2b, vedi [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md)): `AppThrottlerGuard.handleRequest` outer try/catch + `isRedisError` regex `/MaxRetriesPerRequestError|ECONNREFUSED|Redis|ioredis/i` → rate limit + lockout disattivati MA auth continua. Audit log Postgres traccia attempts. Pattern coerente con `LockoutService` fail-open (B1) e `MailService` fail-open (B2a). Verifica empirica integration test `td-ad-throttler-redis-down.e2e-spec.ts` (Redis container stop mid-test → request 201, NON 500).
 
 ```bash
 # Esempio: lockout dopo N fail
@@ -439,7 +439,37 @@ pnpm --filter @gestionale/api test:watch
 pnpm --filter @gestionale/api test:coverage
 ```
 
-Pattern test attuale (D2-vitest): instanziazione manuale dei service NestJS con mock providers via `vi.fn()` (bypass DI container, vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md) sezione "D2-vitest implementation"). E2E test (full Nest bootstrap + Testcontainers) in macro-task futuro.
+Pattern test attuale: unit test con istanziazione manuale dei service NestJS + mock providers via `vi.fn()` (bypass DI container, vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md) sezione "D2-vitest implementation"). **E2E test framework attivo da B2b** (`apps/api/test/e2e/`).
+
+### E2E tests (Testcontainers)
+
+E2E test framework attivo da B2b (vedi [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md)). Vitest `projects` array separa **unit** (`src/**/*.spec.ts`, fast ~700ms) da **E2E** (`test/e2e/**/*.e2e-spec.ts`, slow ~13s con container start).
+
+Stack: `supertest@7.x` + `@testcontainers/postgresql@11.x` + `@testcontainers/redis@11.x` + `pg@8.x` (raw SQL truncate/seed) + `unplugin-swc` + `@swc/core` (decoratorMetadata emit per NestJS DI). Container fresh per file test, `TRUNCATE` 11 tabelle `CASCADE` tra describe.
+
+```bash
+# E2E only (slow, ~13s con container start + Prisma migrate)
+pnpm --filter @gestionale/api test:e2e
+
+# Unit only (fast, ~700ms, no Docker)
+pnpm --filter @gestionale/api test
+
+# Entrambi
+pnpm --filter @gestionale/api test:all
+```
+
+Helpers in [`apps/api/test/e2e/helpers/`](./apps/api/test/e2e/helpers/):
+
+- `test-containers.ts` — `startTestContainers()` (Promise.all Postgres+Redis + Prisma migrate) + `stopTestContainers()`
+- `test-app.ts` — `createTestApp()` (env override + lazy AppModule import) + `truncateDatabase()` + `seedMinimal()` (tenant demo + admin con argon2)
+- `setup-env.ts` — env vars pre-import + `reflect-metadata` (necessario per `JWT_SECRET` letto top-level)
+
+E2E test esistenti (B2b):
+
+- `auth-login.e2e-spec.ts` (3 scenari: login OK, wrong password, no tenant header)
+- `td-ad-throttler-redis-down.e2e-spec.ts` (1 scenario: `AppThrottlerGuard` fail-open Redis DOWN verified)
+
+**Discoveries empiriche** (#27-30) + decisioni + tech debt: [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md). Nota: `@Inject(ClassName)` esplicito su 14 file production code (Discovery #29 permanente — TD-AE) come workaround Vitest+NestJS-DI gap.
 
 Comandi disponibili oggi (root):
 

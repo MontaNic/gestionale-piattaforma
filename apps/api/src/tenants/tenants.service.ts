@@ -18,7 +18,7 @@
 // - Audit log con tenantId del nuovo tenant + action 'tenant.created'
 // =============================================================================
 
-import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 import { id, withSystemContextAtomicTx } from '@gestionale/db';
 import argon2 from 'argon2';
 
@@ -44,8 +44,8 @@ export class TenantsService {
   private readonly logger = new Logger(TenantsService.name);
 
   constructor(
-    private readonly db: DbService,
-    private readonly usersService: UsersService,
+    @Inject(DbService) private readonly db: DbService,
+    @Inject(UsersService) private readonly usersService: UsersService,
   ) {}
 
   async createTenant(dto: CreateTenantDto, createdBy: string): Promise<CreateTenantResult> {
