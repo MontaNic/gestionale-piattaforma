@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,10 @@ type Profile = MeResponse['data'];
 
 export default function DashboardPage() {
   const router = useRouter();
+  // TD-2 ADR-0012 resolution: slug runtime per redirect tenant-aware.
+  const params = useParams<{ slug: string }>();
+  const tenantSlug = params.slug;
+  const loginUrl = `/t/${tenantSlug}/login`;
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,11 +26,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const token = getAccessToken();
     if (!token) {
-      router.replace('/login');
+      router.replace(loginUrl);
       return;
     }
 
-    apiGet<MeResponse>('/me', token)
+    apiGet<MeResponse>('/me', { accessToken: token })
       .then((res) => {
         setProfile(res.data);
         setLoading(false);
@@ -34,13 +38,13 @@ export default function DashboardPage() {
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 401) {
           clearTokens();
-          router.replace('/login');
+          router.replace(loginUrl);
           return;
         }
         setError(err instanceof Error ? err.message : 'Errore caricamento profilo');
         setLoading(false);
       });
-  }, [router]);
+  }, [router, loginUrl]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -48,7 +52,7 @@ export default function DashboardPage() {
 
     if (token) {
       try {
-        await apiPost<void>('/auth/logout', {}, { Authorization: `Bearer ${token}` });
+        await apiPost<void>('/auth/logout', {}, { accessToken: token });
       } catch (err) {
         // Decision 1A ADR-0012: error silente + log, always clearTokens anche su fail.
         // Sessione backend potrebbe restare orphan fino a scadenza naturale JWT (15 min).
@@ -60,7 +64,7 @@ export default function DashboardPage() {
     }
 
     clearTokens();
-    router.replace('/login');
+    router.replace(loginUrl);
   };
 
   if (loading) {

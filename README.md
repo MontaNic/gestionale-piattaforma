@@ -399,23 +399,34 @@ A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button 
 
 Stack version pinning + razionale (Tailwind 3.4 vs 4, React 18.3 vs 19, manual scaffold vs `create-next-app`): [ADR-0011 sezione Decisions](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md#decisions).
 
-#### Login flow (E2)
+#### Login flow (E2 + TD-2 multi-tenant routing)
 
-Primo flow end-to-end frontend↔API via browser. Stack: App Router pages + `react-hook-form` + `zod` + shadcn `Form` components + localStorage JWT storage (pragmatic, tech debt esplicito).
+Primo flow end-to-end frontend↔API via browser. Stack: App Router pages + Next.js 15 middleware (multi-tenant routing path-based) + `react-hook-form` + `zod` + shadcn `Form` components + localStorage JWT storage (pragmatic, tech debt esplicito).
 
 ```bash
 # Avvia entrambi i dev server (2 terminali OR pnpm dev root)
 pnpm exec turbo run dev --filter=@gestionale/api    # → :3000
 pnpm exec turbo run dev --filter=@gestionale/web    # → :3001
 
-# Browser: http://localhost:3001 → /login automatico
-# Credenziali seedate: admin@demo.local / Admin123! (X-Tenant-Slug: demo hardcoded)
-# Post-login: /dashboard con Welcome <firstName> + 32 permessi badge + logout button
+# Browser: http://localhost:3001 → redirect /t/demo/login (default tenant dev)
+# Credenziali seedate D3b:
+#   - admin@demo.local / Admin123!         → http://localhost:3001/t/demo/login
+#   - manager@acme.local / Manager123!     → http://localhost:3001/t/acme/login
+# Post-login: /t/<slug>/dashboard con Welcome <firstName> + permessi badge + logout button
 ```
 
-Pattern: 3 pages (`/login`, `/dashboard`, `/` redirect) + 3 lib (`api.ts` API client typed con `ApiError`, `auth.ts` token storage con SSR guards, `types.ts` matching empirico `/me` response). `router.replace` (NON `push`) per redirect — no history pollution. Error discrimination per `E_AUTH_INVALID_CREDENTIALS` → UX-friendly "Email o password non corrette".
+**Multi-tenant routing path-based (TD-2 resolution, sessione 9)**:
 
-Razionale completo: [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) — 6 decisioni (localStorage vs cookie, RHF+zod, tenant slug hardcoded, pages structure, no auto-refresh, shadcn CLI add), 4 discoveries (testing limit Claude Code remoto, shadcn lint, **CORS missing backend ⭐**, cross-platform shortcuts), 6 tech debt (TD-1 → TD-6).
+- Pattern URL: `/t/<slug>/<page>` (es. `/t/demo/login`, `/t/acme/dashboard`)
+- [`apps/web/src/middleware.ts`](./apps/web/src/middleware.ts) Next.js 15 edge-side: slug validation regex + `RESERVED_SLUGS` Set (coerente backend `FORBIDDEN_SLUGS` D4)
+- Root `/` → redirect `/t/demo/login` (default tenant dev) — Server Component fallback + middleware edge
+- Slug invalid (es. `INVALID-FOO` uppercase) o reserved (es. `api`, `admin`) → redirect `/not-found`
+- Client components leggono slug runtime via `useParams<{slug:string}>()` (App Router idiomatic)
+- API client [`apps/web/src/lib/api.ts`](./apps/web/src/lib/api.ts): `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata. `tenantSlug` → header `X-Tenant-Slug`. Backend API contract INVARIATO.
+
+Pattern struttura: 5 pages (`/`, `/not-found`, `/t/[slug]/login`, `/t/[slug]/dashboard`, root middleware) + 3 lib (`api.ts` API client typed con `ApiError` + `RequestOptions`, `auth.ts` token storage con SSR guards, `types.ts` matching empirico `/me` response). `router.replace`/`router.push` tenant-aware via template literal `/t/${tenantSlug}/<page>`. Error discrimination per `E_AUTH_INVALID_CREDENTIALS` → UX-friendly "Email o password non corrette".
+
+Razionale completo: [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) — 6 decisioni E2 (localStorage vs cookie, RHF+zod, tenant slug hardcoded → **risolto TD-2**, pages structure, no auto-refresh, shadcn CLI add) + sezione **TD-2 Resolution** (path-based vs subdomain vs query param, smoke server-side 7/7), 5 discoveries (E2 + #31 Next.js dynamic segment shell escape), 7 tech debt (TD-1 → TD-7).
 
 **Entrypoint dev — anti-pattern noto**: `pnpm --filter @gestionale/web dev` **bypassa Turbo** (chiama lo script direttamente, salta `dependsOn`). Se `packages/db/dist/` non esiste fallisce con `Cannot find module`. Usa sempre uno di questi due:
 
