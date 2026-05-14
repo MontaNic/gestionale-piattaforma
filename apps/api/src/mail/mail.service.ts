@@ -25,6 +25,8 @@ import nodemailer, { type Transporter } from 'nodemailer';
 // PII / Security: email content MAI include password, JWT token, refresh
 // token, session id. Solo: indirizzo IP, user agent, timestamp, motivo
 // breve. Lockout key NON in email (privacy).
+// Pattern: quando serve riferimento user, usare hash sha256[0:8] coerente
+// con audit log (es. identifierHash per lockout, mai user.email plain).
 // =============================================================================
 
 interface AccountLockedContext {
@@ -38,7 +40,6 @@ interface AccountLockedContext {
 
 interface RefreshTokenTheftContext {
   to: string;
-  userId: string;
   attackerIp: string | null;
   attackerUserAgent: string | null;
   revokedSessionCount: number;
@@ -116,7 +117,7 @@ ${tenantLine}
 <li>Se sei stato tu, attendi ${ctx.lockoutDurationMin} minuti e riprova.</li>
 <li>Se NON sei stato tu, contatta l'amministratore: qualcuno potrebbe star tentando di accedere al tuo account.</li>
 </ul>
-<p style="color: #666; font-size: 0.85em;">Questa e' una notifica automatica di sicurezza. Non rispondere a questa email.</p>
+<p style="color: #666; font-size: 0.85em;">Questa è una notifica automatica di sicurezza. Non rispondere a questa email.</p>
 </body></html>`;
 
     return this.sendSafe({ to: ctx.to, subject, html });
@@ -128,7 +129,7 @@ ${tenantLine}
   // Trigger: AuthService.refresh rileva refresh token rotato + riusato
   // (theft FULL D2-vitest). Tutte le sessioni del user sono state revocate.
   async sendRefreshTokenTheftEmail(ctx: RefreshTokenTheftContext): Promise<boolean> {
-    const subject = '[Gestionale] Attivita sospetta — sessioni revocate';
+    const subject = '[Gestionale] Attività sospetta — sessioni revocate';
     const ipLine = ctx.attackerIp
       ? `<li>Indirizzo IP: <code>${escapeHtml(ctx.attackerIp)}</code></li>`
       : '';
@@ -138,8 +139,8 @@ ${tenantLine}
 
     const html = `<!doctype html>
 <html lang="it"><body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
-<h2>Attivita sospetta rilevata sul tuo account</h2>
-<p>E' stato rilevato il riutilizzo di un token gia' invalidato. Questo puo' indicare che un attaccante e' in possesso delle tue credenziali di sessione.</p>
+<h2>Attività sospetta rilevata sul tuo account</h2>
+<p>È stato rilevato il riutilizzo di un token già invalidato. Questo può indicare che un attaccante è in possesso delle tue credenziali di sessione.</p>
 <p><strong>Per protezione, abbiamo revocato ${ctx.revokedSessionCount} sessione/i attiva/e.</strong> Dovrai effettuare nuovamente il login da tutti i dispositivi.</p>
 <p><strong>Dettagli del tentativo</strong>:</p>
 <ul>
@@ -151,9 +152,9 @@ ${uaLine}
 <ul>
 <li>Cambia la password al prossimo login.</li>
 <li>Se hai accesso a una console amministrativa, verifica l'audit log per dettagli.</li>
-<li>Se non riconosci l'attivita, contatta immediatamente l'amministratore.</li>
+<li>Se non riconosci l'attività, contatta immediatamente l'amministratore.</li>
 </ul>
-<p style="color: #666; font-size: 0.85em;">Questa e' una notifica automatica di sicurezza. Non rispondere a questa email.</p>
+<p style="color: #666; font-size: 0.85em;">Questa è una notifica automatica di sicurezza. Non rispondere a questa email.</p>
 </body></html>`;
 
     return this.sendSafe({ to: ctx.to, subject, html });

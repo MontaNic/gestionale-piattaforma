@@ -95,7 +95,7 @@ export class AuthController {
   // B2a: @AuthStrict() rimosso da /auth/login-pin → subsumed da
   // @LoginPinThrottle() che e' piu' granulare (per-tenant tracker) e piu'
   // permissivo (10/min vs 5/min). Mantenere entrambi fa vincere auth-strict
-  // (IP-only) annullando il tracker per-tenant. Discovery #24 ADR-0014.
+  // (IP-only) annullando il tracker per-tenant. Discovery #25 ADR-0014.
   // /auth/login (email/password) mantiene @AuthStrict() — quel flow non ha
   // tenant scope per-tracker (TD-H carry-over B1).
   @LoginPinThrottle()

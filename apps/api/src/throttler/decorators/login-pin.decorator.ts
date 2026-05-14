@@ -7,7 +7,7 @@ import { LOGIN_PIN_METADATA } from '../throttler.module';
 // =============================================================================
 // Pattern coerente con @AuthStrict / @TenantCreate (B1): solo SetMetadata,
 // niente Throttle({...}) inline. Limit/TTL vengono dalla forRootAsync
-// env-driven (THROTTLE_AUTH_PIN_LIMIT / THROTTLE_AUTH_PIN_TTL).
+// env-driven (THROTTLE_AUTH_PIN_LIMIT / THROTTLE_AUTH_PIN_TTL_MS).
 //
 // Il flag metadata e' interpretato da:
 //   1. `skipIfMetadataAbsent(LOGIN_PIN_METADATA)` nella forRoot → throttler

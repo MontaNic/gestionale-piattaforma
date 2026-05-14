@@ -73,7 +73,7 @@ export const LOGIN_PIN_METADATA = 'gestionale:throttle:login-pin';
             // 10 req/60s: PIN 4-6 cifre brute-forceable (10^4-10^6 keyspace),
             // scope per-tenant limita blast radius.
             name: 'auth-pin',
-            ttl: Number(config.get<string>('THROTTLE_AUTH_PIN_TTL') ?? '60000'),
+            ttl: Number(config.get<string>('THROTTLE_AUTH_PIN_TTL_MS') ?? '60000'),
             limit: Number(config.get<string>('THROTTLE_AUTH_PIN_LIMIT') ?? '10'),
             skipIf: skipIfMetadataAbsent(LOGIN_PIN_METADATA),
           },

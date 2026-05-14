@@ -283,7 +283,6 @@ export class AuthService {
       const emailSent = victim?.email
         ? await this.mail.sendRefreshTokenTheftEmail({
             to: victim.email,
-            userId: session.userId,
             attackerIp: meta.ip ?? null,
             attackerUserAgent: meta.userAgent ?? null,
             revokedSessionCount: revoked.count,
