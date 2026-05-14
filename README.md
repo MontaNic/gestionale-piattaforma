@@ -207,19 +207,20 @@ curl -X POST http://localhost:3000/api/v1/auth/login-pin \
 
 Uniqueness PIN garantita lato applicazione via `argon2.verify` loop (il salt random di argon2id rende inutile un UNIQUE index su `pin_hash`). Vedi [ADR-0008 sezione D2b](./docs/architecture/ADR-0008-auth-module.md#d2b-implementation--pin-pos-login-2026-05-13-update) per decisioni e tech debt (HMAC lookup index in F2).
 
-#### Rate limiting & account lockout (B1)
+#### Rate limiting & account lockout (B1 + B2a)
 
-Difesa brute-force a 2 strati via Redis (vedi [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md)):
+Difesa brute-force a 2 strati via Redis (vedi [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)):
 
-**Strato 1 — Rate limiting** (`@nestjs/throttler` + Redis storage, 3 named throttlers env-driven):
+**Strato 1 — Rate limiting** (`@nestjs/throttler` + Redis storage, 4 named throttlers env-driven):
 
-| Throttler       | Soglia default | Endpoint                                                       | Tracker                                 |
-| --------------- | -------------- | -------------------------------------------------------------- | --------------------------------------- |
-| `default`       | 60 req/min     | global fallback (tutti gli endpoint non opt-in)                | IP                                      |
-| `auth-strict`   | 5 req/min      | `/auth/login` + `/auth/login-pin` (opt-in via `@AuthStrict()`) | IP                                      |
-| `tenant-create` | 3 req/h        | `POST /tenants` (opt-in via `@TenantCreate()`)                 | **userId** via JWT decode (fallback IP) |
+| Throttler       | Soglia default | Endpoint                                                 | Tracker                                                  |
+| --------------- | -------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| `default`       | 60 req/min     | global fallback (tutti gli endpoint non opt-in)          | IP                                                       |
+| `auth-strict`   | 5 req/min      | `/auth/login` (opt-in via `@AuthStrict()`)               | IP                                                       |
+| `tenant-create` | 3 req/h        | `POST /tenants` (opt-in via `@TenantCreate()`)           | **userId** via JWT decode (fallback IP)                  |
+| **`auth-pin`**  | **10 req/min** | **`/auth/login-pin` (opt-in via `@LoginPinThrottle()`)** | **`(tenantId, ip)` triplet (fallback `pin:unknown:ip`)** |
 
-Custom tracker `userId` per `tenant-create` impedisce IP rotation di un attacker autenticato. Tuning via env: `THROTTLE_DEFAULT_TTL_MS/LIMIT`, `THROTTLE_AUTH_TTL_MS/LIMIT`, `THROTTLE_TENANT_CREATE_TTL_MS/LIMIT`.
+Custom tracker `userId` per `tenant-create` impedisce IP rotation di un attacker autenticato. Custom tracker `(tenantId, ip)` per `auth-pin` isola buckets tra tenant (smoke verificato: demo saturated, acme stessa IP NON bloccato). `deviceId` non incluso nel triplet → TD-Y per F1 PWA cameriere. Tuning via env: `THROTTLE_*_TTL_MS/LIMIT` (8 vars totali).
 
 **Strato 2 — Account lockout** (`LockoutService` Redis sliding window):
 
@@ -244,6 +245,33 @@ done
 # Retry-After: 900
 # {"statusCode":429,"code":"E_AUTH_ACCOUNT_LOCKED","message":"Account temporaneamente bloccato..."}
 ```
+
+#### Email notifications (B2a)
+
+Eventi security generano email notification automatica via `MailService` (vedi [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)):
+
+- **`[Gestionale] Account temporaneamente bloccato`** — 10 fail consecutivi su `/auth/login` → email all'utente legittimo con `identifierHash` + durata 15min + azioni raccomandate
+- **`[Gestionale] Attivita sospetta — sessioni revocate`** — refresh token reuse rilevato (theft detection D2-vitest) → email + count session revocate + IP/UA attaccante
+
+**Stack**: `nodemailer@8.0.7` + [Mailpit](https://mailpit.axllent.org/) v1.30 (dev MTA in container — sostituisce MailHog abbandonato).
+
+```bash
+# Container già in docker-compose.dev.yml
+docker compose -f docker-compose.dev.yml up -d mailpit
+# Mailpit Web UI:  http://127.0.0.1:8025
+# SMTP endpoint:   127.0.0.1:1025
+# REST API:        http://127.0.0.1:8025/api/v1/messages
+```
+
+**Pattern fail-open layered**:
+
+- `transporter.verify()` su `onModuleInit`: no-throw (log warn se SMTP down, app continua)
+- `sendSafe()` wrapper privato: `try/catch` con `Promise<boolean>` return (audit flag `emailSent`)
+- Email perduta ≠ auth bloccato (audit log Postgres è la fonte primaria di security signal)
+
+**Content zero-PII**: solo `identifierHash` sha256[0:8] (pattern coerente audit log B1), IP, user-agent, count. MAI password/JWT/refresh-token/session-id plain.
+
+**Production**: TD-Z provider esterno (Postmark / SES / Resend) — trigger production deploy. SMTP config via env: `SMTP_HOST/PORT/USER/PASS/FROM/SECURE`.
 
 #### Tenant bootstrap (D4) — POST /tenants
 

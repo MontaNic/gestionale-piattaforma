@@ -10,6 +10,7 @@ import {
 
 import { CurrentTenant } from '../tenant/decorators/current-tenant.decorator';
 import { AuthStrict } from '../throttler/decorators/auth-strict.decorator';
+import { LoginPinThrottle } from '../throttler/decorators/login-pin.decorator';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -91,7 +92,13 @@ export class AuthController {
   // X-Tenant-Slug required (TenantMiddleware scoped a questo path).
   // PIN match via argon2.verify loop sui user del tenant + sessione POS.
   @Public()
-  @AuthStrict()
+  // B2a: @AuthStrict() rimosso da /auth/login-pin → subsumed da
+  // @LoginPinThrottle() che e' piu' granulare (per-tenant tracker) e piu'
+  // permissivo (10/min vs 5/min). Mantenere entrambi fa vincere auth-strict
+  // (IP-only) annullando il tracker per-tenant. Discovery #24 ADR-0014.
+  // /auth/login (email/password) mantiene @AuthStrict() — quel flow non ha
+  // tenant scope per-tracker (TD-H carry-over B1).
+  @LoginPinThrottle()
   @Post('login-pin')
   async loginPin(
     @CurrentTenant() tenantId: string | undefined,

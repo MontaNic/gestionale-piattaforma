@@ -54,7 +54,37 @@ export class AppThrottlerGuard extends ThrottlerGuard {
       };
       return super.handleRequest({ ...requestProps, getTracker: customGetTracker });
     }
+    if (requestProps.throttler.name === 'auth-pin') {
+      // B2a: tracker per-tenant per /auth/login-pin. tenantId arriva da
+      // TenantMiddleware (req.tenantId) — verifica empirica STEP 4.1.
+      // Fallback IP-only se tenant resolution e' fallita (defense-in-depth:
+      // niente crash auth flow). NO deviceId — TD-Y ADR-0014.
+      const customGetTracker: ThrottlerGetTrackerFunction = async (req) => {
+        const { tracker, source } = this.resolveAuthPinTracker(req as Record<string, unknown>);
+        if (process.env.NODE_ENV !== 'production') {
+          this.log.log(`auth-pin tracker=${tracker} (source=${source})`);
+        }
+        return tracker;
+      };
+      return super.handleRequest({ ...requestProps, getTracker: customGetTracker });
+    }
     return super.handleRequest(requestProps);
+  }
+
+  private resolveAuthPinTracker(req: Record<string, unknown>): {
+    tracker: string;
+    source: 'tenant-ip' | 'ip-fallback';
+  } {
+    const tenantId = (req as { tenantId?: string }).tenantId;
+    const ip = (req as { ip?: string }).ip ?? 'unknown';
+    if (!tenantId) {
+      // Defense-in-depth: tenant resolution fallita (es. header missing o
+      // slug invalido — TenantMiddleware solitamente fa fail-fast prima di
+      // arrivare al guard, ma fallback graceful per coerenza).
+      this.log.warn(`auth-pin tracker: tenantId missing on req, fallback to IP-only (ip=${ip})`);
+      return { tracker: `pin:unknown:${ip}`, source: 'ip-fallback' };
+    }
+    return { tracker: `pin:${tenantId}:${ip}`, source: 'tenant-ip' };
   }
 
   private resolveTenantCreateTracker(req: Record<string, unknown>): {
