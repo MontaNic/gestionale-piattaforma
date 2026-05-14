@@ -24,7 +24,7 @@
 // in ADR-0008 per Redis cache TTL=60s.
 // =============================================================================
 
-import { Injectable, type NestMiddleware, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, type NestMiddleware, UnauthorizedException } from '@nestjs/common';
 import { runInTenantContext, withSystemContext } from '@gestionale/db';
 import type { NextFunction, Response } from 'express';
 
@@ -33,7 +33,8 @@ import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-requ
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
-  constructor(private readonly db: DbService) {}
+  // @Inject esplicito — Discovery #29 B2b.
+  constructor(@Inject(DbService) private readonly db: DbService) {}
 
   async use(req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> {
     // Skip se request gia' autenticato: JwtStrategy.validate() ha gia' messo

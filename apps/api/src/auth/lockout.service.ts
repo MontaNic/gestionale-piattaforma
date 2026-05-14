@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { RedisService } from '../redis/redis.service';
@@ -58,9 +58,10 @@ export class LockoutService {
   private readonly windowMs: number;
   private readonly durationMs: number;
 
+  // @Inject esplicito (vedi RedisService — Discovery #29 B2b).
   constructor(
-    private readonly redis: RedisService,
-    config: ConfigService,
+    @Inject(RedisService) private readonly redis: RedisService,
+    @Inject(ConfigService) config: ConfigService,
   ) {
     this.threshold = Number(config.get<string>('LOCKOUT_THRESHOLD') ?? String(DEFAULT_THRESHOLD));
     this.windowMs = Number(config.get<string>('LOCKOUT_WINDOW_MS') ?? String(DEFAULT_WINDOW_MS));

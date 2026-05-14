@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 14 maggio 2026 (B2a sessione 9)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + **B2a email notification + login-pin per-tenant rate-limit** completi. **Difesa brute-force completa**: throttler Redis (5/min login, 3/h tenant-create, **10/min login-pin per-tenant**) + account lockout (10 fail/15min → block 15min) + Retry-After fissi (anti-enumeration) + audit `auth.account_locked` + **email notification Mailpit (account_locked, theft_detected)** + audit `emailSent/emailReason` flag. **10 endpoint operativi** API a `:3000`, **25/25 test Vitest verdi** + RLS attivo.
+**Ultimo aggiornamento:** 15 maggio 2026 (B2b sessione 9)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + **B2b E2E full bootstrap Testcontainers + TD-AD fix** completi → **Auth E2E hardening 100% chiuso**. **Difesa brute-force completa + fail-open layered Redis**: throttler Redis (5/min login, 3/h tenant-create, 10/min login-pin per-tenant) + account lockout (10 fail/15min) + email notification Mailpit + **ThrottlerGuard fail-open Redis DOWN verified end-to-end**. **10 endpoint operativi** API a `:3000`, **29/29 test Vitest verdi** (25 unit + 4 e2e) + RLS attivo + container isolation Postgres+Redis fresh per file.
 
-> ✅ **B2a chiuso**: email notification security (nodemailer + Mailpit dev MTA) + rate-limit `/auth/login-pin` per-tenant `(tenantId, ip)` triplet + TD-B verify empirico (LockoutService fail-open, ThrottlerStorage fail-CLOSED → TD-AD). Smoke E2E 8/8 verdi (lockout+email + theft+email + per-tenant isolation acme vs demo + TenantMiddleware fail-fast + Redis down recovery 121ms). Tech debt 7 nuove (TD-V/Y/Z/AA/AB/AC/AD) tracciate in [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md). Prossimo macro-task: **B2b sessione 10 (E2E full Nest bootstrap + Testcontainers + TD-AD integration test)** o da concordare. Discoveries cumulative: **26**.
+> ✅ **B2b chiuso + B2 closure**: E2E test framework full Nest bootstrap (`@testcontainers/postgresql` + `@testcontainers/redis` + `supertest` + Vitest projects array unit/e2e split) + TD-AD RESOLVED (`AppThrottlerGuard.handleRequest` outer try/catch + `isRedisError` regex → fail-open verified Redis container stop mid-test). 4 nuove discoveries (#27-30, TD-AE permanente `@Inject` 14 file pattern). Auth E2E hardening macro-task chiuso al 100% (B1 PR #19+#20 + B2a PR #21+#22 + B2b questa PR). Tech debt repo: ~29. Discoveries cumulative: **30**. Prossimo macro-task da concordare. Vedi [ADR-0015](docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md).
 
 ---
 
@@ -876,21 +876,66 @@ Split di B2 deciso architecture review sessione 9: B2a = email + login-pin throt
 - TD-AA template engine email se >3 template inline (~1.5h)
 - TD-AB matrix decorator throttler subsumption documentata (~20min)
 - TD-AC default lockout + throttler limit discrasati (~10min discussion)
-- **TD-AD** wrap `AppThrottlerGuard.handleRequest` try/catch fail-open totale (Discovery #26) (~30min)
+- **TD-AD** wrap `AppThrottlerGuard.handleRequest` try/catch fail-open totale (Discovery #26) (~30min) → **RESOLVED in B2b**
 
-Totale tech debt repo: ~28 (B1 21 + B2a 7).
+Totale tech debt repo dopo B2a: ~28 (B1 21 + B2a 7).
+
+### B2b — Auth E2E hardening parte 2 (split B): E2E full bootstrap + TD-AD fix (Sessione 9, 2026-05-14/15 notte tardi)
+
+**Branch**: `feature/b2b-e2e-full-bootstrap-td-ad-fix` · **Status**: completato, PR merge pending · **ADR**: [ADR-0015](docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md)
+
+Chiude B2 (Auth E2E hardening) deciso architecture review sessione 9: primo E2E test full Nest bootstrap del progetto + TD-AD verified end-to-end. **B2 macro-task 100% complete** (B1 PR #19+#20 + B2a PR #21+#22 + B2b questo PR).
+
+**Deliverables**:
+
+- E2E framework: Vitest `projects` array (unit + e2e split) + `@testcontainers/postgresql@11.14.0` + `@testcontainers/redis@11.14.0` + `supertest@7.2.2` + `pg@8.20.0` (raw SQL truncate/seed) + `unplugin-swc@1.5.9` + `@swc/core@1.15.33` + `uuidv7` (devDep apps/api)
+- Helpers `test-containers.ts` (Promise.all start + Prisma migrate via execSync) + `test-app.ts` (env override + lazy AppModule import + ValidationPipe + truncate + seedMinimal) + `setup-env.ts` (JWT_SECRET pre-import + reflect-metadata)
+- `.swcrc` standalone NestJS-friendly (legacyDecorator + decoratorMetadata + keepClassNames + dynamicImport + module.type commonjs + target es2022)
+- 2 E2E spec: `auth-login.e2e-spec.ts` (3 scenari: login OK, wrong password, no tenant header) + `td-ad-throttler-redis-down.e2e-spec.ts` (1 scenario fail-open Redis container stop mid-test)
+- **TD-AD fix RESOLVED**: `AppThrottlerGuard.handleRequest` outer try/catch + `isRedisError` regex `/MaxRetriesPerRequestError|ECONNREFUSED|Redis|ioredis/i` + `Logger.warn [FAIL-OPEN]` prefix + `return true` fail-open
+- **Implementation detail correctness-critical**: `await super.handleRequest(...)` invece di `return super.handleRequest(...)` (senza `await` la Promise rejection scappa try/catch come unhandled rejection). Pattern JS semantic-critical, reviewer junior facilmente missato
+- `@Inject(ClassName)` esplicito su 14 file production code (Discovery #29 permanente — TD-AE)
+- Scripts split: `pnpm test` (unit fast ~700ms, no Docker) vs `pnpm test:e2e` (slow ~13s container start) vs `pnpm test:all` (entrambi)
+- Container fresh per file test (TRUNCATE 11 tabelle CASCADE between describe + seedMinimal raw SQL)
+- Pattern fail-open layered consolidato: LockoutService (B1) + MailService (B2a) + ThrottlerGuard (B2b) tutti coerenti
+
+**Test summary**:
+
+| Test | Tipo | Esito |
+|---|---|---|
+| Unit existing (B1+B2a) | Unit | ✅ 25/25 PASS (~700ms) |
+| `auth-login.e2e-spec.ts` × 3 scenari | E2E | ✅ 3/3 PASS (~7s) |
+| `td-ad-throttler-redis-down.e2e-spec.ts` × 1 | E2E | ✅ 1/1 PASS (~12.5s, fail-open verified) |
+| **Total** | — | **29/29 PASS (~13.93s)** |
+
+**Empirical discoveries (#27-30, +4 cumulative → totale 30)**:
+
+- **#27** — `ssh2@1.17.0` (transitive `@testcontainers/*` via `dockerode`) optional crypto binding fail durante install. Pure-JS fallback OK (Docker Unix socket non triggera SSH path). Zero impact runtime.
+- **#28** — `JWT_SECRET` letto al MODULE LOAD TIME in `auth.module.ts:14` (top-level statement). Vitest carica moduli PRE-beforeAll → env override troppo tardi. Fix: setupFile dedicato `setup-env.ts` con env pre-import. TD-AG refactor a ConfigService runtime read.
+- **#29 (PERMANENTE)** — Vitest+`unplugin-swc`+`.swcrc` completo (`legacyDecorator` + `decoratorMetadata` + `keepClassNames` + `tsconfigFile:false`) NON sufficient per NestJS DI in `Test.createTestingModule` + AppModule. Verifica empirica rollback 1 file pilota (auth.service.ts 5 deps) → `Cannot read properties of undefined`. SWC metadata emit ≠ NestJS testing DI resolution complete chain. Pattern `@Inject(ClassName)` esplicito su **14 file** mantenuto defensive. **TD-AE permanente** (trigger re-evaluation Vitest 4+/NestJS 12+/SWC 2.x).
+- **#30** — `@gestionale/db` singleton eager `prisma` legge `DATABASE_URL` al MODULE REQUIRE TIME. Import statico `AppModule` → PrismaClient con env placeholder → Authentication failed. Fix: lazy `await import('AppModule')` POST env override. TD-AH refactor a factory pattern DI.
+
+**Tech debt update (1 RESOLVED + 4 nuovi)** — vedi [ADR-0015](docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md):
+
+- ✅ **TD-AD RESOLVED**: ThrottlerStorage Redis DOWN fix Fase 4 + integration test Fase 5 verified
+- **TD-AE** (PERMANENTE) `@Inject(ClassName)` esplicito su 14 file — trigger re-evaluation upstream tooling change (~30min cleanup futuro)
+- **TD-AF** Redis monitoring + alerting + multi-AZ production (~2-4h, trigger production deploy)
+- **TD-AG** `JWT_SECRET` top-level env read refactor a `ConfigService` runtime (~30min, F1+ refactor wave)
+- **TD-AH** `prisma` singleton eager refactor a factory pattern DI (~1h, F1+ refactor wave OR TD-2 multi-tenant)
+
+Totale tech debt repo dopo B2b: ~29 (B1 21 + B2a 7 + B2b 4 nuovi - TD-AD chiuso).
 
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: da concordare nella prossima sessione.**
+**Macro-task: da concordare nella prossima sessione. B2 Auth E2E hardening 100% chiuso.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **B2b — Auth E2E hardening parte 2 (split B)** (carry-over B2a): E2E test full Nest bootstrap (primo del progetto) con `Test.createTestingModule(AppModule)` + Testcontainers Postgres + Redis reale + `supertest` HTTP. **TD-AD integration test**: spegnere Redis container, verificare 500 attuale → implementare wrap fail-open `AppThrottlerGuard.handleRequest` → ri-test. Stima 3-4h.
-2. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Sblocca TD-H lockout key per-tenant. Stima 1-2h.
-3. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
-4. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
-5. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+1. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Sblocca TD-H lockout key per-tenant + TD-AH refactor opportunity (prisma singleton eager → factory pattern). Stima 1-2h.
+2. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
+3. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
+4. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+5. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
 6. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
 7. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 

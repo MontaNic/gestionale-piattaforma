@@ -1,4 +1,10 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -15,7 +21,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: Redis;
 
-  constructor(config: ConfigService) {
+  // @Inject esplicito: Discovery #29 B2b — Vitest+esbuild non emette
+  // design:paramtypes metadata, NestJS DI riceve undefined per i constructor
+  // args inferred. @Inject(ConfigService) registra il token in
+  // PARAMTYPES_METADATA bypassando il lookup design:paramtypes. Production
+  // zero impact (metadata reflection ridondante con annotazione esplicita).
+  constructor(@Inject(ConfigService) config: ConfigService) {
     const host = config.get<string>('REDIS_HOST') ?? 'localhost';
     const port = Number(config.get<string>('REDIS_PORT') ?? '6379');
     const password = config.get<string>('REDIS_PASSWORD');

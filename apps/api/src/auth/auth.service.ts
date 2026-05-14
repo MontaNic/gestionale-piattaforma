@@ -23,6 +23,7 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -62,12 +63,19 @@ type AuditAction =
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
+  // @Inject esplicito per ogni dep — Discovery #29 B2b (TD-AE permanente):
+  // SWC config completa (.swcrc + inline keepClassNames + decoratorMetadata)
+  // emette metadata correttamente per i service root, ma NestJS testing DI
+  // ancora non risolve `class` deps via design:paramtypes nei test E2E.
+  // Tentativi rollback STOP 3 (sub-prompt) → fail con
+  // "Cannot read properties of undefined (reading 'checkLockout')". Pattern
+  // @Inject mantenuto come defensive (production-safe, zero impatto runtime).
   constructor(
-    private readonly db: DbService,
-    private readonly users: UsersService,
-    private readonly jwt: JwtService,
-    private readonly lockout: LockoutService,
-    private readonly mail: MailService,
+    @Inject(DbService) private readonly db: DbService,
+    @Inject(UsersService) private readonly users: UsersService,
+    @Inject(JwtService) private readonly jwt: JwtService,
+    @Inject(LockoutService) private readonly lockout: LockoutService,
+    @Inject(MailService) private readonly mail: MailService,
   ) {}
 
   // Durata lockout in minuti, usata per UI message email. Allineata a

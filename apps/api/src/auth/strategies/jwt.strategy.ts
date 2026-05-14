@@ -13,7 +13,7 @@
 // attaccante che forge JWT con tenantId diverso vede 0 sessions -> 401.
 // =============================================================================
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { runInTenantContext } from '@gestionale/db';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -35,7 +35,7 @@ function getJwtSecret(): string {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly db: DbService) {
+  constructor(@Inject(DbService) private readonly db: DbService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,

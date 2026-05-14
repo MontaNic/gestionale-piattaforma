@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { withSystemContext } from '@gestionale/db';
 
 import { DbService } from '../db/db.service';
@@ -8,7 +8,7 @@ import type { HealthDto } from './health.dto';
 export class HealthService {
   private readonly logger = new Logger(HealthService.name);
 
-  constructor(private readonly db: DbService) {}
+  constructor(@Inject(DbService) private readonly db: DbService) {}
 
   async check(): Promise<HealthDto> {
     const timestamp = new Date().toISOString();

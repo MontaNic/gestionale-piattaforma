@@ -5,7 +5,7 @@
 // hydrated profile (user + roles + permissions) per endpoint /me.
 // =============================================================================
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { DbService } from '../db/db.service';
 
@@ -26,7 +26,7 @@ export interface FullProfile {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DbService) {}
+  constructor(@Inject(DbService) private readonly db: DbService) {}
 
   /** Lookup user per (tenantId, email). Niente leak su esistenza-email. */
   async findByTenantEmail(tenantId: string, email: string) {

@@ -41,34 +41,70 @@ export class AppThrottlerGuard extends ThrottlerGuard {
   private readonly log = new Logger(AppThrottlerGuard.name);
 
   protected override async handleRequest(requestProps: ThrottlerRequest): Promise<boolean> {
-    if (requestProps.throttler.name === 'tenant-create') {
-      const customGetTracker: ThrottlerGetTrackerFunction = async (req) => {
-        const { tracker, source } = this.resolveTenantCreateTracker(req as Record<string, unknown>);
-        if (process.env.NODE_ENV !== 'production') {
-          // Logger.log (info) intenzionale: `debug` e' off-by-default in NestJS,
-          // mentre `log` e' visibile nello smoke STOP 2 e disattivato in prod
-          // dal check NODE_ENV. Future: sostituire con structured tracing.
-          this.log.log(`tenant-create tracker=${tracker} (source=${source})`);
-        }
-        return tracker;
-      };
-      return super.handleRequest({ ...requestProps, getTracker: customGetTracker });
+    // ─── TD-AD fix (B2b, ADR-0015) — outer try/catch fail-open ──────────────
+    // Discovery #26 B2a: ThrottlerStorage Redis DOWN → MaxRetriesPerRequestError
+    // 500 totale (anche login valido bloccato). Pattern coerente fail-open
+    // layered: LockoutService (B1 internal try/catch) + MailService (B2a
+    // sendSafe wrapper) + ThrottlerGuard (qui).
+    //
+    // Trade-off accettato (TD-AD resolved B2b): durante Redis DOWN rate-limit
+    // + lockout disattivati simultaneamente (fail-open) MA auth flow funziona.
+    // Audit log Postgres continua a tracciare attempts. Production deploy
+    // escalation: Redis monitoring + alerting (TD futuro).
+    //
+    // Regex `isRedisError` cattura le forme note di errore ioredis/nest-lab:
+    // - MaxRetriesPerRequestError (esaurimento retry policy)
+    // - ECONNREFUSED (connection refused, Redis down brusco)
+    // - "Redis" / "ioredis" generic patterns
+    // Non-Redis errors → re-throw (preserva semantica originaria del package).
+    try {
+      if (requestProps.throttler.name === 'tenant-create') {
+        const customGetTracker: ThrottlerGetTrackerFunction = async (req) => {
+          const { tracker, source } = this.resolveTenantCreateTracker(
+            req as Record<string, unknown>,
+          );
+          if (process.env.NODE_ENV !== 'production') {
+            // Logger.log (info) intenzionale: `debug` e' off-by-default in NestJS,
+            // mentre `log` e' visibile nello smoke STOP 2 e disattivato in prod
+            // dal check NODE_ENV. Future: sostituire con structured tracing.
+            this.log.log(`tenant-create tracker=${tracker} (source=${source})`);
+          }
+          return tracker;
+        };
+        return await super.handleRequest({ ...requestProps, getTracker: customGetTracker });
+      }
+      if (requestProps.throttler.name === 'auth-pin') {
+        // B2a: tracker per-tenant per /auth/login-pin. tenantId arriva da
+        // TenantMiddleware (req.tenantId) — verifica empirica STEP 4.1.
+        // Fallback IP-only se tenant resolution e' fallita (defense-in-depth:
+        // niente crash auth flow). NO deviceId — TD-Y ADR-0014.
+        const customGetTracker: ThrottlerGetTrackerFunction = async (req) => {
+          const { tracker, source } = this.resolveAuthPinTracker(req as Record<string, unknown>);
+          if (process.env.NODE_ENV !== 'production') {
+            this.log.log(`auth-pin tracker=${tracker} (source=${source})`);
+          }
+          return tracker;
+        };
+        return await super.handleRequest({ ...requestProps, getTracker: customGetTracker });
+      }
+      return await super.handleRequest(requestProps);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const errName = err instanceof Error ? err.name : '';
+      const isRedisError = /MaxRetriesPerRequestError|ECONNREFUSED|Redis|ioredis/i.test(
+        `${errName} ${errMsg}`,
+      );
+      if (isRedisError) {
+        this.log.warn(
+          `[FAIL-OPEN] ThrottlerGuard Redis unavailable, allowing request ` +
+            `(throttler=${requestProps.throttler.name}): ${errMsg}`,
+        );
+        return true;
+      }
+      // Non-Redis error → preserva semantica originaria (re-throw con stack
+      // intatto, no wrap-rethrow che bruciato lo stack trace).
+      throw err;
     }
-    if (requestProps.throttler.name === 'auth-pin') {
-      // B2a: tracker per-tenant per /auth/login-pin. tenantId arriva da
-      // TenantMiddleware (req.tenantId) — verifica empirica STEP 4.1.
-      // Fallback IP-only se tenant resolution e' fallita (defense-in-depth:
-      // niente crash auth flow). NO deviceId — TD-Y ADR-0014.
-      const customGetTracker: ThrottlerGetTrackerFunction = async (req) => {
-        const { tracker, source } = this.resolveAuthPinTracker(req as Record<string, unknown>);
-        if (process.env.NODE_ENV !== 'production') {
-          this.log.log(`auth-pin tracker=${tracker} (source=${source})`);
-        }
-        return tracker;
-      };
-      return super.handleRequest({ ...requestProps, getTracker: customGetTracker });
-    }
-    return super.handleRequest(requestProps);
   }
 
   private resolveAuthPinTracker(req: Record<string, unknown>): {

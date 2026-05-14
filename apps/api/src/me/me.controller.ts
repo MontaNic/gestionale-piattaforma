@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Inject, NotFoundException } from '@nestjs/common';
 
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
@@ -7,7 +7,7 @@ import type { FullProfile } from '../users/users.service';
 
 @Controller('me')
 export class MeController {
-  constructor(private readonly users: UsersService) {}
+  constructor(@Inject(UsersService) private readonly users: UsersService) {}
 
   @Get()
   async me(@CurrentUser() user: AuthenticatedUser | undefined): Promise<{ data: FullProfile }> {
