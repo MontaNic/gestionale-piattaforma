@@ -125,6 +125,10 @@ describe('AuthService', () => {
     recordFailedAttempt: ReturnType<typeof vi.fn>;
     resetAttempts: ReturnType<typeof vi.fn>;
   };
+  let mail: {
+    sendAccountLockedEmail: ReturnType<typeof vi.fn>;
+    sendRefreshTokenTheftEmail: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     users = {
@@ -156,6 +160,13 @@ describe('AuthService', () => {
       recordFailedAttempt: vi.fn().mockResolvedValue({ promotedToLockout: false }),
       resetAttempts: vi.fn().mockResolvedValue(undefined),
     };
+    // Mail mock compat (B2a STOP 3): i test esistenti non triggherano
+    // lockout transition o theft, quindi i metodi mail non vengono invocati;
+    // default return true (sent) per semantica positiva quando chiamati.
+    mail = {
+      sendAccountLockedEmail: vi.fn().mockResolvedValue(true),
+      sendRefreshTokenTheftEmail: vi.fn().mockResolvedValue(true),
+    };
 
     // Manual instantiation: cast dei mock al tipo dei collaboratori reali.
     // Bypass del DI container Nest (vedi nota sopra su emitDecoratorMetadata).
@@ -164,6 +175,7 @@ describe('AuthService', () => {
       users as unknown as UsersService,
       jwt as unknown as JwtService,
       lockout as unknown as import('./lockout.service').LockoutService,
+      mail as unknown as import('../mail/mail.service').MailService,
     );
 
     vi.mocked(argon2.verify).mockReset();

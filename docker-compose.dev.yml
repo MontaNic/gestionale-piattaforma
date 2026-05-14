@@ -77,6 +77,38 @@ services:
     # Placeholder: niente 443/Let's Encrypt finché non avremo dominio (vedi
     # docs/architecture/ADR-0001-caddy-as-container.md → "Notes" su ADR-0002 futuro).
 
+  mailpit:
+    # B2a: MTA dev catch-all (vedi ADR-0014). SMTP locale + web UI per
+    # ispezione email senza inviare a destinatari reali. Production = SMTP
+    # provider esterno (TD-Z ADR-0014).
+    #
+    # Scelta Mailpit (NON MailHog) — discovery #22 STOP 1:
+    # MailHog abbandonato (ultimo release 2020, last meaningful commit 2022).
+    # Ecosistema dev migrato a Mailpit (Laravel Sail, DDEV, Drupal VM).
+    # Drop-in protocol-level: SMTP standard, stessi port 1025/8025, zero
+    # impatto su nodemailer config o codice applicativo.
+    #
+    # Tag pinned v1.30 (NON :latest) per reproducibility — anti-pattern
+    # silent breaking change tra deploy.
+    image: axllent/mailpit:v1.30
+    container_name: gestionale_mailpit
+    restart: unless-stopped
+    ports:
+      # Pattern simmetrico postgres/redis: 127.0.0.1-only.
+      # apps/api gira sull'host (ts-node-dev) e parla SMTP via localhost.
+      # Web UI accessibile via SSH tunnel se Nicolò vuole ispezionare email.
+      - '127.0.0.1:1025:1025' # SMTP (apps/api → mailpit)
+      - '127.0.0.1:8025:8025' # Web UI + REST API (/api/v1/messages — NB: v1, era v2 su MailHog)
+    environment:
+      # In-memory storage (MP_DATABASE non impostato → default RAM).
+      # Restart container = inbox vuota by design (no persistenza dev).
+      MP_MAX_MESSAGES: 500
+      # Timestamp email coerenti con timezone host.
+      TZ: Europe/Rome
+    networks:
+      - gestionale_network
+    # No volume: email transitorie in dev, persistenza non necessaria.
+
 networks:
   gestionale_network:
     name: gestionale_network

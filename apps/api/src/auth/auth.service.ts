@@ -32,6 +32,7 @@ import argon2 from 'argon2';
 import { id, runInTenantContext } from '@gestionale/db';
 
 import { DbService } from '../db/db.service';
+import { MailService } from '../mail/mail.service';
 import { UsersService } from '../users/users.service';
 import type { AuthTokensPayload } from './dto/auth-response.dto';
 import type { PinLoginDeviceType } from './dto/login-pin.dto';
@@ -66,7 +67,13 @@ export class AuthService {
     private readonly users: UsersService,
     private readonly jwt: JwtService,
     private readonly lockout: LockoutService,
+    private readonly mail: MailService,
   ) {}
+
+  // Durata lockout in minuti, usata per UI message email. Allineata a
+  // LOCKOUT_DURATION_MS (15min default LockoutService). Hardcoded qui per
+  // semplicita' messaggio email; tuning env-driven gia' nel LockoutService.
+  private readonly LOCKOUT_DURATION_MIN = 15;
 
   // Lockout key helpers (B1 STOP 3, decisione strategica TD-H / D2b §8).
   // Prefix per namespacing: garantisce isolamento tra login (email) e login-pin
@@ -125,12 +132,20 @@ export class AuthService {
         payload: { reason: 'user_not_found_or_inactive' },
       });
       if (result.promotedToLockout) {
+        // No user identificabile (email non esiste o utente disabilitato):
+        // niente recipient affidabile, skip mail send. Mantieni audit row
+        // con emailSent: false + reason esplicito per analytics.
         await this.recordAudit({
           tenantId,
           userId: user?.id,
           action: 'auth.account_locked',
           meta,
-          payload: { source: 'login', lockoutKeyHash: this.lockoutKeyDigest(lockoutKey) },
+          payload: {
+            source: 'login',
+            lockoutKeyHash: this.lockoutKeyDigest(lockoutKey),
+            emailSent: false,
+            emailReason: 'no_user',
+          },
         });
         // Promosso a lockout DA QUESTA chiamata: la prossima request sara'
         // bloccata da checkLockout(). Per coerenza UX su QUESTA chiamata
@@ -152,12 +167,26 @@ export class AuthService {
         payload: { reason: 'wrong_password' },
       });
       if (result.promotedToLockout) {
+        // User esiste → tentativo invio email notifica lockout. MailService
+        // sendSafe fail-open: return false su SMTP down, true su success.
+        const emailSent = await this.mail.sendAccountLockedEmail({
+          to: user.email,
+          identifierHash: this.lockoutKeyDigest(lockoutKey),
+          tenantSlug: null, // TODO TD-H: passa slug post multi-tenant routing
+          source: 'login',
+          lockoutDurationMin: this.LOCKOUT_DURATION_MIN,
+        });
         await this.recordAudit({
           tenantId,
           userId: user.id,
           action: 'auth.account_locked',
           meta,
-          payload: { source: 'login', lockoutKeyHash: this.lockoutKeyDigest(lockoutKey) },
+          payload: {
+            source: 'login',
+            lockoutKeyHash: this.lockoutKeyDigest(lockoutKey),
+            emailSent,
+            emailReason: emailSent ? null : 'send_failed',
+          },
         });
         this.throwAccountLocked();
       }
@@ -235,11 +264,32 @@ export class AuthService {
     // Session already rotated (is_active=false) + token corrisponde al hash
     // storico. Significa: qualcuno (legittimo o attaccante) sta riusando
     // un token GIA' ruotato. Defense in depth: revoca tutto.
+    //
+    // B2a: aggiunta notifica email all'user legittimo (recupero email via
+    // session.userId). Ordine: detect → revoke → email → audit (con flag
+    // emailSent) → throw. Email PRIMA di throw, ma DOPO revoke per
+    // garantire la security action anche se mail fail (sendSafe fail-open
+    // interno comunque, ma defensive).
     if (!session.isActive) {
       const revoked = await this.db.prisma.session.updateMany({
         where: { userId: session.userId, isActive: true },
         data: { isActive: false },
       });
+
+      // Riusa `auth.theft_detected` esistente (D2-vitest) — semanticamente
+      // copre gia' il refresh-token reuse case. NO nuova action (scoperta
+      // empirica #23 STOP 3 B2a).
+      const victim = await this.users.findById(session.userId);
+      const emailSent = victim?.email
+        ? await this.mail.sendRefreshTokenTheftEmail({
+            to: victim.email,
+            userId: session.userId,
+            attackerIp: meta.ip ?? null,
+            attackerUserAgent: meta.userAgent ?? null,
+            revokedSessionCount: revoked.count,
+          })
+        : false;
+
       await this.recordAudit({
         tenantId: payload.tenantId,
         userId: session.userId,
@@ -250,10 +300,12 @@ export class AuthService {
           suspectedSessionId: session.id,
           attackerIp: meta.ip ?? null,
           attackerUserAgent: meta.userAgent ?? null,
+          emailSent,
+          emailReason: emailSent ? null : victim?.email ? 'send_failed' : 'no_email',
         },
       });
       this.logger.warn(
-        `Theft detected on user=${session.userId} session=${session.id} revoked=${revoked.count}`,
+        `Theft detected on user=${session.userId} session=${session.id} revoked=${revoked.count} emailSent=${emailSent}`,
       );
       throw new UnauthorizedException('E_AUTH_THEFT_DETECTED');
     }
@@ -402,6 +454,9 @@ export class AuthService {
         payload: { reason: 'no_pin_match', deviceId, deviceType },
       });
       if (result.promotedToLockout) {
+        // No user identificabile (pin no match → non sappiamo a chi era
+        // diretto il tentativo). Skip mail send. Audit flag esplicito per
+        // analytics: distingue da `no_email` (user senza email registrata).
         await this.recordAudit({
           tenantId,
           userId: undefined,
@@ -412,6 +467,8 @@ export class AuthService {
             deviceId,
             deviceType,
             lockoutKeyHash: this.lockoutKeyDigest(lockoutKey),
+            emailSent: false,
+            emailReason: 'no_user_pin_lockout',
           },
         });
         this.throwAccountLocked();

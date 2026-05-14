@@ -37,6 +37,8 @@ import { skipIfMetadataAbsent } from './utils/skip-if-metadata.util';
 // per poter essere consumate dal decorator senza duplicare la stringa.
 export const AUTH_STRICT_METADATA = 'gestionale:throttle:auth-strict';
 export const TENANT_CREATE_METADATA = 'gestionale:throttle:tenant-create';
+// B2a: opt-in per-tenant rate limit /auth/login-pin (ADR-0014).
+export const LOGIN_PIN_METADATA = 'gestionale:throttle:login-pin';
 
 // skipIfMetadataAbsent estratto in utils/skip-if-metadata.util.ts per testability
 // (vedi STOP 4). Pattern higher-order: builder ritorna callback ExecutionContext-aware
@@ -64,6 +66,16 @@ export const TENANT_CREATE_METADATA = 'gestionale:throttle:tenant-create';
             ttl: Number(config.get<string>('THROTTLE_TENANT_CREATE_TTL_MS') ?? '3600000'),
             limit: Number(config.get<string>('THROTTLE_TENANT_CREATE_LIMIT') ?? '3'),
             skipIf: skipIfMetadataAbsent(TENANT_CREATE_METADATA),
+          },
+          {
+            // B2a: per-tenant rate limit /auth/login-pin (vedi ADR-0014).
+            // Tracker (tenantId, ip) custom in AppThrottlerGuard. Default
+            // 10 req/60s: PIN 4-6 cifre brute-forceable (10^4-10^6 keyspace),
+            // scope per-tenant limita blast radius.
+            name: 'auth-pin',
+            ttl: Number(config.get<string>('THROTTLE_AUTH_PIN_TTL') ?? '60000'),
+            limit: Number(config.get<string>('THROTTLE_AUTH_PIN_LIMIT') ?? '10'),
+            skipIf: skipIfMetadataAbsent(LOGIN_PIN_METADATA),
           },
         ],
         storage: new ThrottlerStorageRedisService(redis.getClient()),

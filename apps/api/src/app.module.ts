@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { TenantContextInterceptor } from './context/tenant-context.interceptor';
 import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
+import { MailModule } from './mail/mail.module';
 import { MeModule } from './me/me.module';
 import { RedisModule } from './redis/redis.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
@@ -25,6 +26,7 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({ isGlobal: true }),
     DbModule,
     RedisModule,
+    MailModule,
     AppThrottlerModule,
     TenantModule,
     UsersModule,

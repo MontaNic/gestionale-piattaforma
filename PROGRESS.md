@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 13 maggio 2026 (mattina-pomeriggio-sera-notte)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + **B1 Auth E2E hardening (rate limit + lockout)** completi. **Difesa brute-force attiva**: throttler Redis (5/min login, 3/h tenant-create userId-tracked) + account lockout (10 fail/15min → block 15min) + Retry-After 900 fissi (anti-enumeration) + audit `auth.account_locked`. **10 endpoint operativi** API a `:3000` + frontend `:3001`, **25/25 test Vitest verdi** (+17 vs E2) + RLS attivo.
+**Ultimo aggiornamento:** 14 maggio 2026 (B2a sessione 9)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + **B2a email notification + login-pin per-tenant rate-limit** completi. **Difesa brute-force completa**: throttler Redis (5/min login, 3/h tenant-create, **10/min login-pin per-tenant**) + account lockout (10 fail/15min → block 15min) + Retry-After fissi (anti-enumeration) + audit `auth.account_locked` + **email notification Mailpit (account_locked, theft_detected)** + audit `emailSent/emailReason` flag. **10 endpoint operativi** API a `:3000`, **25/25 test Vitest verdi** + RLS attivo.
 
-> ✅ **B1 chiuso + cleanup follow-up**: rate limiting + lockout via Redis sliding window operativi. Smoke E2E 8/8 verdi (rate-limit auth-strict + tenant-create custom tracker + lockout login + lockout login-pin + reset doppio + isolation). Tech debt 21 nuove (14 STOP TD-A → TD-N + 7 cleanup review TD-O → TD-U) tracciate in ADR-0013. Prossimo macro-task candidato: **B2 (email theft notification + rate-limit login-pin triplet + E2E full Nest bootstrap)** o da concordare. Vedi [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (rate-limit + lockout).
+> ✅ **B2a chiuso**: email notification security (nodemailer + Mailpit dev MTA) + rate-limit `/auth/login-pin` per-tenant `(tenantId, ip)` triplet + TD-B verify empirico (LockoutService fail-open, ThrottlerStorage fail-CLOSED → TD-AD). Smoke E2E 8/8 verdi (lockout+email + theft+email + per-tenant isolation acme vs demo + TenantMiddleware fail-fast + Redis down recovery 121ms). Tech debt 7 nuove (TD-V/Y/Z/AA/AB/AC/AD) tracciate in [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md). Prossimo macro-task: **B2b sessione 10 (E2E full Nest bootstrap + Testcontainers + TD-AD integration test)** o da concordare. Discoveries cumulative: **26**.
 
 ---
 
@@ -822,13 +822,71 @@ Categorie STOP: Redis resilience (TD-A,B), Config consistency (TD-C), Docker por
 
 Categorie cleanup review (emerse da check pre-merge Claude strategico): DevOps (TD-O), Lockout DoS (TD-P), Config validation (TD-Q), Redis TLS (TD-R), Observability (TD-S,U), Edge case IPv6 (TD-T). Tutti low-priority, F1 NOT-production-blocking.
 
+### B2a — Auth E2E hardening parte 2 (split A): email notification + login-pin per-tenant (Sessione 9, 2026-05-14 sera)
+
+**Branch**: `feature/b2a-email-notification-login-pin-throttler` · **Status**: completato, PR merge pending · **ADR**: [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)
+
+Split di B2 deciso architecture review sessione 9: B2a = email + login-pin throttler + TD-B verify; B2b = E2E full Nest bootstrap + Testcontainers programmato sessione 10.
+
+**Deliverables**:
+
+- `MailService` NestJS (`@Global`) con `nodemailer@8.0.7` + Mailpit `v1.30` dev MTA (NON MailHog abbandonato — Discovery #22)
+- Pattern fail-open layered: `transporter.verify()` no-throw + `sendSafe()` wrapper try/catch con `Promise<boolean>` return
+- 2 metodi email: `sendAccountLockedEmail` (account_locked) + `sendRefreshTokenTheftEmail` (theft_detected)
+- Content zero-PII: `identifierHash` sha256[0:8] coerente audit log B1, IP, user-agent, count revoked. MAI password/JWT/token/session id plain
+- Email HTML inline + `escapeHtml()` helper privato, lingua IT, Subject prefisso `[Gestionale]`
+- Integrazione `AuthService.login` (wrong-password branch) + `AuthService.refreshInContext` (theft branch) + `AuthService.loginPin` (skip mail no-user audit)
+- Audit immutability single-row con `emailSent: boolean` + `emailReason: enum | null` nel payload `afterValue` (D4 ADR-0014)
+- **NO nuova audit action**: riuso `auth.theft_detected` esistente D2-vitest (Discovery #23 — semantic equivalent)
+- 4° named throttler `auth-pin`: 10/60s per `(tenantId, ip)` triplet (env `THROTTLE_AUTH_PIN_LIMIT/TTL`)
+- Decorator `@LoginPinThrottle()` opt-in via `SetMetadata` (pattern coerente B1)
+- `AppThrottlerGuard.handleRequest` branch `auth-pin` con `resolveAuthPinTracker` (tenant-ip / ip-fallback defense-in-depth)
+- Rimosso `@AuthStrict()` da `/auth/login-pin` (Discovery #25 subsumption: `@LoginPinThrottle()` più granulare e più permissivo subsume IP-only)
+- TD-B verify empirico: LockoutService fail-open ✅, ThrottlerStorage fail-CLOSED 500 → nuovo **TD-AD** follow-up
+- Container Mailpit aggiunto a `docker-compose.dev.yml` (`axllent/mailpit:v1.30` pinned, ports `127.0.0.1:1025/8025`, `MP_MAX_MESSAGES=500`, `TZ=Europe/Rome`, no volume)
+- Test Vitest 25/25 PASS (~720ms), zero regression
+
+**Smoke E2E verificati (8/8)**:
+
+| # | Scenario | Verdetto |
+|---|---|---|
+| A | `/auth/login` lockout (THRESHOLD=3 temp): 2x 401 + 3° 429 + 4° 429 + `Retry-After: 900` | ✅ |
+| A-email | Mailpit inbox: 1 msg "[Gestionale] Account temporaneamente bloccato" → admin@demo.local | ✅ |
+| A-audit | `after_value: {emailSent: true, emailReason: null, lockoutKeyHash: "37c95a1a"}` | ✅ |
+| B | `/auth/refresh` theft (refresh reuse): 401 `E_AUTH_THEFT_DETECTED` + 25 session revoked | ✅ |
+| B-email | Mailpit inbox: 1 msg "[Gestionale] Attivita sospetta — sessioni revocate" → admin@demo.local | ✅ |
+| B-audit | `after_value: {emailSent:true, attackerIp:::ffff:127.0.0.1, attackerUA:curl/7.81.0, revokedSessionCount:25}` | ✅ |
+| C | Per-tenant isolation: demo saturated 10x → 429, acme stessa IP → 401 NOT 429 | ✅ |
+| D | TenantMiddleware fail-fast: slug invalido → 401 `E_AUTH_TENANT_REQUIRED` PRE-throttler | ✅ |
+| E | TD-B Redis DOWN: 500 `MaxRetriesPerRequestError` (~1018ms) + recovery auto 121ms post-restart | ✅ (#26) |
+
+**Empirical discoveries (#22-26, +5 cumulative → totale 26)**:
+
+- **#22** MailHog abbandonato (ultimo release 2020) → Mailpit v1.30 drop-in protocol-level (SMTP standard, breaking solo REST `/api/v1` vs `/api/v2`, irrilevante)
+- **#23** `auth.theft_detected` audit action già esistente (D2-vitest) → NO nuova `auth.refresh_token_theft`, NO migration (lesson: grep semantic equivalents)
+- **#24** Lockout `THRESHOLD=10` e throttler `auth-pin limit=10` coincidono → interleaving: 10° fail = lockout (`E_AUTH_ACCOUNT_LOCKED`), 11° = throttler (`ThrottlerException`). Body distingue strato.
+- **#25** Doppio decorator `@AuthStrict() + @LoginPinThrottle()` → throttler più stretto vince. Rimosso `@AuthStrict()` da `loginPin` (subsumed)
+- **#26** TD-B Redis DOWN: LockoutService fail-open ✅ (mio), ThrottlerStorage fail-CLOSED → 500 (`@nest-lab/throttler-storage-redis`). Recovery auto ~121ms. User legittimo NON può loggarsi durante Redis DOWN
+
+**Tech debt nuovi (7)** — vedi [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md):
+
+- TD-V `LOCKOUT_DURATION_MIN` hardcoded in AuthService per UI email (~10min)
+- TD-Y deviceId nel tracker `auth-pin` triplet completo per F1 PWA cameriere (~30min)
+- TD-Z SMTP production provider integration (Postmark/SES/Resend) (~1h, trigger production deploy)
+- TD-AA template engine email se >3 template inline (~1.5h)
+- TD-AB matrix decorator throttler subsumption documentata (~20min)
+- TD-AC default lockout + throttler limit discrasati (~10min discussion)
+- **TD-AD** wrap `AppThrottlerGuard.handleRequest` try/catch fail-open totale (Discovery #26) (~30min)
+
+Totale tech debt repo: ~28 (B1 21 + B2a 7).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: da concordare nella prossima sessione.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **B2 — Auth E2E hardening parte 2** (carry-over B1): email notification on theft + account_locked (`nodemailer` + MailHog dev MTA), rate-limit `/auth/login-pin` per `(tenantId, deviceId, ip)` triplet (D2b §8 carry-over completo), E2E test full Nest bootstrap (primo del progetto) con Testcontainers Postgres + Redis reale, verify TD-B empiricamente (Redis down mid-request behaviour). Stima 3-4h.
+1. **B2b — Auth E2E hardening parte 2 (split B)** (carry-over B2a): E2E test full Nest bootstrap (primo del progetto) con `Test.createTestingModule(AppModule)` + Testcontainers Postgres + Redis reale + `supertest` HTTP. **TD-AD integration test**: spegnere Redis container, verificare 500 attuale → implementare wrap fail-open `AppThrottlerGuard.handleRequest` → ri-test. Stima 3-4h.
 2. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Sblocca TD-H lockout key per-tenant. Stima 1-2h.
 3. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
 4. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
