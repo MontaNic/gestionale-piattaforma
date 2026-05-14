@@ -943,10 +943,10 @@ Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/archit
 - [x] ~~Schema Prisma base (Tenant, Sede, User, Role, Permission, AuditLog) con RLS PostgreSQL~~ — completato 2026-05-12 (Macro-task A)
 - [x] ~~Seed system_role_templates + permission catalog~~ — completato 2026-05-12 (Macro-task B: 32 permessi + 6 templates + 104 mappings)
 - [x] ~~Soft-delete extension Prisma client + helper `uuidv7` wrapper esportato~~ — completato 2026-05-12 (Macro-task B: 5 scenari smoke verdi)
-- [ ] **Scaffold NestJS** `apps/api` consumer di `@gestionale/db` (prossimo macro-task)
-- [ ] **Middleware tenant context** NestJS: `SET app.tenant_id` su transaction Prisma per attivare RLS reale
-- [ ] **Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005) — sub-task del precedente
-- [ ] **Bootstrap tenant logic**: clone `system_role_templates` (`isDefault: true`) → `roles` con `tenant_id` reale + copia mapping `system_role_template_permissions` → `role_permissions`
+- [x] ~~**Scaffold NestJS** `apps/api` consumer di `@gestionale/db`~~ — completato 2026-05-13 (D1, ADR-0007)
+- [x] ~~**Middleware tenant context** NestJS: `SET app.tenant_id` su transaction Prisma per attivare RLS reale~~ — completato 2026-05-13 (D3a, ADR-0009)
+- [x] ~~**Sostituzione policy RLS** `USING (true)` con check reali (3 pattern in ADR-0005)~~ — completato 2026-05-13 (D3b, ADR-0009 v3)
+- [x] ~~**Bootstrap tenant logic**: clone `system_role_templates` → `roles` con `tenant_id` reale + copia mapping~~ — completato 2026-05-13 (D4, ADR-0010)
 - [x] ~~**Auth backend NestJS — email/password + JWT + refresh rotation + /me**~~ — completato 2026-05-13 notte (D2a, ADR-0008). 6 endpoint, smoke 10/10 verdi, admin@demo.local seedato
 - [x] ~~**D2-vitest: Vitest 3 baseline + 4 test AuthService + theft detection FULL**~~ — completato 2026-05-13 notte tardi (E2E theft verificato: revoke all + audit forense)
 - [ ] **D2b PIN POS**: `/auth/pin-setup` + `/auth/login-pin` + uniqueness applicativa + 2 test PIN
@@ -1097,7 +1097,7 @@ NON proporre, NON includere senza esplicito sblocco:
 
 ## 📝 Prompt operativo prossimo task — da definire
 
-> B1 completato (rate limiting + lockout via Redis sliding window, [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2 in cima).
+> B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
 
 ---
 

@@ -84,6 +84,7 @@ B2b (sessione 10) coprirà E2E test full Nest bootstrap con Testcontainers Postg
 
 | Endpoint                   | Throttler            | Limit / TTL  | Tracker                      | Decorator                 |
 | -------------------------- | -------------------- | ------------ | ---------------------------- | ------------------------- |
+| **ANY (fallback)**         | **`default` (B1)**   | **60 / 60s** | **IP**                       | **none (always-on)**      |
 | POST `/auth/login`         | `auth-strict` (B1)   | 5 / 60s      | userId-or-IP (JWT decode B1) | `@AuthStrict()`           |
 | POST `/tenants`            | `tenant-create` (B1) | 3 / 1h       | userId-or-IP (JWT decode B1) | `@TenantCreate()`         |
 | **POST `/auth/login-pin`** | **`auth-pin` (B2a)** | **10 / 60s** | **`(tenantId, ip)` triplet** | **`@LoginPinThrottle()`** |
@@ -209,6 +210,8 @@ Verifica empirica STOP 5: 4 attempt con Redis stoppato → tutti 500 `MaxRetries
 | 4-5     | TenantMiddleware fail-fast: slug invalido → 401 `E_AUTH_TENANT_REQUIRED` PRE-throttler                                                      | ✅       |
 | 5-TD-B  | Redis DOWN: 500 `MaxRetriesPerRequestError` su login (incluso valido) + recovery auto 121ms post-restart                                    | ✅ (#26) |
 
+> **Nota Smoke 3-A**: `LOCKOUT_THRESHOLD=3` temporaneamente abbassato in `.env` per velocizzare smoke loop (3 fail invece di 10 default). Ripristinato `LOCKOUT_THRESHOLD=10` post-test (default produzione invariato).
+
 ## Related ADRs
 
 - [ADR-0008](./ADR-0008-auth-module.md) — auth module D2a/D2b (D2-vitest `auth.theft_detected` riuso)
@@ -228,14 +231,17 @@ Verifica empirica STOP 5: 4 attempt con Redis stoppato → tutti 500 `MaxRetries
   - `nodemailer@8.0.7` + `@types/nodemailer@8.0.0`
   - `axllent/mailpit:v1.30` (digest `sha256:0059ef81e492a7192af3816281eed6859eb078bd7bdc58b76757c13e10e53a7d`)
   - `@nestjs/throttler@6.5.0` (invariato da B1)
-- **LOC empirici** (da `wc -l`, NON stima):
-  - `apps/api/src/mail/mail.service.ts`: **198**
-  - `apps/api/src/mail/mail.module.ts`: **19**
-  - `apps/api/src/throttler/decorators/login-pin.decorator.ts`: **25**
-  - Total file nuovi: **242 LOC**
-  - Delta `git diff main --stat`: **+204 / -5** su 10 file modificati
-  - **Total B2a: ~441 LOC** (242 nuovi + 199 net insertions delta)
-- **KB empirici** (da `wc -c`, file nuovi solo): `mail.service.ts` 8755, `mail.module.ts` 776, `login-pin.decorator.ts` 1374 → **totale ~10.9KB**
-- **ADR-0014 size**: post-Prettier, da verificare `wc -c` POST commit (lesson #7 ADR-0013).
+- **LOC empirici post-merge** (re-run `wc -l` post-cleanup, SHA `0154344` B2a merge + `docs/cleanup-b2a-post-merge` follow-up):
+  - `apps/api/src/mail/mail.service.ts`: **201** (post cleanup #1-3: -1 `userId` orfano +1 commento PII pattern)
+  - `apps/api/src/mail/mail.module.ts`: **19** (invariato)
+  - `apps/api/src/throttler/decorators/login-pin.decorator.ts`: **25** (invariato)
+  - Total file nuovi: **245 LOC**
+  - Delta `git diff 5da4404..0154344 --stat`: **+786 / -18** su **16 file modificati** (incluso ADR-0014, PROGRESS, README, pnpm-lock, oltre ai 4 file source nuovi)
+- **KB empirici** (`wc -c` post-cleanup): `mail.service.ts` 8900, `mail.module.ts` 776, `login-pin.decorator.ts` 1374 → **~11KB totale**
+- **ADR-0014 size**: ~26KB post-Prettier (verifica via `wc -c docs/architecture/ADR-0014-*.md`)
+- **Nota Smoke 3-A**: `LOCKOUT_THRESHOLD=3` temporaneamente abbassato in `.env` per velocizzare smoke loop (3 fail invece di 10 default). Ripristinato `LOCKOUT_THRESHOLD=10` post-test (default produzione invariato).
 - **Audit action enum totale**: 11 (invariato — riuso `auth.theft_detected` esistente, Discovery #23). Schema `audit_logs.action` resta `String` text-based (Caso B B1 STOP 5 confermato).
-- **Endpoint rate-limited**: 4 (era 3 in B1): `auth-strict` su `/auth/login` (+ era login-pin, rimosso #25), `tenant-create` su POST `/tenants`, `auth-pin` su `/auth/login-pin`, `default` 60/min globale.
+- **Endpoint rate-limited**: 4 throttler attivi globalmente.
+  - **B1** (3 throttler): `default` 60/min globale + `auth-strict` 5/min su `/auth/login` + `tenant-create` 3/h su `POST /tenants`
+  - **B2a** (+1 throttler): `auth-pin` 10/min su `/auth/login-pin` per `(tenantId, ip)` triplet
+  - **Cambio B2a su `/auth/login-pin`**: `@AuthStrict()` rimosso (Discovery #25 subsumption), sostituito da `@LoginPinThrottle()` più granulare

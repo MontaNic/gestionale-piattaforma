@@ -8,8 +8,8 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
 
-> ✅ **Primo login browser funzionante.**
-> Macro-task **D3a + D3b + D4 + E1 + E2** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports, **frontend con `/login` + `/dashboard`** (primo login browser end-to-end). Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, **CORS abilitato (E2 fix)**, frontend `:3001`. Smoke E2E 7/7 + 8/8 Vitest + 9/9 smoke browser. Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2).
+> ✅ **Primo login browser funzionante + Auth E2E hardening completo.**
+> Macro-task **D3a + D3b + D4 + E1 + E2 + B1 + B2a** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports, **frontend con `/login` + `/dashboard`** (primo login browser end-to-end), **rate limiting Redis (4 throttler) + account lockout sliding window + email notification Mailpit + per-tenant rate-limit `/auth/login-pin`**. Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, **CORS abilitato (E2 fix)**, frontend `:3001`. Smoke E2E 7/7 + 8/8 + 8/8 + 25/25 Vitest + 9/9 smoke browser. Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2) + [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (B1 rate limit + lockout) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md) (B2a email + login-pin per-tenant).
 
 ## Stack
 
@@ -251,7 +251,7 @@ done
 Eventi security generano email notification automatica via `MailService` (vedi [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)):
 
 - **`[Gestionale] Account temporaneamente bloccato`** — 10 fail consecutivi su `/auth/login` → email all'utente legittimo con `identifierHash` + durata 15min + azioni raccomandate
-- **`[Gestionale] Attivita sospetta — sessioni revocate`** — refresh token reuse rilevato (theft detection D2-vitest) → email + count session revocate + IP/UA attaccante
+- **`[Gestionale] Attività sospetta — sessioni revocate`** — refresh token reuse rilevato (theft detection D2-vitest) → email + count session revocate + IP/UA attaccante
 
 **Stack**: `nodemailer@8.0.7` + [Mailpit](https://mailpit.axllent.org/) v1.30 (dev MTA in container — sostituisce MailHog abbandonato).
 
