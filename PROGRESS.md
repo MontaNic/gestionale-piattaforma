@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 15 maggio 2026 (B2b sessione 9)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + **B2b E2E full bootstrap Testcontainers + TD-AD fix** completi → **Auth E2E hardening 100% chiuso**. **Difesa brute-force completa + fail-open layered Redis**: throttler Redis (5/min login, 3/h tenant-create, 10/min login-pin per-tenant) + account lockout (10 fail/15min) + email notification Mailpit + **ThrottlerGuard fail-open Redis DOWN verified end-to-end**. **10 endpoint operativi** API a `:3000`, **29/29 test Vitest verdi** (25 unit + 4 e2e) + RLS attivo + container isolation Postgres+Redis fresh per file.
+**Ultimo aggiornamento:** 15 maggio 2026 (TD-2 sessione 9 post-B2)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + **TD-2 Multi-tenant slug routing frontend path-based** completi. **Frontend multi-tenant attivo**: routing `/t/<slug>/<page>` con Next.js 15 middleware + slug validation regex + RESERVED_SLUGS list (coerente backend FORBIDDEN_SLUGS D4) + `useParams` runtime + `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata in `lib/api.ts`. **Test 2° tenant abilitato** (`acme` seedato D3b loggabile via `/t/acme/login`). **10 endpoint operativi** API a `:3000`, frontend `:3001`, **29/29 test Vitest verdi** (25 unit + 4 e2e), backend INVARIATO (zero breaking).
 
-> ✅ **B2b chiuso + B2 closure**: E2E test framework full Nest bootstrap (`@testcontainers/postgresql` + `@testcontainers/redis` + `supertest` + Vitest projects array unit/e2e split) + TD-AD RESOLVED (`AppThrottlerGuard.handleRequest` outer try/catch + `isRedisError` regex → fail-open verified Redis container stop mid-test). 4 nuove discoveries (#27-30, TD-AE permanente `@Inject` 14 file pattern). Auth E2E hardening macro-task chiuso al 100% (B1 PR #19+#20 + B2a PR #21+#22 + B2b questa PR). Tech debt repo: ~29. Discoveries cumulative: **30**. Prossimo macro-task da concordare. Vedi [ADR-0015](docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md).
+> ✅ **TD-2 RESOLVED**: multi-tenant slug routing path-based frontend (Next.js middleware + `/t/<slug>/<page>` pattern). Backend `X-Tenant-Slug` API contract preservato. Sblocca TD-H lockout key per-tenant (B1 carry-over backend, scope futuro). Smoke server-side middleware 7/7 verdi (root redirect + slug valid/invalid/reserved + not-found). Smoke browser interactive delegati a Nicolò pre-merge (5 scenari). Discovery #31 (Next.js dynamic segment `[slug]` shell escape). Vedi [ADR-0012 sezione TD-2 Resolution](docs/architecture/ADR-0012-frontend-auth-flow.md). Discoveries cumulative: **31**. Prossimo macro-task da concordare.
 
 ---
 
@@ -925,17 +925,64 @@ Chiude B2 (Auth E2E hardening) deciso architecture review sessione 9: primo E2E 
 
 Totale tech debt repo dopo B2b: ~29 (B1 21 + B2a 7 + B2b 4 nuovi - TD-AD chiuso).
 
+### TD-2 — Multi-tenant slug routing frontend path-based (Sessione 9, 2026-05-15 post-B2 closure)
+
+**Branch**: `feature/td-2-multi-tenant-slug-frontend` · **Status**: completato, PR merge pending · **ADR**: [ADR-0012 sezione TD-2 Resolution](docs/architecture/ADR-0012-frontend-auth-flow.md)
+
+Resolution carry-over TD-2 ADR-0012 (`TENANT_SLUG = 'demo'` hardcoded in LoginPage E2). Backend INVARIATO — solo frontend refactor + Next.js 15 middleware.
+
+**Deliverables**:
+
+- `apps/web/src/middleware.ts` (NEW, 64 LOC): pattern `/t/<slug>/<page>` validation + redirect logic edge-side. Slug regex `^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$` + `RESERVED_SLUGS` Set coerente backend `FORBIDDEN_SLUGS` (ADR-0010 D4). Root `/` → `/t/demo/login`. Slug invalid/reserved → `/not-found`.
+- `apps/web/src/app/not-found.tsx` (NEW): 404 page Next.js convention, link "Torna alla home".
+- `apps/web/src/app/page.tsx` (full rewrite Server Component): `redirect('/t/demo/login')` next/navigation. Era client `useEffect + isAuthenticated()` (E2 E1 pattern). Coerente con middleware-based routing + SSR-friendly.
+- `git mv apps/web/src/app/{login,dashboard}` → `apps/web/src/app/t/[slug]/{login,dashboard}` (history preservata).
+- `apps/web/src/app/t/[slug]/login/page.tsx`: `useParams<{slug:string}>()` runtime + redirect `router.push(\`/t/${tenantSlug}/dashboard\`)` post-login. Rimosso `TENANT_SLUG = 'demo'` const.
+- `apps/web/src/app/t/[slug]/dashboard/page.tsx`: `useParams` + `loginUrl` extracted const (DRY + stable useEffect dep). 3 redirect tenant-aware (auth missing, 401, logout success).
+- `apps/web/src/lib/api.ts` (full refactor): `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata + `buildHeaders()` helper. Pattern security senior: `accessToken` field-typed (vs raw `Authorization` header) elimina typo Bearer prefix possibility. 3 call sites migrati.
+- Backend INVARIATO: header `X-Tenant-Slug` API contract preservato, zero breaking.
+
+**Smoke server-side middleware (7/7 via curl)**:
+
+| # | Scenario | Esito |
+|---|---|---|
+| 1 | `/` → 307 → `/t/demo/login` | ✅ |
+| 2 | `/t/demo/login` → 200 | ✅ |
+| 3 | `/t/acme/login` → 200 (slug valido seedato D3b) | ✅ |
+| 4 | `/t/INVALID-SLUG-FOO/login` → 307 → `/not-found` (uppercase fail regex) | ✅ |
+| 5 | `/t/api/login` → 307 → `/not-found` (RESERVED) | ✅ |
+| 6 | `/t/admin/login` → 307 → `/not-found` (RESERVED) | ✅ |
+| 7 | `/not-found` → 404 (Next.js standard render `app/not-found.tsx`) | ✅ |
+
+**Smoke browser interactive delegati a Nicolò pre-merge (5 scenari)**:
+
+1. Login `demo`: `admin@demo.local / Admin123!` → `/t/demo/dashboard` + Welcome "Admin Demo"
+2. Login `acme`: `manager@acme.local / Manager123!` → `/t/acme/dashboard` + Welcome "Manager Acme"
+3. Logout demo → `/t/demo/login`
+4. Session persistence: login demo → Cmd+R → resta loggato in `/t/demo/dashboard`
+5. Cross-tenant token edge case: login demo + navigate `/t/acme/dashboard` → behavior osservato (vedi TD-7 sotto)
+
+**Empirical discoveries (#31, +1 cumulative → totale 31)**:
+
+- **#31** — Next.js App Router dynamic segment `[slug]` richiede single-quote shell escape per `mkdir`/`mv`/`git mv`/`ls`. Brackets unquoted = glob pattern → `fatal: No such file or directory`. Pattern: `mkdir -p 'apps/web/src/app/t/[slug]'`. Trivial ma reviewer junior può perdere ~10 min su errore cryptic.
+
+**Tech debt nuovo (1 minor)**:
+
+- **TD-7** ADR-0012 — Cross-tenant token UX edge: user demo apre URL `/t/acme/dashboard` → dashboard renderizza dati demo (JWT contiene `tenantId=demo`). Inconsistenza URL/dati. Fix F1+ (~30min): page-level check JWT tenantId vs `useParams().slug` → mismatch → redirect appropriato. Low priority (richiede manual URL hack utente legittimo).
+
+**Foundation per**: TD-H lockout key per-tenant (B1 carry-over backend, ora sbloccato lato frontend) + future macro-task tenant switching UI + tenant-aware command palette F2.
+
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: da concordare nella prossima sessione. B2 Auth E2E hardening 100% chiuso.**
+**Macro-task: da concordare nella prossima sessione. B2 Auth E2E hardening 100% chiuso + TD-2 multi-tenant slug resolved.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **Multi-tenant tenant slug resolution** (TD-2 ADR-0012) — subdomain detection OR path-based OR query param per superare hardcoded `'demo'`. Sblocca TD-H lockout key per-tenant + TD-AH refactor opportunity (prisma singleton eager → factory pattern). Stima 1-2h.
-2. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow, dashboard, logout) + GitHub Actions integration. Stima 3-4h.
-3. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
-4. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
-5. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
+1. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow demo/acme, dashboard, logout, slug invalid redirect) + GitHub Actions integration. Naturale follow-up post-TD-2 (path-based routing automatizzabile in headless). Stima 3-4h.
+2. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
+3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
+5. **TD-H lockout key per-tenant** (B1 ADR-0013 carry-over, ora frontend sbloccato): backend `LOCKOUT_KEY_LOGIN(email)` → `${tenantId}:${email}` (~30min + smoke).
 6. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
 7. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
@@ -965,7 +1012,7 @@ Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/archit
 - [ ] **TD-4 ADR-0011 — packages/db source-vs-dist asymmetry**: apps/api typecheck via src/, apps/web via dist/. Funziona oggi (2 consumer). Trigger: arrivo 3° workspace consumer (apps/kds probabile). Stima 30-60 min, decisione strategica "always-dist" vs "always-src".
 - [ ] **TD-5 ADR-0011 — shadcn manual scaffold update path**: 5 file shadcn scritti a mano in E1 (F4 discovery). Trigger: shadcn 5.x opt-out T3 flag OR breaking changes registry da prendere. Monitor CHANGELOG ogni 6 mesi.
 - [ ] **TD-1 ADR-0012 — Migration localStorage → httpOnly cookie**: JWT in localStorage XSS surface. Trigger: ANY production deployment OR introduction sensitive features (financial transactions, multi-user concurrent). Stima ~1.5h (backend cookie middleware + CSRF endpoint + frontend `credentials: 'include'`). `credentials: true` già in CORS config (E2 ready).
-- [ ] **TD-2 ADR-0012 — Multi-tenant tenant slug resolution**: oggi `TENANT_SLUG = 'demo'` hardcoded in `LoginPage`. Trigger: 2° tenant deve loggarsi via browser. Stima 1-2h. Opzioni: subdomain (`demo.gestionale.local`) OR path (`/t/demo/login`) OR query param.
+- [x] ~~**TD-2 ADR-0012 — Multi-tenant tenant slug resolution**~~ — **RESOLVED 2026-05-15 sessione 9** (PR merge pending). Pattern path-based scelto: `/t/<slug>/<page>` con Next.js 15 middleware + `useParams` runtime + `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata. Backend INVARIATO. Vedi [ADR-0012 TD-2 Resolution](docs/architecture/ADR-0012-frontend-auth-flow.md).
 - [ ] **TD-3 ADR-0012 — Auto-refresh token prima scadenza**: access token 15min, user re-login forzato. Trigger: feedback UX "sessione scade durante uso". Stima ~1h. Pattern setInterval 14min + refresh in background + edge case tab inactive + multi-tab sync.
 - [ ] **TD-4 ADR-0012 — Setup Playwright E2E frontend CI**: oggi smoke browser manual Nicolò (no regression visiva auto-caught). Trigger: prima regression visiva non catturata da test unit OR 2° pagina critical. Stima 3-4h (Playwright + 5-10 test E2E + GitHub Actions).
 - [ ] **TD-5 ADR-0012 — shadcn CLI output cleanup pattern**: `shadcn add` può generare file che violano lint rules monorepo (E2 F2: 1 char `import type`). Trigger: ogni nuovo component. Stima 5-10 min per component. Memo CHANGELOG monitor.

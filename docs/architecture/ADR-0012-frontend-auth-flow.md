@@ -228,20 +228,22 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 
 **Stima rework**: ~1.5h. Backend: cookie middleware + CSRF endpoint. Frontend: rimuovi `lib/auth.ts` localStorage code, sostituisci con `fetch(.., { credentials: 'include' })`. `credentials: true` già in CORS config (E2 ready, zero impatto cambio).
 
-### TD-2: Multi-tenant tenant slug resolution
+### TD-2: Multi-tenant tenant slug resolution — ✅ RESOLVED 2026-05-15 (sessione 9)
 
-**Cosa**: `TENANT_SLUG = 'demo'` hardcoded in `LoginPage`. Single-tenant flow.
+**Resolution**: pattern **path-based** scelto e implementato. Vedi sezione "TD-2 Resolution" sotto.
 
-**Trigger di re-evaluation**:
+**~~Cosa~~** ~~(pre-resolution)~~: `TENANT_SLUG = 'demo'` hardcoded in `LoginPage`. Single-tenant flow.
 
-- 2° tenant deve loggarsi via browser (oggi solo `demo` seedato)
-- POST `/tenants` API ([D4](./ADR-0010-tenant-bootstrap.md)) consumato in produzione
+**~~Trigger di re-evaluation~~**:
 
-**Stima rework**: ~1-2h. Opzioni:
+- ~~2° tenant deve loggarsi via browser (oggi solo `demo` seedato)~~
+- ~~POST `/tenants` API ([D4](./ADR-0010-tenant-bootstrap.md)) consumato in produzione~~
 
-- **Subdomain** (`demo.gestionale.local`, `acme.gestionale.local`): Next.js middleware estrae subdomain → tenant slug come Context. Production-grade ma richiede DNS wildcard config.
-- **Path-based** (`/t/demo/login`, `/t/acme/login`): dynamic route segment `[tenantSlug]`. Più semplice per setup locale.
-- **Query param** (`/login?tenant=demo`): rapido ma UX worse, no bookmark friendly.
+**~~Stima rework~~**: ~~~1-2h~~ — **completato in ~1.5h sessione 9 post-B2 closure**. Opzioni considerate:
+
+- ~~**Subdomain** (`demo.gestionale.local`, `acme.gestionale.local`)~~ — **Rejected**: richiede `/etc/hosts` config locale + DNS wildcard prod. Friction setup dev.
+- ✅ **Path-based** (`/t/demo/login`, `/t/acme/login`) — **CHOSEN**: dynamic route segment Next.js 15 + middleware validation. Più semplice setup locale, no DNS config.
+- ~~**Query param** (`/login?tenant=demo`)~~ — **Rejected**: UX worse, no bookmark friendly, slug invisibile nel breadcrumb.
 
 ### TD-3: Auto-refresh token prima della scadenza
 
@@ -302,6 +304,59 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 - Discovery collaterale: `apiPost` libreria non gestiva 204 No Content (`res.json()` su body vuoto → SyntaxError). Fix +3 LOC in `apps/web/src/lib/api.ts` con early-return `if (res.status === 204) return undefined as T`. Pattern riusabile per DELETE endpoint F1 futuri.
 - Backend zero modifiche: endpoint `/auth/logout` già esistente da D2a (ADR-0008)
 - LOC finali: 37 totali (+34 / -5) su 2 file. Stima rework ~30 min: rispettata.
+
+### TD-2 Resolution — Multi-tenant slug routing path-based (2026-05-15, sessione 9 post-B2)
+
+**Resolution highlights**:
+
+- **Path-based routing**: `/t/<slug>/<page>` (es. `/t/demo/login`, `/t/acme/dashboard`)
+- **Next.js 15 middleware** (`apps/web/src/middleware.ts`): edge-side slug validation + redirect logic
+- **`useParams<{slug:string}>()`** in client components per slug runtime (App Router idiomatic)
+- **`RequestOptions { tenantSlug?, accessToken? }`** interface tipizzata in `lib/api.ts` (pattern OAuth client + type completion F1+)
+- **Backend INVARIATO**: header `X-Tenant-Slug` API contract preservato. Zero breaking change su `apps/api`.
+- **Test 2° tenant abilitato**: `acme` (seedato D3b, `manager@acme.local / Manager123!`) ora loggabile via browser su `/t/acme/login`
+
+**Decisioni implementative**:
+
+- **Slug validation**: regex `^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$` + `RESERVED_SLUGS` Set hardcoded (`api`, `www`, `admin`, `system`, `app`, `public`, `static`, `health`, `auth`, `me`, `tenants`, `_next`, `favicon.ico`) — coerente con backend `FORBIDDEN_SLUGS` ([ADR-0010 D4](./ADR-0010-tenant-bootstrap.md)). Defense-in-depth: la validation backend resta primary, middleware fast-fail edge.
+- **Root `/` → redirect `/t/demo/login`**: Server Component con `redirect()` next/navigation + middleware fallback. Default tenant dev hardcoded SOLO qui (non in pages).
+- **Slug invalido/reserved → `/not-found`**: 307 redirect lato middleware, page `app/not-found.tsx` Next.js convention.
+- **`useParams` typed generic `<{slug:string}>`**: middleware garantisce slug presente e validato upstream — il valore è safe-to-use sul client (no `null` check necessario nella signature).
+- **`apiPost`/`apiGet` `RequestOptions`**: refactor da `Record<string,string>` raw a interface tipizzata. `tenantSlug` opzionale → header `X-Tenant-Slug`. `accessToken` opzionale → header `Authorization: Bearer`. Pattern security senior: no typo possibili su header name + Bearer prefix. Backward-compat break consciously: 3 call site esistenti migrati nello stesso atomic commit.
+- **Refactor `page.tsx` root → Server Component**: era Client `useEffect + isAuthenticated()` check (E2 E1 pattern). Server `redirect()` è coerente con middleware-based routing e SSR-friendly (preview, prerender).
+
+**Smoke verificati (server-side middleware logic via curl)**:
+
+| #   | Scenario                                                                | Esito |
+| --- | ----------------------------------------------------------------------- | ----- |
+| 1   | `/` → 307 → `/t/demo/login`                                             | ✅    |
+| 2   | `/t/demo/login` → 200 (page render)                                     | ✅    |
+| 3   | `/t/acme/login` → 200 (slug valido)                                     | ✅    |
+| 4   | `/t/INVALID-SLUG-FOO/login` → 307 → `/not-found` (uppercase fail regex) | ✅    |
+| 5   | `/t/api/login` → 307 → `/not-found` (RESERVED_SLUG)                     | ✅    |
+| 6   | `/t/admin/login` → 307 → `/not-found` (RESERVED_SLUG)                   | ✅    |
+| 7   | `/not-found` → 404 (Next.js standard, render `app/not-found.tsx`)       | ✅    |
+
+**Smoke browser interactive (delegati a Nicolò pre-merge)**:
+
+1. Login `demo` tenant: `admin@demo.local / Admin123!` → redirect `/t/demo/dashboard` + Welcome "Admin Demo"
+2. Login `acme` tenant: `manager@acme.local / Manager123!` → redirect `/t/acme/dashboard` + Welcome "Manager Acme"
+3. Logout demo → redirect `/t/demo/login`
+4. Session persistence: login demo → Cmd+R browser → resta loggato in `/t/demo/dashboard`
+5. Cross-tenant token check: login demo + navigate `/t/acme/dashboard` → behavior osservato (atteso: dashboard render con dati demo perche' JWT contiene tenantId originale; UI mostra slug acme nell'URL ma identita' demo — UX edge case da decidere F1+, vedi TD futuro sotto)
+
+**Discoveries empiriche (#31)**:
+
+- **#31** — Next.js App Router dynamic segments `[slug]` richiedono single-quote shell escape per `mkdir`/`mv`/`git mv`/`ls`. Brackets unquoted vengono interpretati come glob pattern → `fatal: No such file or directory`. Pattern: `mkdir -p 'apps/web/src/app/t/[slug]'`. Trivial ma reviewer junior può perdere ~10 min su errore cryptic.
+
+**Tech debt nuovo (1 minor)**:
+
+- **TD-7** — Cross-tenant token UX edge: se user demo apre manualmente URL `/t/acme/dashboard`, la dashboard renderizza con dati demo (JWT contiene `tenantId=demo`, dashboard chiama `/me` che ritorna profile demo). Inconsistenza visiva: URL slug acme, dati demo. Fix opzioni F1+:
+  - (a) Page-level check: leggere JWT `tenantId`, confrontare con `useParams().slug` lookup → mismatch → redirect `/t/<jwt-tenantSlug>/dashboard`
+  - (b) Server Component dashboard con tenant lookup → 404 se mismatch
+  - Stima ~30min. Low priority (richiede manual URL hack utente legittimo).
+
+**Foundation per**: TD-H lockout key per-tenant (B1 ADR-0013 carry-over, ora sbloccato lato frontend) + future macro-task multi-tenant routing (tenant switching UI, tenant-aware command palette, ecc.).
 
 ## Consequences
 

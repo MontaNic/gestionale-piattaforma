@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -22,8 +22,9 @@ import { apiPost, ApiError } from '@/lib/api';
 import { setTokens } from '@/lib/auth';
 import type { LoginResponse } from '@/lib/types';
 
-// TODO: multi-tenant routing in future macro-task (subdomain/path detection)
-const TENANT_SLUG = 'demo';
+// TD-2 ADR-0012 resolution: slug runtime da URL (`/t/<slug>/login`) via
+// useParams(). Middleware (src/middleware.ts) ha gia' validato il formato
+// + reserved list prima di arrivare qui — il valore e' safe-to-use.
 
 const loginSchema = z.object({
   email: z.string().email('Email non valida'),
@@ -34,6 +35,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const params = useParams<{ slug: string }>();
+  const tenantSlug = params.slug;
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<LoginFormValues>({
@@ -44,11 +47,9 @@ export default function LoginPage() {
   async function onSubmit(values: LoginFormValues) {
     setServerError(null);
     try {
-      const response = await apiPost<LoginResponse>('/auth/login', values, {
-        'X-Tenant-Slug': TENANT_SLUG,
-      });
+      const response = await apiPost<LoginResponse>('/auth/login', values, { tenantSlug });
       setTokens(response.data.accessToken, response.data.refreshToken);
-      router.push('/dashboard');
+      router.push(`/t/${tenantSlug}/dashboard`);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.errorCode === 'E_AUTH_INVALID_CREDENTIALS') {
