@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 15 maggio 2026 (TD-2 sessione 9 post-B2)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + **TD-2 Multi-tenant slug routing frontend path-based** completi. **Frontend multi-tenant attivo**: routing `/t/<slug>/<page>` con Next.js 15 middleware + slug validation regex + RESERVED_SLUGS list (coerente backend FORBIDDEN_SLUGS D4) + `useParams` runtime + `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata in `lib/api.ts`. **Test 2° tenant abilitato** (`acme` seedato D3b loggabile via `/t/acme/login`). **10 endpoint operativi** API a `:3000`, frontend `:3001`, **29/29 test Vitest verdi** (25 unit + 4 e2e), backend INVARIATO (zero breaking).
+**Ultimo aggiornamento:** 15 maggio 2026 (TD-4 sessione 10 — Playwright E2E frontend CI)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + **TD-4 Playwright E2E frontend CI** completi. **Stack E2E completo**: backend B2b Testcontainers + frontend Playwright. **Test totali**: 25 unit + 4 e2e backend + **11/11 Playwright Chromium** + smoke cross-browser Firefox/WebKit (5/5 + 5/5). Job CI `e2e-playwright` con container Playwright + services Postgres/Redis/Mailpit.
 
-> ✅ **TD-2 RESOLVED**: multi-tenant slug routing path-based frontend (Next.js middleware + `/t/<slug>/<page>` pattern). Backend `X-Tenant-Slug` API contract preservato. Sblocca TD-H lockout key per-tenant (B1 carry-over backend, scope futuro). Smoke server-side middleware 7/7 verdi (root redirect + slug valid/invalid/reserved + not-found). Smoke browser interactive delegati a Nicolò pre-merge (5 scenari). Discovery #31 (Next.js dynamic segment `[slug]` shell escape). Vedi [ADR-0012 sezione TD-2 Resolution](docs/architecture/ADR-0012-frontend-auth-flow.md). Discoveries cumulative: **31**. Prossimo macro-task da concordare.
+> ✅ **TD-4 RESOLVED**: Playwright 1.60.0 (Chromium+Firefox+WebKit), 7 test E2E flow critici (routing, auth login OK/fail, logout, anonymous redirect, slug invalido, cross-tenant isolation), CI integration in `.github/workflows/ci.yml`. Multi-tenant fixture demo+acme via storage state pattern. 4 nuove discoveries (#32-35: host deps Hetzner stripped, race condition logout, WebKit `fill()` RHF email quirk, migration role rotation CI step). 7 nuovi TD tracciati (TD-AJ → TD-AP) + TD-7 ADR-0012 update con empirical evidence. Vedi [ADR-0016](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md). Discoveries cumulative: **35**. Prossimo macro-task da concordare (candidata principale: RBAC enforcement Guard generico).
 
 ---
 
@@ -972,14 +972,63 @@ Resolution carry-over TD-2 ADR-0012 (`TENANT_SLUG = 'demo'` hardcoded in LoginPa
 
 **Foundation per**: TD-H lockout key per-tenant (B1 carry-over backend, ora sbloccato lato frontend) + future macro-task tenant switching UI + tenant-aware command palette F2.
 
+### TD-4 — Setup Playwright E2E frontend CI (Sessione 10, 2026-05-15)
+
+**Branch**: `feature/td-4-playwright-setup` · **Status**: completato, PR merge pending · **ADR**: [ADR-0016](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md)
+
+Resolution carry-over TD-4 ADR-0012 (da sessione 7 / E2). Foundation E2E frontend completa, simmetria raggiunta con backend B2b Testcontainers.
+
+**Deliverables (~694 LOC totali)**:
+
+- `apps/web/playwright.config.ts` (70 LOC NEW): config base + 4 projects (setup + chromium/firefox/webkit) + `dependencies: ['setup']` + dotenv `.env.e2e` loader
+- `apps/web/e2e/auth.setup.ts` (91 LOC NEW): setup project login real UI demo + acme → storage state files `.auth/<slug>.json` (gitignored)
+- `apps/web/e2e/specs/routing.spec.ts` (42 LOC NEW): test #1 root redirect + #6 slug malformato → `/not-found`
+- `apps/web/e2e/specs/auth-login.spec.ts` (67 LOC NEW): test #2 login OK + #3 login fail (error message visibile, no redirect)
+- `apps/web/e2e/specs/auth-logout.spec.ts` (60 LOC NEW): test #4 logout + token clear. Login UI inline (no storage state shared — Discovery #33 race condition fix)
+- `apps/web/e2e/specs/auth-redirect.spec.ts` (30 LOC NEW): test #5 anonymous → redirect login
+- `apps/web/e2e/specs/tenant-isolation.spec.ts` (56 LOC NEW): test #7 cross-tenant — documenta gap TD-7 ADR-0012 empiricamente
+- `apps/web/e2e/specs/smoke.spec.ts` (21 LOC NEW): sanity check minimo
+- `apps/web/.env.e2e.example` (9 LOC NEW, template committato; `.env.e2e` gitignored)
+- `apps/web/package.json` (+5 scripts test:e2e:*, +1 devDep `dotenv`)
+- `.github/workflows/ci.yml` (+248 LOC, da 57 → 304): nuovo job `e2e-playwright` con container `mcr.microsoft.com/playwright:v1.60.0-jammy` + services Postgres 16 / Redis 7 / Mailpit v1.30, 22 step incluso role rotation gestionale_app
+
+**Test outcomes**:
+
+| Browser | Result | Tempo |
+|---------|--------|-------|
+| Chromium full | 11/11 PASS (2 setup + 7 reali + 2 smoke) | 9.4s |
+| Firefox smoke | 5/5 PASS (smoke + login OK) | 7.0s |
+| WebKit smoke | 5/5 PASS (smoke + login OK) | 7.2s |
+
+**Empirical discoveries (#32-35, +4 cumulative → totale 35)**:
+
+- **#32** — Hetzner CPX32 Ubuntu 22.04 minimal manca host deps Playwright (libnspr4/libnss3/libxcb-*). Fix dev: `sudo pnpm exec playwright install-deps`. Fix CI: container image preinstallato.
+- **#33** — Race condition logout su storage state condiviso: test #4 invalida JWT server-side, test paralleli con stesso storage state vedono 401. Fix: login UI inline per test che mutano sessione.
+- **#34** — WebKit `fill()` non triggera onChange su RHF controlled `input[type="email"]`. Fix: `click() + pressSequentially()`. Solo email field, password.fill() OK.
+- **#35** — Migration role rotation con PLACEHOLDER password richiede step CI dedicato (`ALTER ROLE` + DATABASE_URL rebuild URL-encoded).
+
+**Tech debt tracking**:
+
+- **TD-4 ADR-0012**: ✅ RESOLVED
+- **TD-7 ADR-0012**: update empirical evidence via `tenant-isolation.spec.ts`. Fix candidato (1) Guard backend cross-check JWT.tenantId vs X-Tenant-Slug preferito.
+- **TD-AJ ADR-0016** — Backend `errorCode` esplicito 401 response (frontend fallback E_UNKNOWN attualmente). Bassa, ~15min.
+- **TD-AK ADR-0016** — Script `pnpm test:e2e:reset` wrapper Redis FLUSHDB. Bassa, ~10min.
+- **TD-AL ADR-0016** — Cache Playwright browsers in CI (per switch matrix futuro). Bassa, ~15min.
+- **TD-AM ADR-0016** — Matrix Firefox/WebKit opt-in via tag `@cross-browser`. Bassa, ~30min.
+- **TD-AN ADR-0016** — `JWT_SECRET_CI` da `secrets.*` GitHub. Bassa, ~10min.
+- **TD-AO ADR-0016** — Page Object Model refactor selettori inline (quando suite > 15 test). Bassa, 1-2h.
+- **TD-AP ADR-0016** — Migration role rotation automation (Vault/Doppler). Media (production-blocker), 2-3h.
+
+**Foundation per**: regression visiva auto-caught su PR, fixture pattern multi-tenant + storage state riusabile F1+ (POS cassa, tenant settings, ecc.). Cross-tenant gap (TD-7) regression guard quando fixato.
+
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: da concordare nella prossima sessione. B2 Auth E2E hardening 100% chiuso + TD-2 multi-tenant slug resolved.**
+**Macro-task: da concordare nella prossima sessione. Stack E2E end-to-end (backend B2b + frontend TD-4) 100% completo.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **Setup Playwright E2E frontend CI** (TD-4 ADR-0012) — Playwright + 5-10 test E2E (login flow demo/acme, dashboard, logout, slug invalid redirect) + GitHub Actions integration. Naturale follow-up post-TD-2 (path-based routing automatizzabile in headless). Stima 3-4h.
-2. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3).
+1. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3). Naturale follow-up post-foundation E2E (sblocca F1 con confidence).
+2. **TD-7 ADR-0012 fix** (cross-tenant token UX edge) — Guard backend cross-check JWT.tenantId vs X-Tenant-Slug + frontend manda header anche post-auth. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` diventa regression guard.
 3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
 4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
 5. **TD-H lockout key per-tenant** (B1 ADR-0013 carry-over, ora frontend sbloccato): backend `LOCKOUT_KEY_LOGIN(email)` → `${tenantId}:${email}` (~30min + smoke).
@@ -1014,7 +1063,7 @@ Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/archit
 - [ ] **TD-1 ADR-0012 — Migration localStorage → httpOnly cookie**: JWT in localStorage XSS surface. Trigger: ANY production deployment OR introduction sensitive features (financial transactions, multi-user concurrent). Stima ~1.5h (backend cookie middleware + CSRF endpoint + frontend `credentials: 'include'`). `credentials: true` già in CORS config (E2 ready).
 - [x] ~~**TD-2 ADR-0012 — Multi-tenant tenant slug resolution**~~ — **RESOLVED 2026-05-15 sessione 9** (PR merge pending). Pattern path-based scelto: `/t/<slug>/<page>` con Next.js 15 middleware + `useParams` runtime + `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata. Backend INVARIATO. Vedi [ADR-0012 TD-2 Resolution](docs/architecture/ADR-0012-frontend-auth-flow.md).
 - [ ] **TD-3 ADR-0012 — Auto-refresh token prima scadenza**: access token 15min, user re-login forzato. Trigger: feedback UX "sessione scade durante uso". Stima ~1h. Pattern setInterval 14min + refresh in background + edge case tab inactive + multi-tab sync.
-- [ ] **TD-4 ADR-0012 — Setup Playwright E2E frontend CI**: oggi smoke browser manual Nicolò (no regression visiva auto-caught). Trigger: prima regression visiva non catturata da test unit OR 2° pagina critical. Stima 3-4h (Playwright + 5-10 test E2E + GitHub Actions).
+- [x] ~~**TD-4 ADR-0012 — Setup Playwright E2E frontend CI**~~ — **RESOLVED 2026-05-15 sessione 10** ([ADR-0016](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md), PR #25). Playwright 1.60.0 + 7 test E2E flow critici + CI job container `mcr.microsoft.com/playwright:v1.60.0-jammy` + services Postgres/Redis/Mailpit. Test: Chromium 11/11 PASS + cross-browser smoke 5/5+5/5. 4 nuove discoveries (#32-35) + 7 nuovi TD (TD-AJ → TD-AP).
 - [ ] **TD-5 ADR-0012 — shadcn CLI output cleanup pattern**: `shadcn add` può generare file che violano lint rules monorepo (E2 F2: 1 char `import type`). Trigger: ogni nuovo component. Stima 5-10 min per component. Memo CHANGELOG monitor.
 - [x] ~~**TD-6 ADR-0012 (backend) — Logout server-side via /auth/logout**~~: **RISOLTO 2026-05-13** in questa PR. Frontend handleLogout async chiama POST /auth/logout PRE clearTokens + always-executed clearTokens su error (silent log) + loading state UX. Discovery collaterale: apiPost lib 204 No Content handling fix (+3 LOC riusabile per DELETE F1). Vedi [ADR-0012 sezione TD-6 Resolution](./docs/architecture/ADR-0012-frontend-auth-flow.md).
 

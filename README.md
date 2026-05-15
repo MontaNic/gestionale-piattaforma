@@ -482,6 +482,38 @@ E2E test esistenti (B2b):
 
 **Discoveries empiriche** (#27-30) + decisioni + tech debt: [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md). Nota: `@Inject(ClassName)` esplicito su 14 file production code (Discovery #29 permanente — TD-AE) come workaround Vitest+NestJS-DI gap.
 
+### E2E tests frontend (Playwright)
+
+E2E frontend attivi da TD-4 sessione 10 (vedi [ADR-0016](./docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md)). Playwright 1.60.0 (Chromium + Firefox + WebKit). Multi-tenant fixture demo + acme via storage state pattern. 7 test E2E flow critici + 2 smoke.
+
+Pre-requisiti dev locale:
+
+```bash
+# Browser binaries (~1.2GB in ~/.cache/ms-playwright, una tantum)
+cd apps/web && pnpm exec playwright install
+
+# Host system libs apt (Ubuntu 22.04 minimal, una tantum — Discovery #32)
+sudo pnpm exec playwright install-deps
+```
+
+Stack dev up obbligatorio: `docker compose -f docker-compose.dev.yml up -d` + `pnpm dev` (background in tab dedicata) + `apps/web/.env.e2e` con credenziali seed (template `.env.e2e.example` committato).
+
+```bash
+cd apps/web
+pnpm test:e2e:chromium   # Run Chromium (default, ~9s)
+pnpm test:e2e:ui          # UI mode debug visivo (port forward Mac richiesto)
+pnpm test:e2e:debug       # Debug step-by-step
+pnpm test:e2e:report      # Apri ultimo HTML report
+```
+
+Files chiave: [`apps/web/e2e/auth.setup.ts`](./apps/web/e2e/auth.setup.ts) (login UI demo + acme → storage state `.auth/<slug>.json`), [`apps/web/e2e/specs/`](./apps/web/e2e/specs/) (7 spec + smoke), [`apps/web/playwright.config.ts`](./apps/web/playwright.config.ts) (4 projects: setup + chromium/firefox/webkit).
+
+CI: job `e2e-playwright` in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) (container `mcr.microsoft.com/playwright:v1.60.0-jammy` + services Docker Postgres 16 / Redis 7 / Mailpit v1.30, Chromium-only default).
+
+**Test outcomes**: Chromium 11/11 PASS in 9.4s + Firefox 5/5 PASS in 7.0s + WebKit 5/5 PASS in 7.2s.
+
+**Discoveries empiriche** (#32-35) + 7 nuovi TD (TD-AJ → TD-AP) + TD-7 ADR-0012 update empirical evidence: [ADR-0016](./docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md).
+
 Comandi disponibili oggi (root):
 
 ```bash

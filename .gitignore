@@ -27,6 +27,10 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
+playwright/.cache/
+blob-report/
+# Playwright auth storage state (generato runtime, contiene tokens sessione)
+apps/web/e2e/.auth/
 
 # --- Environment ---
 .env
@@ -35,7 +39,8 @@ test-results/
 .env.development
 .env.production
 .env.staging
-# (NB: .env.example IS committed)
+.env.e2e
+# (NB: .env.example + .env.e2e.example ARE committed)
 
 # --- IDE / editors ---
 .vscode/
