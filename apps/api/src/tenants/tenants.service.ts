@@ -58,10 +58,10 @@ export class TenantsService {
     const sedePostalCode = dto.sedePostalCode ?? SEDE_DEFAULT_POSTAL_CODE;
 
     // -------------------------------------------------------------------------
-    // 3. Atomic bootstrap (single $transaction, system context)
+    // 2. Atomic bootstrap (single $transaction, system context)
     // -------------------------------------------------------------------------
     return withSystemContextAtomicTx(this.db.prisma, async (tx) => {
-      // 3.1 Slug uniqueness
+      // 2.1 Slug uniqueness
       const existing = await tx.tenant.findUnique({ where: { slug: dto.slug } });
       if (existing) {
         throw new ConflictException({
@@ -70,12 +70,12 @@ export class TenantsService {
         });
       }
 
-      // 3.2 Tenant
+      // 2.2 Tenant
       const tenant = await tx.tenant.create({
         data: { id: id(), name: dto.name, slug: dto.slug, isActive: true },
       });
 
-      // 3.3 Sede
+      // 2.3 Sede
       const sede = await tx.sede.create({
         data: {
           id: id(),
@@ -87,13 +87,13 @@ export class TenantsService {
         },
       });
 
-      // 3.4 Hash admin password (argon2 e' CPU-bound, ma dentro tx non c'e'
+      // 2.4 Hash admin password (argon2 e' CPU-bound, ma dentro tx non c'e'
       // problema: la connection del tx non e' tenuta a lungo da una query DB
       // attiva, solo allocata mentre la promise pending. Postgres tx attive
       // sono leggere se non bloccano lock).
       const passwordHash = await argon2.hash(dto.adminPassword, { type: argon2.argon2id });
 
-      // 3.5 Admin user
+      // 2.5 Admin user
       const admin = await tx.user.create({
         data: {
           id: id(),
@@ -106,7 +106,7 @@ export class TenantsService {
         },
       });
 
-      // 3.6 Clone 6 system_role_templates (isDefault=true) → roles tenant-scoped
+      // 2.6 Clone 6 system_role_templates (isDefault=true) → roles tenant-scoped
       // + copia mapping system_role_template_permissions → role_permissions.
       // Letti dinamicamente: se in futuro aggiungiamo template, scale-up free.
       const templates = await tx.systemRoleTemplate.findMany({
@@ -136,7 +136,7 @@ export class TenantsService {
         rolesByName.set(template.name, { id: newRole.id, name: newRole.name });
       }
 
-      // 3.7 Assign admin → Super Admin tenant-wide (sede_id NULL)
+      // 2.7 Assign admin → Super Admin tenant-wide (sede_id NULL)
       const superAdminRole = rolesByName.get('Super Admin');
       if (!superAdminRole) {
         // Invariante: system_role_templates seed garantisce 'Super Admin' con
@@ -156,7 +156,7 @@ export class TenantsService {
         },
       });
 
-      // 3.8 Audit log: action 'tenant.created' (nuovo enum D4, totale 10 actions).
+      // 2.8 Audit log: action 'tenant.created' (nuovo enum D4, totale 10 actions).
       // afterValue NON include adminPassword (security leak).
       await tx.auditLog.create({
         data: {

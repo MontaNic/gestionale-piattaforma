@@ -18,3 +18,11 @@ export interface PermissionsMetadata {
   mode: PermissionsMode;
   permissions: readonly string[];
 }
+
+/**
+ * Options object per @RequirePermissions decorator signature overload.
+ * Permette esplicito opt-in OR mode: @RequirePermissions({ mode: 'OR' }, 'p1', 'p2')
+ */
+export interface PermissionOptions {
+  mode: PermissionsMode;
+}

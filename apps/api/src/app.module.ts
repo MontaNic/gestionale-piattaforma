@@ -51,8 +51,10 @@ import { UsersModule } from './users/users.module';
     // - Override getTracker(): per `tenant-create` usa userId-or-IP (decode
     //   JWT minimale dall'Authorization header). Vedi guard sorgente.
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
-    // ORDINE GUARD CRITICO (sessione 11 ADR-0017): APP_GUARD multipli in
-    // module diversi NON hanno ordine garantito. Registrazione locale qui
+    // ORDINE GUARD CRITICO (sessione 11 ADR-0017, Discovery #36): APP_GUARD
+    // multipli in module diversi NON hanno ordine garantito. Registrazione
+    // centralizzata qui (vs distribuita cross-module pre-fix: JwtAuthGuard
+    // era APP_GUARD in auth.module.ts → race ordering con PermissionsGuard)
     // garantisce sequence deterministica per providers array di app.module:
     //   1. AppThrottlerGuard (rate-limit, no req.user dependency)
     //   2. JwtAuthGuard (auth, popola req.user)

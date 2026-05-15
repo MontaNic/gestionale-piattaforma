@@ -18,13 +18,10 @@ import { SetMetadata } from '@nestjs/common';
 
 import {
   PERMISSIONS_METADATA_KEY,
+  type PermissionOptions,
   type PermissionsMetadata,
   type PermissionsMode,
 } from '../interfaces/permissions-metadata.interface';
-
-interface PermissionOptions {
-  mode: PermissionsMode;
-}
 
 export function RequirePermissions(
   ...permissions: readonly string[]

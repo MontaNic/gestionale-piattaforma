@@ -1065,6 +1065,12 @@ Resolution carry-over **TD #3 ADR-0010** (sessione 4): macro-task RBAC enforceme
 - **TD-AT ADR-0017** — Refactor altri endpoint inline check D4 a `@RequirePermissions` decorator. Bassa, ~30min.
 - **TD-AU ADR-0017** — Documentare in `test-app.ts:25-26` lista "API che NON funzionano con seedMinimal solo". Bassa, ~10min.
 
+**TD candidate emersi cleanup PR #27 (sessione 11 post-merge review)**:
+
+- **TD-AV ADR-0017** — `audit_log.entityType` semantica per access control event. Issue Media emersa review pre-merge: `PermissionsGuard.logPermissionDenied` insert audit `auth.permission_denied` con `entityType: 'User'` + `entityId: userId`. Semanticamente debatable (l'evento è AuthorizationCheck, non modifica User). Verifica empirica `schema.prisma` audit_log → decidere se refactor a `'AuthorizationCheck'` o accept pragmatico. Trigger: F1+ aggiunge altri access control events (es. tenant-level permission denied). Stima: ~30min refactor + verifica E2E.
+
+- **TD-AW ADR-0017** — Raw SQL fixture `seedRbacFixtures` (`rbac-permissions.e2e-spec.ts`) → valutare refactor a Prisma client direct dentro fixture per type-safety. Trade-off: complexity inject Prisma vs raw SQL diretto (schema drift risk vs Prisma TS error compile-time). Decisione corrente: raw SQL pragmatico (coerente con `seedMinimal` helper esistente). Trigger: schema drift rilevato (es. rename column audit_log). Stima: ~20min refactor.
+
 **Foundation per**: F1 endpoint business (menu, tavoli, ordini, cassa, reports) con `@RequirePermissions(...)` standard. Pattern fail-open layered consolidato a 4 livelli (Lockout/Mail/Throttler/RBAC).
 
 ## 🚧 In corso / Prossimo task

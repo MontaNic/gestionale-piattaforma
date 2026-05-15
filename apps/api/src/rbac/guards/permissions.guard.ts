@@ -123,6 +123,10 @@ export class PermissionsGuard implements CanActivate {
     if (!allowed) {
       // request.route.path è il pattern Express (es. '/tenants/:id'), preserva
       // cardinalità low del dedupe key (vs request.url con path params variabili).
+      // Edge case: se request.route undefined (es. 404 router non-match upstream),
+      // fallback request.url può aumentare cardinalità dedupe per attaccanti con
+      // path params variabili. Acceptable scope corrente (POST /tenants pattern
+      // stabile); TD candidato se F1+ aggiunge endpoint dinamici con path params.
       const endpoint = `${request.method} ${request.route?.path ?? request.url}`;
       await this.logPermissionDenied(
         user.tenantId,
