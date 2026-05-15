@@ -91,6 +91,11 @@ jobs:
 
       mailpit:
         image: axllent/mailpit:v1.30
+        options: >-
+          --health-cmd "wget --no-verbose --spider --tries=1 http://localhost:8025/api/v1/info || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     env:
       # Hostname services: dentro container action, services raggiungibili
@@ -144,6 +149,9 @@ jobs:
         # fisso `../../.env`. Più semplice override-via-job-env: creiamo .env
         # qui una volta sola, riusato da prisma + api dev. DATABASE_URL viene
         # riscritto post-rotate password (vedi step successivo).
+        # NB: heredoc `<<'EOF'` quoted = no shell expansion. Le ${{ env.X }}
+        # sono GitHub Actions expressions, risolte PRIMA che heredoc venga
+        # eseguito dalla shell. Pattern intenzionale per chiarezza.
         run: |
           cat > .env <<'EOF'
           POSTGRES_USER=postgres
@@ -200,6 +208,9 @@ jobs:
         # Migration 20260513002159 crea role con PLACEHOLDER password che
         # DEVE essere ruotato (vedi commento header migration.sql).
         # In dev/prod questo step è eseguito manualmente o via deploy pipeline.
+        # NB: PGPASSWORD inline è accettabile per scope test-only (string contiene
+        # esplicito "test-only-not-a-real-secret"). Quando si introdurrà secret
+        # reale GitHub Actions, migrare a .pgpass pattern — vedi TD-AR ADR-0016.
         run: |
           apt-get update -qq && apt-get install -y -qq postgresql-client
           PGPASSWORD='${{ env.POSTGRES_PASSWORD }}' psql \

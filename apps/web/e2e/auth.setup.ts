@@ -1,4 +1,5 @@
-import { test as setup, expect, type Page } from '@playwright/test';
+import { test as setup, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import path from 'node:path';
 
 /**

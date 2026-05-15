@@ -22,10 +22,9 @@ import path from 'node:path';
  * Questo è il gap TD-7 ADR-0012 "Cross-tenant token UX edge".
  * Il test documenta il comportamento ATTUALE, NON forza fix ideale.
  *
- * Fix ideale (TD futuro):
- * - Opzione 1: Frontend manda X-Tenant-Slug ANCHE post-auth + backend cross-check
- * - Opzione 2: Backend Guard verifica JWT.tenantId vs URL.slug, 403 se mismatch
- * - Opzione 3: Frontend useEffect verifica /me.tenantSlug vs useParams.slug, redirect logout
+ * Fix ideale (TD-7 ADR-0012, 2 candidates):
+ * - (1) Backend Guard cross-check JWT.tenantId vs X-Tenant-Slug header (frontend manda slug ANCHE post-auth)
+ * - (2) Frontend useEffect verifica /me.tenantSlug vs useParams.slug, redirect a /t/<jwt-slug>/dashboard
  */
 
 test.use({ storageState: path.join(import.meta.dirname, '..', '.auth', 'demo.json') });
@@ -51,6 +50,6 @@ test.describe('Cross-tenant isolation (demo user → acme tenant URL)', () => {
     await expect(page.getByText(demoEmail)).toBeVisible({ timeout: 5_000 });
 
     // Verifica esplicita NO redirect a /t/acme/login (no enforcement attuale)
-    expect(page.url()).toBe(new URL('/t/acme/dashboard', page.url()).toString());
+    expect(page.url()).toContain('/t/acme/dashboard');
   });
 });

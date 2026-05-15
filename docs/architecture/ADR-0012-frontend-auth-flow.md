@@ -367,7 +367,9 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
   - (b) Server Component dashboard con tenant lookup → 404 se mismatch
   - Stima ~30min. Low priority (richiede manual URL hack utente legittimo).
 
-  **Update sessione 10** ([ADR-0016](./ADR-0016-playwright-e2e-frontend-ci.md)): comportamento ora documentato empiricamente via E2E `apps/web/e2e/specs/tenant-isolation.spec.ts` (test PASS sul gap attuale). Root cause confermato via API direct test: backend `tenant.middleware.ts:43` skippa cross-check se `req.user` post-JwtAuthGuard, `me.controller.ts` usa solo `user.id` da JWT. Fix candidato (1) preferito: Guard backend cross-check JWT.tenantId vs X-Tenant-Slug header (richiede frontend manda X-Tenant-Slug ANCHE post-auth). Quando fixato, `tenant-isolation.spec.ts` diventa regression guard (adattare assert).
+  **Update sessione 10** ([ADR-0016](./ADR-0016-playwright-e2e-frontend-ci.md)): comportamento ora documentato empiricamente via E2E `apps/web/e2e/specs/tenant-isolation.spec.ts` (test PASS sul gap attuale). Root cause confermato via API direct test: backend `tenant.middleware.ts:43` skippa cross-check se `req.user` post-JwtAuthGuard, `me.controller.ts` usa solo `user.id` da JWT. Fix candidato (1) preferito: Guard backend cross-check JWT.tenantId vs X-Tenant-Slug header (richiede frontend manda X-Tenant-Slug ANCHE post-auth). Quando fixato (es. Opzione 1), `tenant-isolation.spec.ts` diventa regression guard:
+  - Assert attuale: `await expect(page).toHaveURL('/t/acme/dashboard')` + verifica email demo visibile
+  - Assert post-fix: `await page.waitForURL(/\/t\/demo\/dashboard|\/t\/.*\/login/)` (redirect a tenant proprio O login)
 
 **Foundation per**: TD-H lockout key per-tenant (B1 ADR-0013 carry-over, ora sbloccato lato frontend) + future macro-task multi-tenant routing (tenant switching UI, tenant-aware command palette, ecc.).
 
