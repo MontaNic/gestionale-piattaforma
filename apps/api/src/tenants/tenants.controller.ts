@@ -21,6 +21,7 @@ import {
 
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
 import { TenantCreate } from '../throttler/decorators/tenant-create.decorator';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import type { CreateTenantResult } from './tenants.service';
@@ -33,6 +34,7 @@ export class TenantsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @TenantCreate()
+  @RequirePermissions('sistema.tenant.gestisci')
   async create(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Body() dto: CreateTenantDto,

@@ -514,6 +514,21 @@ CI: job `e2e-playwright` in [`.github/workflows/ci.yml`](./.github/workflows/ci.
 
 **Discoveries empiriche** (#32-35) + 7 nuovi TD (TD-AJ → TD-AP) + TD-7 ADR-0012 update empirical evidence: [ADR-0016](./docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md).
 
+### Authorization (RBAC)
+
+RBAC enforcement attivo da sessione 11 (vedi [ADR-0017](./docs/architecture/ADR-0017-rbac-permissions-guard.md)).
+
+- **`@RequirePermissions(...)` decorator** ([apps/api/src/rbac/decorators/](./apps/api/src/rbac/decorators/)): protegge endpoint con check permission lazy lookup
+  - AND default: `@RequirePermissions('users.read', 'users.write')` = ENTRAMBE richieste
+  - OR opt-in: `@RequirePermissions({ mode: 'OR' }, 'admin', 'manager')` = ALMENO UNA
+- **PermissionsGuard APP_GUARD globale** ([apps/api/src/rbac/guards/permissions.guard.ts](./apps/api/src/rbac/guards/permissions.guard.ts)): cache Redis TTL 60s (env `RBAC_CACHE_TTL_S`) + fallback DB (Pattern fail-open layered 4° livello, coerente B1/B2a/B2b)
+- **Audit action `auth.permission_denied`**: dedupe Redis 60s per anti-flood (`audit:permdenied:<userId>:<endpoint>`)
+- **Permission codes**: seedati in [`packages/db/prisma/seed.ts`](./packages/db/prisma/seed.ts) (32 permessi, 6 system role templates clonati al bootstrap tenant)
+
+Ordine APP_GUARDs deterministico (sessione 11 Discovery #36): `AppThrottlerGuard` → `JwtAuthGuard` → `PermissionsGuard`, tutti registrati in [`app.module.ts`](./apps/api/src/app.module.ts).
+
+**Test outcomes**: 20/20 unit rbac (mock Redis+DB+Reflector) + 3/3 e2e Testcontainers (admin allow / limited deny / audit row).
+
 Comandi disponibili oggi (root):
 
 ```bash
