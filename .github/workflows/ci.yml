@@ -54,3 +54,251 @@ jobs:
         # turbo run test -> propaga ai workspace con script `test`.
         # Workspace senza spec files passano via --passWithNoTests.
         run: pnpm test
+
+  e2e-playwright:
+    name: E2E tests (Playwright Chromium)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # TD-4 sessione 10 — E2E foundation.
+    # Container Playwright (mcr.microsoft.com/playwright:v1.60.0-jammy) ha
+    # browser + OS deps preinstallati: evita `playwright install --with-deps`
+    # (~2-3 min). Pinned alla stessa versione del client (apps/web/package.json
+    # @playwright/test 1.60.0); aggiornare in coppia per evitare API drift.
+    container:
+      image: mcr.microsoft.com/playwright:v1.60.0-jammy
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-postgres-superuser-test-only
+          POSTGRES_DB: gestionale_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      mailpit:
+        image: axllent/mailpit:v1.30
+
+    env:
+      # Hostname services: dentro container action, services raggiungibili
+      # via service name (NOT localhost). Vedi docs GitHub Actions
+      # "Running jobs in a container — communicate with services".
+      # NB: dev locale usa 127.0.0.1 (port binding host). In CI = service name.
+      DIRECT_URL: postgresql://postgres:ci-postgres-superuser-test-only@postgres:5432/gestionale_test?schema=public
+      POSTGRES_PASSWORD: ci-postgres-superuser-test-only
+      APP_DB_PASSWORD: ci-app-role-test-only-not-a-real-secret
+      JWT_SECRET: ci-jwt-secret-test-only-32-chars-min-not-real
+      CORS_ORIGIN: http://localhost:3001
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_USER: ''
+      SMTP_PASS: ''
+      SMTP_FROM: no-reply@gestionale.local
+      SMTP_SECURE: 'false'
+      THROTTLE_DEFAULT_TTL_MS: '60000'
+      THROTTLE_DEFAULT_LIMIT: '60'
+      THROTTLE_AUTH_TTL_MS: '60000'
+      THROTTLE_AUTH_LIMIT: '5'
+      THROTTLE_TENANT_CREATE_TTL_MS: '3600000'
+      THROTTLE_TENANT_CREATE_LIMIT: '3'
+      THROTTLE_AUTH_PIN_TTL_MS: '60000'
+      THROTTLE_AUTH_PIN_LIMIT: '10'
+      LOCKOUT_THRESHOLD: '10'
+      LOCKOUT_WINDOW_MS: '900000'
+      LOCKOUT_DURATION_MS: '900000'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        # version letta dal campo `packageManager` di package.json (pnpm@9.15.0)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write root .env for CI
+        # Dotenv-cli (pnpm scripts api/db dev) carica .env da root via path
+        # fisso `../../.env`. Più semplice override-via-job-env: creiamo .env
+        # qui una volta sola, riusato da prisma + api dev. DATABASE_URL viene
+        # riscritto post-rotate password (vedi step successivo).
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB=gestionale_test
+          APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
+          DIRECT_URL=${{ env.DIRECT_URL }}
+          DATABASE_URL=${{ env.DIRECT_URL }}
+          REDIS_HOST=${{ env.REDIS_HOST }}
+          REDIS_PORT=${{ env.REDIS_PORT }}
+          JWT_SECRET=${{ env.JWT_SECRET }}
+          CORS_ORIGIN=${{ env.CORS_ORIGIN }}
+          SMTP_HOST=${{ env.SMTP_HOST }}
+          SMTP_PORT=${{ env.SMTP_PORT }}
+          SMTP_USER=
+          SMTP_PASS=
+          SMTP_FROM=${{ env.SMTP_FROM }}
+          SMTP_SECURE=false
+          THROTTLE_DEFAULT_TTL_MS=${{ env.THROTTLE_DEFAULT_TTL_MS }}
+          THROTTLE_DEFAULT_LIMIT=${{ env.THROTTLE_DEFAULT_LIMIT }}
+          THROTTLE_AUTH_TTL_MS=${{ env.THROTTLE_AUTH_TTL_MS }}
+          THROTTLE_AUTH_LIMIT=${{ env.THROTTLE_AUTH_LIMIT }}
+          THROTTLE_TENANT_CREATE_TTL_MS=${{ env.THROTTLE_TENANT_CREATE_TTL_MS }}
+          THROTTLE_TENANT_CREATE_LIMIT=${{ env.THROTTLE_TENANT_CREATE_LIMIT }}
+          THROTTLE_AUTH_PIN_TTL_MS=${{ env.THROTTLE_AUTH_PIN_TTL_MS }}
+          THROTTLE_AUTH_PIN_LIMIT=${{ env.THROTTLE_AUTH_PIN_LIMIT }}
+          LOCKOUT_THRESHOLD=${{ env.LOCKOUT_THRESHOLD }}
+          LOCKOUT_WINDOW_MS=${{ env.LOCKOUT_WINDOW_MS }}
+          LOCKOUT_DURATION_MS=${{ env.LOCKOUT_DURATION_MS }}
+          EOF
+
+      - name: Write apps/web/.env.e2e for Playwright credentials
+        # Playwright auth.setup.ts legge .env.e2e via dotenv (vedi
+        # apps/web/playwright.config.ts). Credenziali matchano seed dev
+        # (packages/db/prisma/seed.ts tenant demo + acme).
+        run: |
+          cat > apps/web/.env.e2e <<'EOF'
+          E2E_DEMO_EMAIL=admin@demo.local
+          E2E_DEMO_PASSWORD=Admin123!
+          E2E_ACME_EMAIL=manager@acme.local
+          E2E_ACME_PASSWORD=Manager123!
+          EOF
+
+      - name: Generate Prisma client
+        run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Run Prisma migrations
+        # `migrate deploy` (non `migrate dev`) — CI è non-interactive, applica
+        # solo migration esistenti committate. Crea schema + role gestionale_app
+        # con password PLACEHOLDER (ruotata sotto).
+        run: pnpm --filter @gestionale/db prisma:migrate:deploy
+
+      - name: Rotate gestionale_app role password
+        # Migration 20260513002159 crea role con PLACEHOLDER password che
+        # DEVE essere ruotato (vedi commento header migration.sql).
+        # In dev/prod questo step è eseguito manualmente o via deploy pipeline.
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+          PGPASSWORD='${{ env.POSTGRES_PASSWORD }}' psql \
+            -h postgres -U postgres -d gestionale_test \
+            -c "ALTER ROLE gestionale_app PASSWORD '${{ env.APP_DB_PASSWORD }}';"
+
+      - name: Update .env with real DATABASE_URL (post-rotate)
+        # Backend usa DATABASE_URL = gestionale_app role (NOSUPERUSER, RLS
+        # enforced). Re-encode password URL-safe se contiene char speciali
+        # (qui safe: solo lowercase + hyphen).
+        run: |
+          ENC_PWD=$(node -e "console.log(encodeURIComponent(process.env.APP_DB_PASSWORD))")
+          sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://gestionale_app:${ENC_PWD}@postgres:5432/gestionale_test?schema=public|" .env
+
+      - name: Seed database (tenant demo + acme)
+        run: pnpm --filter @gestionale/db db:seed
+
+      - name: Build packages/db
+        # api dev può richiedere il package built per resolve workspace import
+        run: pnpm --filter @gestionale/db build
+
+      - name: Start API server (background)
+        # ts-node-dev background; PID salvato per cleanup.
+        # nohup + redirect log per debug post-mortem se test FAIL.
+        run: |
+          mkdir -p /tmp/ci-logs
+          cd apps/api
+          nohup pnpm dev > /tmp/ci-logs/api.log 2>&1 &
+          echo $! > /tmp/ci-logs/api.pid
+
+      - name: Start Web server (background)
+        run: |
+          cd apps/web
+          nohup pnpm dev > /tmp/ci-logs/web.log 2>&1 &
+          echo $! > /tmp/ci-logs/web.pid
+
+      - name: Wait for API healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/api/v1/health > /dev/null 2>&1; then
+              echo "API ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy in 60s"
+          cat /tmp/ci-logs/api.log
+          exit 1
+
+      - name: Wait for Web healthy
+        run: |
+          for i in $(seq 1 60); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 || echo 000)
+            if [ "$CODE" = "307" ] || [ "$CODE" = "200" ]; then
+              echo "Web ready after ${i}s (HTTP $CODE)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Web did not become healthy in 60s"
+          cat /tmp/ci-logs/web.log
+          exit 1
+
+      - name: Reset Redis (anti rate-limit accumulation)
+        # Empirical STOP 3 sessione 10: rate limit B1 (5 login fail/min) può
+        # accumularsi tra setup login + auth-login fail test in workers
+        # paralleli. FLUSHDB pre-test garantisce contatori puliti.
+        run: redis-cli -h redis FLUSHDB
+
+      - name: Run Playwright E2E (Chromium)
+        working-directory: apps/web
+        run: pnpm test:e2e:ci
+
+      - name: Stop dev servers (cleanup)
+        if: always()
+        run: |
+          [ -f /tmp/ci-logs/api.pid ] && kill "$(cat /tmp/ci-logs/api.pid)" 2>/dev/null || true
+          [ -f /tmp/ci-logs/web.pid ] && kill "$(cat /tmp/ci-logs/web.pid)" 2>/dev/null || true
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+      - name: Upload test-results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: apps/web/test-results/
+          retention-days: 3
+
+      - name: Upload dev server logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-server-logs-${{ github.run_id }}
+          path: /tmp/ci-logs/
+          retention-days: 3

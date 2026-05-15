@@ -260,7 +260,7 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 - Edge case: tab inactive (Page Visibility API), multiple tabs (BroadcastChannel sync), 401 mid-flight retry pattern
 - Refresh endpoint già esiste ([D2a](./ADR-0008-auth-module.md)), JWT pair returned
 
-### TD-4: Setup Playwright per test E2E frontend CI
+### TD-4: Setup Playwright per test E2E frontend CI — ✅ RESOLVED 2026-05-15 (sessione 10)
 
 **Cosa**: Oggi smoke browser 9/9 = manual run di Nicolò. Regression visiva non auto-caught su PR.
 
@@ -270,6 +270,17 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
 - 2° pagina critical aggiunta (es. POS cassa flow F1)
 
 **Stima rework**: ~3-4h. Playwright install + browser binaries CI compatible + 5-10 test E2E (login flow, dashboard render, logout, validation messages) + GitHub Actions workflow integration. Beneficio: zero regression visiva auto-caught.
+
+**Resolution** (2026-05-15, sessione 10, [ADR-0016](./ADR-0016-playwright-e2e-frontend-ci.md), PR #25):
+
+- Playwright 1.60.0 installato (Chromium + Firefox + WebKit), config in `apps/web/playwright.config.ts`
+- Multi-tenant fixture demo + acme via storage state pattern (`apps/web/e2e/auth.setup.ts`)
+- 7 test E2E flow critici: routing (root + slug invalido), auth login (OK + fail), logout, anonymous redirect, cross-tenant isolation (documenta gap TD-7)
+- CI integration: nuovo job `e2e-playwright` in `.github/workflows/ci.yml` (container Playwright + services Postgres/Redis/Mailpit)
+- Test outcomes: Chromium 11/11 PASS in 9.4s + Firefox 5/5 PASS in 7.0s + WebKit 5/5 PASS in 7.2s
+- 4 discoveries empiriche (#32-35) + 7 nuovi TD tracciati (TD-AJ → TD-AP)
+- LOC: ~694 nuovi (446 Playwright/E2E + 248 ci.yml delta)
+- Stima rework ~3-4h: rispettata (~4h effettivi, +30% per Discovery #35 emersa Fase 4.4)
 
 ### TD-5: shadcn CLI output cleanup pattern
 
@@ -355,6 +366,8 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
   - (a) Page-level check: leggere JWT `tenantId`, confrontare con `useParams().slug` lookup → mismatch → redirect `/t/<jwt-tenantSlug>/dashboard`
   - (b) Server Component dashboard con tenant lookup → 404 se mismatch
   - Stima ~30min. Low priority (richiede manual URL hack utente legittimo).
+
+  **Update sessione 10** ([ADR-0016](./ADR-0016-playwright-e2e-frontend-ci.md)): comportamento ora documentato empiricamente via E2E `apps/web/e2e/specs/tenant-isolation.spec.ts` (test PASS sul gap attuale). Root cause confermato via API direct test: backend `tenant.middleware.ts:43` skippa cross-check se `req.user` post-JwtAuthGuard, `me.controller.ts` usa solo `user.id` da JWT. Fix candidato (1) preferito: Guard backend cross-check JWT.tenantId vs X-Tenant-Slug header (richiede frontend manda X-Tenant-Slug ANCHE post-auth). Quando fixato, `tenant-isolation.spec.ts` diventa regression guard (adattare assert).
 
 **Foundation per**: TD-H lockout key per-tenant (B1 ADR-0013 carry-over, ora sbloccato lato frontend) + future macro-task multi-tenant routing (tenant switching UI, tenant-aware command palette, ecc.).
 
