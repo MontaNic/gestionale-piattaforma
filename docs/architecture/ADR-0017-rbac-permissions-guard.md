@@ -56,7 +56,8 @@
 - **Dedupe rate-limit Redis**: key `audit:permdenied:<userId>:<endpoint>` TTL 60s con `SET NX` atomic. Anti-flood pattern (un attaccante che martella endpoint = 1 audit row/min/userId+endpoint).
 - **Log warn SEMPRE** (real-time visibility ops), audit insert solo se non dedupato.
 - Redis DOWN su dedupe → fail-open: audit insert SEMPRE (better double audit than missing).
-- Audit insert direct via `DbService` (DbModule è `@Global()`, no coupling RbacModule → AuthModule). AuditService NON esiste come module separato — pattern simmetrico a `AuthService.recordAudit` (private inline). Discovery STOP 3.
+- Audit insert direct via `DbService` (DbModule è `@Global()`, no coupling RbacModule → AuthModule). AuditService NON esiste come module separato — pattern simmetrico a `AuthService.recordAudit` (private inline). Decisione emersa da letture empiriche STOP 3 (vedi tabella Considered Alternatives 8° alternative scartata).
+- **Considerata e scartata**: estrazione `AuditService` standalone da `AuthService.recordAudit` (vedi Considered Alternatives). Coupling RbacModule → AuthModule unnecessary per scope corrente, DbService global insert inline più cleaner.
 
 ### DP4 — Scope refactor: solo POST /tenants (sub-DP4 = A)
 
@@ -254,4 +255,4 @@ Cumulative test totali progetto post-sessione 11 PR 1:
 
 - **Tempo reale**: ~2h sessione 11 PR 1 (stima iniziale 1-2h, +30% per Discovery #36-38 emerse STOP 4)
 - **LOC totali**: ~973 LOC nuovi (rbac/ 727 + e2e spec 246) + delta modifiche +51/-30
-- **PR**: #27 atteso
+- **PR**: #27 (27° PR del progetto)

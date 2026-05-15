@@ -1,9 +1,12 @@
 // =============================================================================
-// tenants.controller.ts — POST /api/v1/tenants (D4)
+// tenants.controller.ts — POST /api/v1/tenants (D4 + RBAC sessione 11)
 // =============================================================================
 // Bootstrap nuovo tenant. Protected by default (JwtAuthGuard globale, no
-// @Public). Permission check `sistema.tenant.gestisci` fatto da TenantsService
-// inline (no Guard generico — rimandato a macro-task RBAC futuro).
+// @Public). Authorization via @RequirePermissions('sistema.tenant.gestisci')
+// decorator (PermissionsGuard APP_GUARD globale, ADR-0017 sessione 11).
+// Lazy lookup con cache Redis TTL 60s + audit 'auth.permission_denied'
+// automatico su deny. Inline check service rimosso in PR #27 (single source
+// of truth nel Guard).
 //
 // Response shape coerente con altri endpoint: `{data: {tenant, sede, admin,
 // superAdminRole}}` (subset, non tutte le 8 entita' create).

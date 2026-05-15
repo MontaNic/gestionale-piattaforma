@@ -10,7 +10,7 @@ import {
 } from './helpers/test-containers';
 
 // =============================================================================
-// rbac-permissions.spec.ts (sessione 11, ADR-0017) — E2E PermissionsGuard
+// rbac-permissions.e2e-spec.ts (sessione 11, ADR-0017) — E2E PermissionsGuard
 // =============================================================================
 // 3 scenari smoke RBAC su POST /api/v1/tenants:
 //   1. Admin con `sistema.tenant.gestisci` (role + permission grant) → 201
