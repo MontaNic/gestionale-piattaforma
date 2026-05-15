@@ -154,14 +154,15 @@ pnpm test:e2e:report      # apri ultimo HTML report
 // Anti-pattern (FAIL su WebKit):
 await page.locator('input[type="email"]').fill(email);
 
-// Fix cross-browser-safe:
-await page.locator('input[type="email"]').click();
-await page.locator('input[type="email"]').pressSequentially(email);
+// Fix cross-browser-safe (single locator, reused):
+const emailInput = page.locator('input[type="email"]');
+await emailInput.click();
+await emailInput.pressSequentially(email);
 ```
 
 `pressSequentially` emette `keydown/keyup` per ogni char (~1ms/char), allineato a interazione utente reale → triggera React onChange. Applicato in `auth.setup.ts`, `auth-login.spec.ts`, `auth-logout.spec.ts` solo per email field.
 
-**Lesson:** RHF controlled inputs su WebKit richiedono `pressSequentially` defensive default. Da considerare se aggiungere ESLint custom rule futura.
+**Lesson:** RHF controlled inputs su WebKit richiedono `pressSequentially` defensive default. Pattern documentato in `auth.setup.ts` commento inline + TD-AQ tracciato per ESLint custom rule preventiva.
 
 ### Discovery #35 — Migration role rotation con placeholder password richiede step CI dedicato
 
@@ -174,7 +175,7 @@ await page.locator('input[type="email"]').pressSequentially(email);
 1. **Rotate gestionale_app role password**: `apt-get install postgresql-client` + `PGPASSWORD=<superuser> psql -h postgres -c "ALTER ROLE gestionale_app PASSWORD '<value>'"`
 2. **Update .env with real DATABASE_URL (post-rotate)**: `sed -i` riscrive DATABASE_URL con password URL-encoded (`encodeURIComponent`) per essere safe su char speciali
 
-**Lesson:** ogni "tipo di environment" (locale dev, CI ephemeral, prod) può rivelare gap di migration immutability + post-deploy steps. Migration con placeholder secret è anti-pattern medio-termine — TD-AP candidato production-blocker.
+**Lesson:** ogni "tipo di environment" (locale dev, CI ephemeral, prod) può rivelare gap di post-deploy steps non automatizzati. La migration in sé è correttamente immutabile (creazione role + grant); è la rotazione password post-deploy che richiede orchestration esterna. Migration con placeholder secret è anti-pattern medio-termine — TD-AP candidato production-blocker.
 
 ## Considered Alternatives
 
@@ -220,7 +221,9 @@ Fix candidati (in ordine di preferenza):
 | TD-AM | Matrix Firefox/WebKit opt-in CI via tag `@cross-browser` su test selettivi — oggi Chromium-only default                                                                                                                                      | Bassa                      | ~30min |
 | TD-AN | `JWT_SECRET_CI` da `secrets.*` GitHub invece di inline test-only (riduce noise SAST scan + impedisce copy-paste accidentale)                                                                                                                 | Bassa                      | ~10min |
 | TD-AO | Page Object Model refactor selettori inline (quando suite > 15 test)                                                                                                                                                                         | Bassa                      | 1-2h   |
-| TD-AP | Migration role rotation automation (Vault/Doppler post-prod) — sostituisce PLACEHOLDER password manual rotation Discovery #35. Anti-pattern medio-termine                                                                                    | Media (production-blocker) | 2-3h   |
+| TD-AP | Migration role rotation automation (Vault/Doppler post-prod) — sostituisce PLACEHOLDER password manual rotation Discovery #35. Anti-pattern medio-termine                                                                                    | Media (production-blocker) | 4-6h   |
+| TD-AQ | ESLint custom rule `no-playwright-fill-on-email-rhf` per prevenire regression Discovery #34 (RHF email + WebKit `fill()` non triggera onChange). Trigger: 3+ test file con pattern email RHF                                                 | Bassa                      | ~30min |
+| TD-AR | Pattern `.pgpass` file per `psql` in CI quando si introdurrà secret reale (sostituisce `PGPASSWORD='${{ env.X }}'` plain). Trigger: introduction secret reale GitHub Actions                                                                 | Bassa                      | ~15min |
 
 ## Consequences
 
