@@ -267,7 +267,11 @@ jobs:
         # Empirical STOP 3 sessione 10: rate limit B1 (5 login fail/min) può
         # accumularsi tra setup login + auth-login fail test in workers
         # paralleli. FLUSHDB pre-test garantisce contatori puliti.
-        run: redis-cli -h redis FLUSHDB
+        # Container Playwright Jammy NON ha redis-tools preinstallato
+        # (revealed first CI run PR #25, exit 127). Install inline.
+        run: |
+          apt-get update -qq && apt-get install -y -qq redis-tools
+          redis-cli -h redis FLUSHDB
 
       - name: Run Playwright E2E (Chromium)
         working-directory: apps/web
