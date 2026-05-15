@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 15 maggio 2026 (TD-4 sessione 10 — Playwright E2E frontend CI)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + **TD-4 Playwright E2E frontend CI** completi. **Stack E2E completo**: backend B2b Testcontainers + frontend Playwright. **Test totali**: 25 unit + 4 e2e backend + **11/11 Playwright Chromium** + smoke cross-browser Firefox/WebKit (5/5 + 5/5). Job CI `e2e-playwright` con container Playwright + services Postgres/Redis/Mailpit.
+**Ultimo aggiornamento:** 15 maggio 2026 (sessione 11 PR 1 — RBAC enforcement Guard `@RequirePermissions`)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + **RBAC enforcement Guard** completi. **Stack security/scaling F1 completa**: ogni endpoint business futuro avrà `@RequirePermissions(...)` standard. **Test totali**: 45 unit (era 25, +20 rbac) + **7 e2e Testcontainers** (era 4, +3 rbac) + 11/11 Playwright Chromium + smoke cross-browser (invariato).
 
-> ✅ **TD-4 RESOLVED**: Playwright 1.60.0 (Chromium+Firefox+WebKit), 7 test E2E flow critici (routing, auth login OK/fail, logout, anonymous redirect, slug invalido, cross-tenant isolation), CI integration in `.github/workflows/ci.yml`. Multi-tenant fixture demo+acme via storage state pattern. 4 nuove discoveries (#32-35: host deps Hetzner stripped, race condition logout, WebKit `fill()` RHF email quirk, migration role rotation CI step). 7 nuovi TD tracciati (TD-AJ → TD-AP) + TD-7 ADR-0012 update con empirical evidence. Vedi [ADR-0016](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md). Discoveries cumulative: **35**. Prossimo macro-task da concordare (candidata principale: RBAC enforcement Guard generico).
+> ✅ **RBAC Guard RESOLVED** (carry-over ADR-0010 TD #3 sessione 4): `@RequirePermissions(...)` decorator AND default + opt-in OR via `{mode:'OR'}` signature overload, PermissionsGuard APP_GUARD globale con cache Redis TTL 60s + fallback DB (Pattern fail-open layered 4° livello), audit action `auth.permission_denied` (12° TS union) + dedupe Redis 60s anti-flood. POST /tenants refactor: inline check rimosso (-15 LOC net), decorator controller single source of truth. 3 nuove discoveries (#36-38: APP_GUARDs cross-module ordering, Guard stage RLS no-context wrap, seedMinimal gap createTenant). 3 nuovi TD tracciati (TD-AS/AT/AU). Vedi [ADR-0017](docs/architecture/ADR-0017-rbac-permissions-guard.md). Discoveries cumulative: **38**. Prossimo task: PR 2 sessione 11 (TD-H lockout per-tenant + TD-AJ errorCode 401).
 
 ---
 
@@ -1021,19 +1021,64 @@ Resolution carry-over TD-4 ADR-0012 (da sessione 7 / E2). Foundation E2E fronten
 
 **Foundation per**: regression visiva auto-caught su PR, fixture pattern multi-tenant + storage state riusabile F1+ (POS cassa, tenant settings, ecc.). Cross-tenant gap (TD-7) regression guard quando fixato.
 
+### RBAC enforcement Guard `@RequirePermissions(...)` (Sessione 11 PR 1, 2026-05-15)
+
+**Branch**: `feature/rbac-permissions-guard` · **Status**: completato, PR merge pending · **ADR**: [ADR-0017](docs/architecture/ADR-0017-rbac-permissions-guard.md)
+
+Resolution carry-over **TD #3 ADR-0010** (sessione 4): macro-task RBAC enforcement Guard generico. Anticipato il trigger "10+ endpoint con permission diverse" — pattern senior chiusura foundation pre-F1.
+
+**Deliverables (~973 LOC nuovi)**:
+
+- `apps/api/src/rbac/interfaces/permissions-metadata.interface.ts` (20 LOC NEW)
+- `apps/api/src/rbac/decorators/require-permissions.decorator.ts` (66 LOC NEW): signature overload AND/OR + edge case empty throw
+- `apps/api/src/rbac/decorators/require-permissions.decorator.spec.ts` (70 LOC NEW): 6 unit test
+- `apps/api/src/rbac/guards/permissions.guard.ts` (259 LOC NEW): Guard + cache Redis + audit + dedupe + `runInTenantContext` wrap
+- `apps/api/src/rbac/guards/permissions.guard.spec.ts` (283 LOC NEW): 14 unit test (7 base + 7 cache+audit)
+- `apps/api/src/rbac/rbac.module.ts` (29 LOC NEW): UsersModule + RedisModule + ConfigModule imports
+- `apps/api/test/e2e/rbac-permissions.e2e-spec.ts` (246 LOC NEW): 3 scenari E2E + `seedRbacFixtures` inline
+- `apps/api/src/auth/auth.service.ts` (modificato): +`'auth.permission_denied'` TS union + `export type AuditAction`
+- `apps/api/src/tenants/tenants.controller.ts` (modificato): +`@RequirePermissions('sistema.tenant.gestisci')` decorator
+- `apps/api/src/tenants/tenants.service.ts` (modificato): -15 LOC inline check + cleanup imports
+- `apps/api/src/auth/auth.module.ts` (modificato): JwtAuthGuard provider regolare (no APP_GUARD)
+- `apps/api/src/app.module.ts` (modificato): tutti APP_GUARD centralizzati (Throttler → JwtAuth → Permissions)
+- `.env.example` (modificato): +`RBAC_CACHE_TTL_S=60`
+
+**Test outcomes**:
+
+| Test type | Result | Tempo |
+|-----------|--------|-------|
+| Unit rbac (guard + decorator) | 20/20 PASS | <22ms |
+| Unit totale apps/api | 45/45 PASS | invariato |
+| E2E Testcontainers totale | 7/7 PASS | 13.3s |
+| E2E rbac-permissions (3 scenari) | 3/3 PASS | 1.9s |
+
+**Empirical discoveries (#36-38, +3 cumulative → totale 38)**:
+
+- **#36** — NestJS APP_GUARDs cross-module order non-deterministico: JwtAuthGuard in `auth.module.ts:35` + PermissionsGuard in `app.module.ts` → ordine instantiation imprevedibile. Fix: centralizzare TUTTI gli APP_GUARDs nello stesso module per ordine deterministico (Throttler → JwtAuth → Permissions).
+- **#37** — Guard stage PRECEDE TenantContextInterceptor (RLS no-context): PermissionsGuard fa query Prisma ma ALS context vuoto a guard stage. Fix: wrap body in `runInTenantContext({tenantId, isSuperAdmin: false}, ...)` (pattern simmetrico a `jwt.strategy.ts:62-65`).
+- **#38** — `seedMinimal` insufficient per `createTenant` E2E: missing `system_role_templates` (helper E2E seeda solo tenant+sede+admin, NO 6 templates + 104 mappings). Fix: fixture inline integrativo per-test (`seedRbacFixtures`).
+
+**Tech debt tracking**:
+
+- **TD #3 ADR-0010**: ✅ RESOLVED
+- **TD-AS ADR-0017** — Refactor `AuditAction` TS union locale → file dedicato `audit-action.ts`. Bassa, ~15min.
+- **TD-AT ADR-0017** — Refactor altri endpoint inline check D4 a `@RequirePermissions` decorator. Bassa, ~30min.
+- **TD-AU ADR-0017** — Documentare in `test-app.ts:25-26` lista "API che NON funzionano con seedMinimal solo". Bassa, ~10min.
+
+**Foundation per**: F1 endpoint business (menu, tavoli, ordini, cassa, reports) con `@RequirePermissions(...)` standard. Pattern fail-open layered consolidato a 4 livelli (Lockout/Mail/Throttler/RBAC).
+
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: da concordare nella prossima sessione. Stack E2E end-to-end (backend B2b + frontend TD-4) 100% completo.**
+**Macro-task: PR 2 sessione 11 (raccomandato) — TD-H lockout per-tenant + TD-AJ errorCode 401 backend.**
 
 Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
 
-1. **RBAC enforcement** — Guard generico `@RequirePermissions('code1', 'code2')` + `PermissionsGuard` quando F1 avra' 10+ endpoint protetti da permission diverse (vedi ADR-0010 tech debt #3). Naturale follow-up post-foundation E2E (sblocca F1 con confidence).
+1. **PR 2 sessione 11** — TD-H lockout key per-tenant (B1 ADR-0013 carry-over): backend `LOCKOUT_KEY_LOGIN(email)` → `${tenantId}:${email}`. Sblocca futuro multi-tenant lockout granularity. Stima ~30min + smoke. Combinabile con **TD-AJ ADR-0016** (backend errorCode 401 esplicito per UX i18n login fail, ~15min).
 2. **TD-7 ADR-0012 fix** (cross-tenant token UX edge) — Guard backend cross-check JWT.tenantId vs X-Tenant-Slug + frontend manda header anche post-auth. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` diventa regression guard.
 3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
 4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
-5. **TD-H lockout key per-tenant** (B1 ADR-0013 carry-over, ora frontend sbloccato): backend `LOCKOUT_KEY_LOGIN(email)` → `${tenantId}:${email}` (~30min + smoke).
-6. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-7. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 

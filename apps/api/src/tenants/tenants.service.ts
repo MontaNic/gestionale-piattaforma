@@ -12,18 +12,19 @@
 //
 // Decisioni D4 (vedi ADR-0010):
 // - withSystemContext (no tenantId disponibile pre-creazione)
-// - Inline permission check via UsersService.hasPermission (no Guard generico)
+// - Authorization via @RequirePermissions Guard decorator (RBAC sessione 11
+//   ADR-0017). Inline check rimosso dal service — single source of truth nel
+//   Guard con cache Redis TTL 60s + audit auth.permission_denied automatico.
 // - 1 transaction atomic (orphan rows = bad UX su failure mid-flow)
 // - System role templates letti dinamicamente (no hardcoding nomi)
 // - Audit log con tenantId del nuovo tenant + action 'tenant.created'
 // =============================================================================
 
-import { ConflictException, ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { id, withSystemContextAtomicTx } from '@gestionale/db';
 import argon2 from 'argon2';
 
 import { DbService } from '../db/db.service';
-import { UsersService } from '../users/users.service';
 import type { CreateTenantDto } from './dto/create-tenant.dto';
 
 export interface CreateTenantResult {
@@ -37,34 +38,20 @@ const SEDE_DEFAULT_NAME = 'Sede Principale';
 const SEDE_DEFAULT_CITY = 'Milano';
 const SEDE_DEFAULT_POSTAL_CODE = '20100';
 
-const TENANT_BOOTSTRAP_PERMISSION = 'sistema.tenant.gestisci';
-
 @Injectable()
 export class TenantsService {
   private readonly logger = new Logger(TenantsService.name);
 
-  constructor(
-    @Inject(DbService) private readonly db: DbService,
-    @Inject(UsersService) private readonly usersService: UsersService,
-  ) {}
+  constructor(@Inject(DbService) private readonly db: DbService) {}
 
   async createTenant(dto: CreateTenantDto, createdBy: string): Promise<CreateTenantResult> {
-    // -------------------------------------------------------------------------
-    // 1. Permission check (FUORI dalla transaction)
-    // -------------------------------------------------------------------------
-    // Anti-pattern: permission check dentro tx tiene un'idle connection del pool
-    // mentre fa una query di authorization. La guardia di entrata e' la prima
-    // cosa: throw 403 prima di consumare risorse DB.
-    const allowed = await this.usersService.hasPermission(createdBy, TENANT_BOOTSTRAP_PERMISSION);
-    if (!allowed) {
-      throw new ForbiddenException({
-        errorCode: 'E_AUTH_INSUFFICIENT_PERMISSIONS',
-        message: `${TENANT_BOOTSTRAP_PERMISSION} required`,
-      });
-    }
+    // Authorization: gestita via @RequirePermissions('sistema.tenant.gestisci')
+    // su TenantsController#create() (RBAC Guard sessione 11, ADR-0017).
+    // Guard fa lazy lookup con cache Redis TTL 60s + audit
+    // auth.permission_denied automatico su deny. Single source of truth.
 
     // -------------------------------------------------------------------------
-    // 2. Defaults sede (service-side, DTO pulito)
+    // 1. Defaults sede (service-side, DTO pulito)
     // -------------------------------------------------------------------------
     const sedeName = dto.sedeName ?? SEDE_DEFAULT_NAME;
     const sedeCity = dto.sedeCity ?? SEDE_DEFAULT_CITY;

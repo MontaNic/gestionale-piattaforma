@@ -160,7 +160,19 @@ Atomic helpers (`withSystemContextAtomicTx`, `withTenantContextAtomicTx`) restan
    - Wrappare l'INTERO test in una tx + `tx.rollback()` intenzionale alla fine (no orphan possibile)
      Lo smoke D3a `/tmp/d3a-smoke-limited.ts` (cleanup via DROP ROLE) era OK. Lo smoke D4 `/tmp/d4-smoke.sh` ha lasciato orfani che hanno rotto smoke RLS S4/S5 regression. Pattern futuro: usare DIRECT_URL OR tx rollback per cleanup smoke scripts.
 
-3. **Generic `@RequirePermissions` Guard**: macro-task RBAC enforcement futuro. Trigger: quando F1 avra' 10+ endpoint protetti da permission diverse, inline check duplica troppo. Suggerimento: `@RequirePermissions('code1', 'code2')` decorator + `PermissionsGuard` che fa N `hasPermission` checks. Caching opzionale.
+3. **Generic `@RequirePermissions` Guard** — ✅ **RESOLVED 2026-05-15 (sessione 11)** — [ADR-0017](./ADR-0017-rbac-permissions-guard.md), PR #27.
+
+   **Originale**: macro-task RBAC enforcement futuro. Trigger: quando F1 avra' 10+ endpoint protetti da permission diverse, inline check duplica troppo. Suggerimento: `@RequirePermissions('code1', 'code2')` decorator + `PermissionsGuard` che fa N `hasPermission` checks. Caching opzionale.
+
+   **Resolution highlights**:
+   - Anticipato il trigger (chiusura foundation pre-F1) — pattern senior "chiudi foundation prima di scalare"
+   - `@RequirePermissions(...)` decorator AND default + opt-in OR via `{ mode: 'OR' }` signature overload
+   - `PermissionsGuard` APP_GUARD globale con cache Redis TTL 60s + fallback DB (Pattern fail-open layered 4° livello, coerente B1/B2a/B2b)
+   - Audit action `auth.permission_denied` (12° TS union) + dedupe Redis 60s anti-flood
+   - POST /tenants refactor: inline check rimosso da `tenants.service.ts:58-63`, decorator controller single source of truth (-15 LOC net)
+   - 3 nuove discoveries empiriche (#36 APP_GUARDs cross-module order, #37 Guard stage RLS no-context wrap, #38 seedMinimal gap createTenant)
+   - Outcome: 20/20 unit rbac + 45/45 unit totali + 7/7 e2e Testcontainers PASS, zero regression
+   - 3 TD nuovi tracked: TD-AS/AT/AU (vedi ADR-0017)
 
 4. **Rate limiting `POST /tenants`** (carry-over ADR-0008): attacker autenticato con `sistema.tenant.gestisci` potrebbe spam creates. Anche con permission valida, abuso possibile. Fix futuro: `@nestjs/throttler` + Redis bucket per `userId` su questo endpoint specifico (1 tenant/min/user?). Tracciato in ADR-0008 tech debt "Auth E2E hardening".
 

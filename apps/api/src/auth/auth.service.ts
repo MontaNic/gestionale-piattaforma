@@ -45,7 +45,7 @@ import { validatePin } from './utils/pin-validator';
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15min
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7d
 
-type AuditAction =
+export type AuditAction =
   | 'auth.login.success'
   | 'auth.login.failure'
   | 'auth.logout'
@@ -57,7 +57,10 @@ type AuditAction =
   | 'auth.login_pin.success'
   | 'auth.login_pin.failure'
   // B1 (sessione 8) — lockout transition:
-  | 'auth.account_locked'; // promoted to lockout: count >= threshold
+  | 'auth.account_locked' // promoted to lockout: count >= threshold
+  // RBAC (sessione 11 ADR-0017) — emesso da PermissionsGuard su deny path,
+  // con dedupe Redis 60s/(userId,endpoint) per evitare flood audit log.
+  | 'auth.permission_denied';
 
 @Injectable()
 export class AuthService {

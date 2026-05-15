@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
@@ -30,14 +30,17 @@ if (!JWT_SECRET) {
     AuthService,
     JwtStrategy,
     LockoutService,
-    // JwtAuthGuard registrato globale: ogni endpoint richiede JWT valido di
-    // default; @Public() decorator opt-out (decisione E ADR-0008).
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // JwtAuthGuard registrato come provider regolare (non APP_GUARD qui).
+    // Registrazione globale APP_GUARD avviene in app.module.ts con ordine
+    // deterministico relativo a PermissionsGuard (RBAC sessione 11 ADR-0017):
+    // JwtAuthGuard MUST run BEFORE PermissionsGuard per popolare req.user.
+    // APP_GUARD multipli in module diversi → ordine non garantito.
+    JwtAuthGuard,
     // LockoutExceptionFilter globale (B1 STOP 3): intercetta HttpException
     // con body.code='E_AUTH_ACCOUNT_LOCKED' e setta Retry-After: 900 fissi
     // (anti user-enumeration TD-J). Pass-through per altre HttpException.
     { provide: APP_FILTER, useClass: LockoutExceptionFilter },
   ],
-  exports: [AuthService],
+  exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}

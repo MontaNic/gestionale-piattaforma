@@ -4,11 +4,14 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantContextInterceptor } from './context/tenant-context.interceptor';
 import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { MeModule } from './me/me.module';
+import { PermissionsGuard } from './rbac/guards/permissions.guard';
+import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
 import { TenantModule } from './tenant/tenant.module';
@@ -34,6 +37,7 @@ import { UsersModule } from './users/users.module';
     MeModule,
     HealthModule,
     TenantsModule,
+    RbacModule,
   ],
   controllers: [AppController],
   providers: [
@@ -47,6 +51,21 @@ import { UsersModule } from './users/users.module';
     // - Override getTracker(): per `tenant-create` usa userId-or-IP (decode
     //   JWT minimale dall'Authorization header). Vedi guard sorgente.
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
+    // ORDINE GUARD CRITICO (sessione 11 ADR-0017): APP_GUARD multipli in
+    // module diversi NON hanno ordine garantito. Registrazione locale qui
+    // garantisce sequence deterministica per providers array di app.module:
+    //   1. AppThrottlerGuard (rate-limit, no req.user dependency)
+    //   2. JwtAuthGuard (auth, popola req.user)
+    //   3. PermissionsGuard (RBAC, legge req.user popolato da #2)
+    // JwtAuthGuard globale: ogni endpoint richiede JWT valido di default;
+    // @Public() decorator opt-out (decisione E ADR-0008).
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // PermissionsGuard globale: legge metadata @RequirePermissions(...) via
+    // Reflector. Endpoint SENZA decorator → allow (opt-in). Lazy lookup
+    // permission via UsersService.hasPermission con cache Redis TTL 60s +
+    // audit auth.permission_denied automatico (no JWT eager — ADR-0008
+    // dec.7 + ADR-0010 rejected eager payload).
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule implements NestModule {
