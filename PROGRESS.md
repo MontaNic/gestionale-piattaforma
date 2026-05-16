@@ -7,7 +7,7 @@
 **Ultimo aggiornamento:** 15 maggio 2026 (sessione 11 PR 1 — RBAC enforcement Guard `@RequirePermissions`)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + **RBAC enforcement Guard** + **PR 2 TD-H/TD-AJ lockout per-tenant + errorCode** completi. **Stack security/scaling F1 completa**: ogni endpoint business futuro avrà `@RequirePermissions(...)` standard, lockout cross-tenant isolation production-safe, errorCode taxonomy i18n-ready su `/auth/login`. **Test totali**: 48 unit (era 45, +3 cross-tenant) + **8 e2e Testcontainers** (era 7, +1 TD-H smoke) + 11/11 Playwright Chromium + smoke cross-browser (invariato).
 
-> ✅ **PR 2 sessione 12 RESOLVED** (TD-H ADR-0013 + TD-AJ ADR-0016 atomic): lockout key `/auth/login` da `email:<email>` a `tenant:<tenantId>:email:<email>` (cross-tenant DoS isolation) + errorCode 401 enum centralizzato `apps/api/src/common/error-codes.ts` con shape `{statusCode, errorCode, message, timestamp}` (DP3.1 scope `/auth/login`) + frontend mapping table i18n-ready `apps/web/src/lib/error-codes.ts`. Sub-DP raccomandate lockate (A1-E1): composition opaque preserved (LockoutService API stabile), test cross-tenant in `auth.service.spec.ts` composition layer, no global exception filter. 3 nuove discoveries (#39-41: `noUncheckedIndexedAccess` strict, "extend don't create" smoke pattern, sibling helper `seedSecondTenant`). 1 nuovo TD tracciato (TD-AY: coverage errorCode altri 401 endpoint). Vedi [ADR-0013 §TD-H resolution](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016 §TD-AJ resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2). **PR cleanup post-merge sessione 12 docs-only** (2 nuove discovery #42-43 da smoke browser Nicolò: LockoutExceptionFilter naming + DTO validation shape, TD-AY scope expansion 30→45-60min) — vedi [§PR cleanup post-merge PR 2 sessione 12](#pr-cleanup-post-merge-pr-2-sessione-12-2026-05-16). Discoveries cumulative: **43**. Prossimo task: TBD (TD-AY o TD-7 candidate prioritari).
+> ✅ **PR 2 sessione 12 RESOLVED** (TD-H ADR-0013 + TD-AJ ADR-0016 atomic): lockout key `/auth/login` da `email:<email>` a `tenant:<tenantId>:email:<email>` (cross-tenant DoS isolation) + errorCode 401 enum centralizzato `apps/api/src/common/error-codes.ts` con shape `{statusCode, errorCode, message, timestamp}` (DP3.1 scope `/auth/login`) + frontend mapping table i18n-ready `apps/web/src/lib/error-codes.ts`. Sub-DP raccomandate lockate (A1-E1): composition opaque preserved (LockoutService API stabile), test cross-tenant in `auth.service.spec.ts` composition layer, no global exception filter. 3 nuove discoveries (#39-41: `noUncheckedIndexedAccess` strict, "extend don't create" smoke pattern, sibling helper `seedSecondTenant`). 1 nuovo TD tracciato (TD-AY: coverage errorCode altri 401 endpoint). Vedi [ADR-0013 §TD-H resolution](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016 §TD-AJ resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2). **PR cleanup post-merge sessione 12 docs-only** (2 nuove discovery #42-43 da smoke browser Nicolò: LockoutExceptionFilter naming + DTO validation shape, TD-AY scope expansion 30→45-60min) — vedi [§PR cleanup post-merge PR 2 sessione 12](#pr-cleanup-post-merge-pr-2-sessione-12-2026-05-16). Discoveries cumulative: **44** (+1 sessione 13: #44 E2E helper raw SQL pattern intentional). Prossimo task: TBD (TD-AY o TD-7 candidate prioritari).
 
 ---
 
@@ -1069,7 +1069,7 @@ Resolution carry-over **TD #3 ADR-0010** (sessione 4): macro-task RBAC enforceme
 
 - **TD-AV ADR-0017** — `audit_log.entityType` semantica per access control event. Issue Media emersa review pre-merge: `PermissionsGuard.logPermissionDenied` insert audit `auth.permission_denied` con `entityType: 'User'` + `entityId: userId`. Semanticamente debatable (l'evento è AuthorizationCheck, non modifica User). Verifica empirica `schema.prisma` audit_log → decidere se refactor a `'AuthorizationCheck'` o accept pragmatico. Trigger: F1+ aggiunge altri access control events (es. tenant-level permission denied). Stima: ~30min refactor + verifica E2E. ✅ **RESOLVED sessione 13** — vedi [§TD-AV cleanup sessione 13](#td-av-cleanup-sessione-13--entitytype-semantica--convention-pascalcase-2026-05-16).
 
-- **TD-AW ADR-0017** — Raw SQL fixture `seedRbacFixtures` (`rbac-permissions.e2e-spec.ts`) → valutare refactor a Prisma client direct dentro fixture per type-safety. Trade-off: complexity inject Prisma vs raw SQL diretto (schema drift risk vs Prisma TS error compile-time). Decisione corrente: raw SQL pragmatico (coerente con `seedMinimal` helper esistente). Trigger: schema drift rilevato (es. rename column audit_log). Stima: ~20min refactor.
+- **TD-AW ADR-0017** — Raw SQL fixture `seedRbacFixtures` (`rbac-permissions.e2e-spec.ts`) → valutare refactor a Prisma client direct dentro fixture per type-safety. Trade-off: complexity inject Prisma vs raw SQL diretto (schema drift risk vs Prisma TS error compile-time). Decisione corrente: raw SQL pragmatico (coerente con `seedMinimal` helper esistente). Trigger: schema drift rilevato (es. rename column audit_log). Stima: ~20min refactor. ✅ **RESOLVED sessione 13 (won't fix — intentional pattern)** — verifica empirica STOP 2B ha rivelato pattern consolidato in tutti gli helper E2E (`seedMinimal`, `seedSecondTenant`, `seedRbacFixtures`); refactor a Prisma richiederebbe wrap `withSuperAdminContext` artificiale (vedi [ADR-0017 §Resolution TD-AW](docs/architecture/ADR-0017-rbac-permissions-guard.md#resolution-td-aw--intentional-pattern-sessione-13) + Discovery #44).
 
 **Foundation per**: F1 endpoint business (menu, tavoli, ordini, cassa, reports) con `@RequirePermissions(...)` standard. Pattern fail-open layered consolidato a 4 livelli (Lockout/Mail/Throttler/RBAC).
 
@@ -1152,27 +1152,43 @@ Pattern consolidato Sezione 0.6 Pattern 5 (cleanup follow-up post-merge come PR 
 
 ### TD-AV cleanup sessione 13 — entityType semantica + convention PascalCase (2026-05-16)
 
-**Branch**: `feat/td-av-aw-cleanup-session-11` · **Tipo**: refactor semantico audit + documentazione convention · **ADR**: [ADR-0017 §Convention `audit_log.entityType` naming](docs/architecture/ADR-0017-rbac-permissions-guard.md#convention--audit_logentitytype-naming-resolution-td-av-sessione-13)
+**Branch**: `feat/td-av-aw-cleanup-session-11` · **Tipo**: 1 PR atomic con 2 commit (refactor semantico audit + docs Resolution TD-AW intentional) · **ADR**: [ADR-0017 §Convention `audit_log.entityType` naming](docs/architecture/ADR-0017-rbac-permissions-guard.md#convention--audit_logentitytype-naming-resolution-td-av-sessione-13) + [§Resolution TD-AW intentional](docs/architecture/ADR-0017-rbac-permissions-guard.md#resolution-td-aw--intentional-pattern-sessione-13) + [§Discovery #44](docs/architecture/ADR-0017-rbac-permissions-guard.md#discovery-44--e2e-helper-raw-sql-pattern-è-intentional-sessione-13)
 
-Resolution carry-over **TD-AV ADR-0017** (review sessione 11 post-merge PR #27). STOP 1 verifica empirica ha confermato `audit_log.entity_type` è `text` libero (no enum DB), aprendo a refactor semantico zero-migration.
+Resolution carry-over **TD-AV + TD-AW ADR-0017** (review sessione 11 post-merge PR #27). STOP 1 verifica empirica ha confermato `audit_log.entity_type` è `text` libero (no enum DB) aprendo a refactor semantico zero-migration. STOP 2B verifica empirica ha re-validato TD-AW e rivelato pattern raw SQL E2E helper consolidato → won't fix intentional.
 
-**Decision points lockati (STOP 1 sessione 13)**:
+**Decision points lockati**:
 
-- **DP-AV-1** = B → schema `text`, no migration richiesta (verifica live live container: `entity_type | text`)
+STOP 1 (Commit 1 TD-AV):
+
+- **DP-AV-1** = B → schema `text`, no migration richiesta (verifica live container: `entity_type | text`)
 - **DP-AV-2** = A → `'AuthorizationCheck'` literal in `permissions.guard.ts:243` (PascalCase compound, semantica precisa: l'evento è check di autorizzazione, non modifica User)
 - **Sub-DP AV-3** = C (emersa STOP 1) → outlier latente `tenants.service.ts:167` con `entityType: 'tenant'` lowercase fixato a `'Tenant'` PascalCase + convention naming documentata in ADR-0017 per prevenire drift futuro
-- **DP-PR** = A → 1 PR, 2 commit atomic (TD-AV semantica audit + TD-AW typesafety fixture in commit 2 separato)
+- **DP-PR** = A → 1 PR, 2 commit atomic
 
-**Deliverables commit 1 (~+30/-3 LOC, code +2/-2 + docs +28/-1)**:
+STOP 2B (Commit 2 TD-AW):
+
+- **DP-AW-1** revised = won't fix → refactor a Prisma client richiederebbe wrap `withSuperAdminContext` artificiale (RLS extension chain ADR-0009 decisione 11 fail-fast). Pattern raw SQL consolidato in tutti gli helper E2E (`seedMinimal`, `seedSecondTenant`, `seedRbacFixtures`) — intentional per 3 motivi: superuser bypass RLS by design + skip softDelete extension side-effects + performance (skip per-op interactive tx).
+- **Discovery #44** catturata: lesson generalizzabile "review TD su empirical evidence PRIMA di implementare fix non-trivial" (12+ catture cumulative).
+
+**Deliverables commit 1 TD-AV (~+57/-3 LOC, code +2/-2 + docs +55/-1)**:
 
 - `apps/api/src/rbac/guards/permissions.guard.ts:243` (+1/-1): `entityType: 'User'` → `'AuthorizationCheck'`
 - `apps/api/src/tenants/tenants.service.ts:167` (+1/-1): `entityType: 'tenant'` → `'Tenant'` (fix outlier Sub-DP AV-3)
-- `docs/architecture/ADR-0017-rbac-permissions-guard.md` (+28/-1): nuova sezione `## Convention — audit_log.entityType naming` con tabella esempi + anti-pattern + resolution Sub-DP AV-3
-- `PROGRESS.md` (+/- this section): TD-AV inline annotation RESOLVED + nuova entry
+- `docs/architecture/ADR-0017-rbac-permissions-guard.md`: nuova sezione `## Convention — audit_log.entityType naming` con tabella esempi + anti-pattern + resolution Sub-DP AV-3
+- `PROGRESS.md`: TD-AV inline annotation RESOLVED + nuova entry sessione 13
 
-**Convention enforcement**: applicativa via review pre-merge + grep `entityType:` su `apps/api/src/**/*.ts` (3 occorrenze tutte PascalCase singolare post-fix: `'AuthorizationCheck'`, `'Tenant'`, `'User'`).
+**Deliverables commit 2 TD-AW (docs-only, zero code change runtime)**:
 
-**Foundation per**: futuri audit events (es. `device.linked`, `pin.changed`, F1+ business actions) seguono convention PascalCase senza ricerca semantica caso-per-caso.
+- `docs/architecture/ADR-0017-rbac-permissions-guard.md`: nuova sezione `## Resolution TD-AW — Intentional pattern` (3 razionali + trade-off + pattern E2E helper convention) + `## Discovery #44 — E2E helper raw SQL pattern è intentional`
+- `PROGRESS.md`: TD-AW inline annotation RESOLVED (won't fix) + bump Discovery counter 43 → 44 + extension this entry
+
+**Convention enforcement TD-AV**: applicativa via review pre-merge + grep `entityType:` su `apps/api/src/**/*.ts` (3 occorrenze tutte PascalCase singolare post-fix: `'AuthorizationCheck'`, `'Tenant'`, `'User'`).
+
+**Convention enforcement TD-AW**: documentata in ADR-0017 §Resolution TD-AW (raw SQL setup phase + Prisma wrappato assert phase). Verifica futura empirica grep `from '@gestionale/db'` su `apps/api/test/e2e/` deve restare 0 match.
+
+**Foundation per**: futuri audit events (es. `device.linked`, `pin.changed`, F1+ business actions) seguono convention PascalCase + futuri helper E2E seguono pattern raw SQL setup convention senza ricerca semantica caso-per-caso.
+
+**Test**: 48/48 unit + 8/8 E2E + 11/11 Playwright invariati post-PR.
 
 ## 🚧 In corso / Prossimo task
 

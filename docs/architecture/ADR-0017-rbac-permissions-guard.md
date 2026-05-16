@@ -221,6 +221,69 @@ Fix applicato atomicamente in commit TD-AV insieme alla semantic resolution per 
 
 DB column `entity_type` è `text` libero (no enum Postgres): la convention è applicativa, enforcement via review pre-merge + grep `entityType:` su `apps/api/src/**/*.ts`.
 
+## Resolution TD-AW — Intentional pattern (sessione 13)
+
+### Background
+
+Review sessione 11 post-merge PR #27 (commit `83567c3`) ha flaggato `seedRbacFixtures` in [`apps/api/test/e2e/rbac-permissions.e2e-spec.ts`](../../apps/api/test/e2e/rbac-permissions.e2e-spec.ts) come "raw SQL → refactor a Prisma client direct (type-safety)". Sessione 13 STOP 2B verifica empirica ha rivelato che la review era basata su assumption incompleta del contesto helper E2E.
+
+### Verifica empirica STOP 2B
+
+Grep `from '@gestionale/db'` su `apps/api/test/e2e/`: **0 match**. Pattern raw SQL via `pg.Client` è **consolidato in TUTTI gli helper E2E**:
+
+- `seedMinimal` (test-app.ts) — bootstrap tenant demo + admin
+- `seedSecondTenant` (test-app.ts, PR 2 sessione 12) — cross-tenant scenarios
+- `seedRbacFixtures` (rbac-permissions.e2e-spec.ts) — RBAC permission + role + user
+
+### Decisione: won't fix — intentional pattern
+
+TD-AW non viene risolto via refactor a Prisma client. Il pattern raw SQL è **intenzionale** per 3 motivi empirici:
+
+1. **Superuser bypass RLS by design** — seed E2E gira con superuser DB credentials (`pg.Client` con `connectionString: databaseUrl`) che bypassa RLS policy senza richiedere context. Usare Prisma client + RLS extension chain ([ADR-0009 decisione 11](./ADR-0009-rls-real.md) fail-fast `RlsNoContextError` by design) richiederebbe wrap `withSuperAdminContext` artificiale (no-op semantico, complicazione real).
+2. **Skip softDelete extension side-effects** — durante seed non vogliamo che la soft-delete extension intercetti operazioni (es. filtro implicito `deletedAt IS NULL` su tabelle nuove dove la riga non esiste ancora).
+3. **Performance** — raw SQL via `pg.Client` skippa transaction interactive che RLS extension wrapper applica a ogni query (per-operation tx, pattern S2 ADR-0009 decisione 1). Su test E2E che girano N volte in CI, l'overhead è significativo cumulativo.
+
+### Trade-off accettato
+
+Costo: type-safety locale persa nelle 6 query SQL di `seedRbacFixtures` (rischio typo a runtime invece di compile-time). Mitigato da:
+
+- Test E2E che usano le fixture falliscono immediatamente se SQL errato (smoke fast feedback loop)
+- Tabelle target hanno schema stabile (Permission/Role/UserRole foundation F1)
+- Parametrizzazione `$1, $2, ...` array → SQL injection-safe
+
+Beneficio: coerenza interna helper E2E + no-RLS-extension-conflict + performance test suite mantenuta.
+
+### Pattern E2E helper convention (documentata)
+
+**Quando seed E2E inserisce dati per setup test:**
+
+- ✅ Usa raw SQL via `pg.Client` + `connectionString: databaseUrl` (superuser)
+- ✅ Parametrizza tutti i valori utente con `$1, $2, ...` array
+- ✅ Genera UUID app-side con `uuidv7()` (no `gen_random_uuid()` DB-side)
+- ❌ Non usare singleton `prisma` da `@gestionale/db` (richiede RLS wrap)
+- ❌ Non usare `createPrismaClient()` factory in helper E2E (overhead extension chain)
+
+**Quando test E2E verifica state post-action (assert phase):**
+
+- ✅ Usa `prisma` singleton wrappato in `withSuperAdminContext` per query verifica
+- Pattern: setup raw SQL → action via supertest → assert via Prisma wrappato
+
+### Status
+
+✅ TD-AW resolved as **intentional pattern — won't refactor**. Catturato in Discovery #44 (vedi sotto).
+
+## Discovery #44 — E2E helper raw SQL pattern è intentional (sessione 13)
+
+**Contesto:** Sessione 11 review ha flaggato `seedRbacFixtures` per refactor raw SQL → Prisma client (TD-AW). Verifica empirica sessione 13 STOP 2B ha rivelato pattern consolidato in tutti gli helper E2E.
+
+**Root cause:** Singleton `prisma` di `@gestionale/db` ha RLS extension che richiede context (`runInTenantContext` / `withSystemContext` / `withSuperAdminContext`) altrimenti lancia `RlsNoContextError` (vedi [ADR-0009 decisione 11](./ADR-0009-rls-real.md) fail-fast by design). Helper E2E girano con superuser credentials e bypassano RLS policy by design DB-side → wrap context sarebbe no-op semantico + complicazione real (transaction interactive overhead, softDelete extension side-effects su tabelle ancora vuote).
+
+**Lesson generalizzabile:** Review consolidata != verità eterna. La verifica empirica può rivelare che un TD candidate era basato su assumption incompleta del contesto. Pattern senior: re-validate TD su empirical evidence PRIMA di implementare il fix, soprattutto se richiede refactor non-trivial.
+
+**Cumulative count:** lesson generalizzabile catturata 12+ volte (#39-43 sessione 12 + #44 sessione 13) — empirical evidence > authority anche su review TD interna.
+
+**Risoluzione:** TD-AW chiuso come "won't fix - intentional pattern" (vedi §Resolution TD-AW sopra). Convention pattern E2E helper raw SQL documentata nella stessa Resolution.
+
 ## Consequences
 
 ### Positive
