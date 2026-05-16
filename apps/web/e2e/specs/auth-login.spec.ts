@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Login flow tests — happy path + fail.
+ * Login flow tests — happy path + fail (TD-AJ resolved, sessione 12 PR 2).
  *
  * Usa form UI reale (NON storage state) per coprire flow completo:
  * goto login page → fill form → submit → redirect dashboard (OK) o errore (fail).
@@ -14,15 +14,12 @@ import { test, expect } from '@playwright/test';
  * Selettori empirici (apps/web/src/app/t/[slug]/login/page.tsx):
  * - shadcn/ui Input via RHF Controller → textbox role + accessible name
  * - Submit: <Button type="submit">Accedi</Button>
- * - Error: <Alert variant="destructive">. Mapping page.tsx:55:
- *     errorCode === 'E_AUTH_INVALID_CREDENTIALS' → "Email o password non corrette"
- *     else → "Errore: ${err.message}"
- *   Empirical Fase 3.1: backend NestJS UnauthorizedException risponde
- *     { message: 'E_AUTH_INVALID_CREDENTIALS', error: 'Unauthorized', statusCode: 401 }
- *   senza campo `errorCode` → parseError fallback errorCode='E_UNKNOWN' → UI
- *   mostra "Errore: E_AUTH_INVALID_CREDENTIALS" (NOT la stringa italian-localized).
- *   Test documenta comportamento ATTUALE. Fix futuro: backend deve emettere
- *   errorCode esplicito (TD candidate).
+ * - Error: <Alert variant="destructive">. Mapping via lib/error-codes.ts:
+ *     `messageForErrorCode(err.errorCode)` → table `ERROR_CODE_MESSAGES`.
+ *
+ * TD-AJ resolved: backend emette `errorCode: 'E_AUTH_INVALID_CREDENTIALS'` +
+ * timestamp esplicito. Frontend rende stringa italian-localized "Email o
+ * password non corrette" via mapping table i18n-ready.
  */
 
 test.describe('Login flow demo tenant', () => {
@@ -45,9 +42,17 @@ test.describe('Login flow demo tenant', () => {
     await expect(page.getByText(/^welcome\s+/i)).toBeVisible({ timeout: 10_000 });
   });
 
-  test('login FAIL with wrong password shows error and stays on login page', async ({ page }) => {
+  test('login FAIL with wrong password shows localized error and stays on login page', async ({
+    page,
+  }) => {
     const email = process.env.E2E_DEMO_EMAIL;
     if (!email) throw new Error('Missing E2E_DEMO_EMAIL env var');
+
+    // TD-AJ regression guard: intercept response /auth/login per verificare
+    // shape errorCode + timestamp lato server (defense in depth oltre alla UI).
+    const responsePromise = page.waitForResponse(
+      (res) => res.url().includes('/auth/login') && res.status() === 401,
+    );
 
     await page.goto('/t/demo/login');
     // WebKit quirk: fill() su input[type="email"] RHF non triggera onChange.
@@ -57,9 +62,16 @@ test.describe('Login flow demo tenant', () => {
     await page.locator('input[type="password"]').fill('WRONG-PASSWORD-xyz-stop3-test');
     await page.getByRole('button', { name: /^accedi$/i }).click();
 
-    // Empirical: backend non manda errorCode → frontend fallback
-    // "Errore: E_AUTH_INVALID_CREDENTIALS" via Alert role.
-    const alert = page.getByRole('alert').filter({ hasText: /E_AUTH_INVALID_CREDENTIALS/i });
+    // Assert backend response shape (TD-AJ)
+    const response = await responsePromise;
+    const body = await response.json();
+    expect(body.errorCode).toBe('E_AUTH_INVALID_CREDENTIALS');
+    expect(body.message).toBe('Credenziali non valide');
+    expect(body.statusCode).toBe(401);
+    expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    // Assert UI: stringa italian-localized (via lib/error-codes.ts mapping)
+    const alert = page.getByRole('alert').filter({ hasText: /Email o password non corrette/i });
     await expect(alert).toBeVisible({ timeout: 5_000 });
     // No redirect: ancora su /t/demo/login
     expect(page.url()).toContain('/t/demo/login');

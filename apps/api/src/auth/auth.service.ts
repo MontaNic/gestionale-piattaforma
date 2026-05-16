@@ -32,9 +32,11 @@ import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { id, runInTenantContext } from '@gestionale/db';
 
+import { AuthErrorCode } from '../common/error-codes';
 import { DbService } from '../db/db.service';
 import { MailService } from '../mail/mail.service';
 import { UsersService } from '../users/users.service';
+import type { AuthErrorResponse } from './dto/auth-error-response.dto';
 import type { AuthTokensPayload } from './dto/auth-response.dto';
 import type { PinLoginDeviceType } from './dto/login-pin.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -86,10 +88,14 @@ export class AuthService {
   // semplicita' messaggio email; tuning env-driven gia' nel LockoutService.
   private readonly LOCKOUT_DURATION_MIN = 15;
 
-  // Lockout key helpers (B1 STOP 3, decisione strategica TD-H / D2b §8).
-  // Prefix per namespacing: garantisce isolamento tra login (email) e login-pin
-  // (tenant+device) sui buckets Redis senza collisione fortuita.
-  private readonly LOCKOUT_KEY_LOGIN = (email: string): string => `email:${email}`;
+  // Lockout key helpers (B1 STOP 3 + TD-H resolution sessione 12 PR 2).
+  // Prefix per namespacing: garantisce isolamento tra login (tenant+email) e
+  // login-pin (tenant+device) sui buckets Redis senza collisione fortuita.
+  // TD-H risolto: chiave login include tenantId → un attacker che conosce
+  // un'email NON può bloccarla cross-tenant (DoS-by-account-name mitigato per
+  // tenant scope). Composizione opaque mantiene LockoutService API stabile.
+  private readonly LOCKOUT_KEY_LOGIN = (tenantId: string, email: string): string =>
+    `tenant:${tenantId}:email:${email}`;
   private readonly LOCKOUT_KEY_LOGIN_PIN = (tenantId: string, deviceId: string): string =>
     `pin:tenant:${tenantId}:device:${deviceId}`;
 
@@ -112,6 +118,20 @@ export class AuthService {
     );
   }
 
+  // TD-AJ resolution (PR 2): emit body 401 con `errorCode` esplicito + timestamp
+  // (vedi AuthErrorResponse DTO). Sostituisce `throw new UnauthorizedException(code)`
+  // che metteva il code nel campo `message` (frontend fallback E_UNKNOWN).
+  // Scope DP3.1: solo `/auth/login`. Altri 401 endpoint → TD-AY.
+  private throwInvalidCredentials(): never {
+    const body: AuthErrorResponse = {
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: AuthErrorCode.INVALID_CREDENTIALS,
+      message: 'Credenziali non valide',
+      timestamp: new Date().toISOString(),
+    };
+    throw new HttpException(body, HttpStatus.UNAUTHORIZED);
+  }
+
   // ---------------------------------------------------------------------------
   // LOGIN — email + password (tenantId pre-risolto da TenantMiddleware)
   // ---------------------------------------------------------------------------
@@ -121,10 +141,11 @@ export class AuthService {
     password: string,
     meta: { ip?: string; userAgent?: string },
   ): Promise<AuthTokensPayload> {
-    // (B1 STOP 3) Lockout check PRIMA del DB lookup: evita timing leak fra
-    // utenti esistenti e non. Key email-only (TD-H: futuro `${tenantId}:${email}`
-    // dopo TD-2 ADR-0012 multi-tenant slug resolution).
-    const lockoutKey = this.LOCKOUT_KEY_LOGIN(email);
+    // (B1 STOP 3 + TD-H resolution PR 2) Lockout check PRIMA del DB lookup:
+    // evita timing leak fra utenti esistenti e non. Key composta `tenant:<id>:
+    // email:<email>` → isolamento cross-tenant garantito (un attacker che
+    // conosce un'email NON la blocca su altri tenant).
+    const lockoutKey = this.LOCKOUT_KEY_LOGIN(tenantId, email);
     if (await this.lockout.checkLockout(lockoutKey)) {
       this.throwAccountLocked();
     }
@@ -163,7 +184,7 @@ export class AuthService {
         // (l'utente vede 429 invece di 401) rispondiamo subito con 429.
         this.throwAccountLocked();
       }
-      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+      this.throwInvalidCredentials();
     }
 
     const ok = await argon2.verify(user.passwordHash, password);
@@ -183,7 +204,7 @@ export class AuthService {
         const emailSent = await this.mail.sendAccountLockedEmail({
           to: user.email,
           identifierHash: this.lockoutKeyDigest(lockoutKey),
-          tenantSlug: null, // TODO TD-H: passa slug post multi-tenant routing
+          tenantSlug: null, // tenant slug propagation: TD-AZ candidate (post-multi-tenant routing)
           source: 'login',
           lockoutDurationMin: this.LOCKOUT_DURATION_MIN,
         });
@@ -201,7 +222,7 @@ export class AuthService {
         });
         this.throwAccountLocked();
       }
-      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+      this.throwInvalidCredentials();
     }
 
     // Success: reset Redis counter + DB counter (recordSuccessfulLogin lo

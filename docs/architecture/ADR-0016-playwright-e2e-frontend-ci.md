@@ -112,7 +112,7 @@ pnpm test:e2e:ui          # debug visivo (richiede port forward Mac)
 pnpm test:e2e:report      # apri ultimo HTML report
 ```
 
-## Empirical discoveries (4 in sessione 10 → 31+4 = 35 cumulative)
+## Empirical discoveries (4 in sessione 10 + 2 in PR 2 sessione 12 → 37 cumulative)
 
 ### Discovery #32 — Hetzner CPX32 Ubuntu 22.04 minimal manca host deps Playwright
 
@@ -177,6 +177,52 @@ await emailInput.pressSequentially(email);
 
 **Lesson:** ogni "tipo di environment" (locale dev, CI ephemeral, prod) può rivelare gap di post-deploy steps non automatizzati. La migration in sé è correttamente immutabile (creazione role + grant); è la rotazione password post-deploy che richiede orchestration esterna. Migration con placeholder secret è anti-pattern medio-termine — TD-AP candidato production-blocker.
 
+### Discovery #40 — Smoke server-side standalone NON necessario quando esiste infrastruttura E2E Testcontainers
+
+**Macro-task:** PR 2 sessione 12 Fase 3 (TD-H smoke design)
+
+**Pattern:** ogni nuovo task di smoke deve PRIMA verificare se esiste già infrastruttura E2E in repo (9° caso cumulative).
+
+**Root cause:** prompt operativo PR 2 richiedeva `apps/api/scripts/smoke-pr2-td-h.ts` standalone (TS script con seedMinimal 2 tenant + curl-like HTTP). Discovery empirica: `apps/api/test/e2e/auth-login.e2e-spec.ts` esiste già con full NestJS bootstrap + Testcontainers Postgres + Redis + helper `seedMinimal` (B2b foundation). Creare script standalone duplica infra senza benefici.
+
+**Fix:** estendere `auth-login.e2e-spec.ts` con Test 4 TD-H cross-tenant lockout isolation (3 fail demo → 4° fail 429 + 1 acme NOT 429). 1 sola infra di test, full stack realistico, isolamento garantito.
+
+**Lesson:** la "build before buy" si applica anche ai test. Smoke = test di alto livello senza framework? No: smoke = scenario E2E che verifica un comportamento critico end-to-end. Se il framework E2E esiste già con la stessa fixture richiesta (containers, seed, bootstrap), USARLO è strettamente migliore di duplicare.
+
+### Discovery #41 — `seedMinimal` E2E helper monolitico: estensione via helper sibling vs flag opzionale
+
+**Macro-task:** PR 2 sessione 12 Fase 3 (TD-H test fixture extension)
+
+**Root cause:** `seedMinimal` esistente seeda SOLO tenant `demo`. Test cross-tenant TD-H richiede 2° tenant `acme`. Opzioni di refactor: (A) aggiungere flag `seedMinimal(url, {withSecondTenant: true})` allargando signature, (B) creare `seedSecondTenant(url, opts?)` come helper sibling chiamabile DOPO `seedMinimal`.
+
+**Decisione:** B — sibling helper. Vantaggi: backward-compat strict (3 callsite `seedMinimal()` esistenti intoccati), single-responsibility (`seedMinimal` = setup base, `seedSecondTenant` = additive extension), parametrizzazione email configurabile per shared-email DoS-proof scenarios (`{email: 'admin@demo.local'}` su entrambi i tenant). Reject A: signature creep + ritorno tipo Union `SeedResult | (SeedResult & {secondTenantId, ...})` rumoroso.
+
+**Lesson:** per fixture helper di test, preferire **composition di helper piccoli** vs **god-helper parametrizzato**. Pattern già usato in `packages/db/scripts/smoke-rls-e2e.ts` (5 scenario `record(id, name, ...)` helpers indipendenti).
+
+## TD-AJ resolution (PR 2 sessione 12)
+
+**Data:** 2026-05-16  
+**Branch:** `feat/pr2-td-h-td-aj-lockout-pertenant-errorcode`  
+**Scope (DP3.1 lockato):** solo `/auth/login`. Coverage altri endpoint → **TD-AY** nuovo.
+
+### Enum centralizzato + DTO shape
+
+- `apps/api/src/common/error-codes.ts`: enum `AuthErrorCode.INVALID_CREDENTIALS = 'E_AUTH_INVALID_CREDENTIALS'` + `CommonErrorCode.UNKNOWN = 'E_UNKNOWN'`.
+- `apps/api/src/auth/dto/auth-error-response.dto.ts`: interface `AuthErrorResponse {statusCode, errorCode, message, timestamp}`.
+- `apps/api/src/auth/auth.service.ts`: helper `throwInvalidCredentials()` sostituisce 2 callsite `throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS')` in `login()`.
+
+### Frontend mapping table i18n-ready
+
+- `apps/web/src/lib/error-codes.ts`: `ERROR_CODE_MESSAGES` table + `messageForErrorCode()` helper. Pattern i18n-ready (estensione futura via i18next/nestjs-i18n keep API stabile).
+- `apps/web/src/app/t/[slug]/login/page.tsx`: refactor mapping inline → `messageForErrorCode(err.errorCode)`.
+
+### Lesson learned: errorCode taxonomy via enum centralizzato
+
+1. **Code-as-message è anti-pattern**: `throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS')` mette il code nel campo `message`, costringendo il client a parsing keyword-based (rischio drift + impossibilità i18n).
+2. **Shape body separation of concerns**: `statusCode` = HTTP semantica, `errorCode` = machine-readable per i18n, `message` = human-readable italian (UI fallback), `timestamp` = correlation client/server. 4 ruoli distinti, ogni field ha 1 motivo per cambiare.
+3. **Scope confinato (DP3.1)** > **scope creep**: TD-AY tracerà coverage altri 401. Filter globale che intercetta TUTTE le HttpException + aggiunge `errorCode`+`timestamp` è tentazione naturale ma scope creep (impatti larger blast radius).
+4. **Lockout filter usa `code`, login userà `errorCode`** (Discovery #20 di B1): coesistenza temporanea accettata. TD-AY uniformerà.
+
 ## Considered Alternatives
 
 | Alternativa                                                 | Scartata perché                                                         |
@@ -213,17 +259,18 @@ Fix candidati (in ordine di preferenza):
 
 ### TD nuovi ADR-0016
 
-| TD    | Descrizione                                                                                                                                                                                                                                  | Priorità                   | Stima  |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------ |
-| TD-AJ | Backend `errorCode` esplicito in 401 response (`auth.controller`). Senza, `parseError` fallback `errorCode='E_UNKNOWN'` → UI mostra `"Errore: E_AUTH_INVALID_CREDENTIALS"` raw invece di stringa localizzata "Email o password non corrette" | Bassa (UX cosmetica)       | ~15min |
-| TD-AK | Script `pnpm test:e2e:reset` wrapper con Redis FLUSHDB pre-test (evita rate limit accumulation cross-run, oggi manuale via `docker exec`)                                                                                                    | Bassa                      | ~10min |
-| TD-AL | Cache Playwright browsers in CI (`actions/cache@v4` su `~/.cache/ms-playwright`) — solo necessario se passiamo a `runs-on: ubuntu-latest` (matrix cross-browser TD-AM)                                                                       | Bassa                      | ~15min |
-| TD-AM | Matrix Firefox/WebKit opt-in CI via tag `@cross-browser` su test selettivi — oggi Chromium-only default                                                                                                                                      | Bassa                      | ~30min |
-| TD-AN | `JWT_SECRET_CI` da `secrets.*` GitHub invece di inline test-only (riduce noise SAST scan + impedisce copy-paste accidentale)                                                                                                                 | Bassa                      | ~10min |
-| TD-AO | Page Object Model refactor selettori inline (quando suite > 15 test)                                                                                                                                                                         | Bassa                      | 1-2h   |
-| TD-AP | Migration role rotation automation (Vault/Doppler post-prod) — sostituisce PLACEHOLDER password manual rotation Discovery #35. Anti-pattern medio-termine                                                                                    | Media (production-blocker) | 4-6h   |
-| TD-AQ | ESLint custom rule `no-playwright-fill-on-email-rhf` per prevenire regression Discovery #34 (RHF email + WebKit `fill()` non triggera onChange). Trigger: 3+ test file con pattern email RHF                                                 | Bassa                      | ~30min |
-| TD-AR | Pattern `.pgpass` file per `psql` in CI quando si introdurrà secret reale (sostituisce `PGPASSWORD='${{ env.X }}'` plain). Trigger: introduction secret reale GitHub Actions                                                                 | Bassa                      | ~15min |
+| TD                     | Descrizione                                                                                                                                                                                                                                                                                                                                                    | Priorità                   | Stima            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------- |
+| ~~TD-AJ~~              | ~~Backend `errorCode` esplicito in 401 response~~ — **RESOLVED PR 2 sessione 12** ([feat/pr2-td-h-td-aj-lockout-pertenant-errorcode](#td-aj-resolution-pr-2)). Backend emette shape `{statusCode, errorCode, message, timestamp}`; frontend rende stringa italian-localized "Email o password non corrette" via mapping table i18n-ready.                      | ✅ DONE                    | ~20min effettivi |
+| **TD-AY** (nuovo PR 2) | Coverage `errorCode` altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`). Oggi DP3.1 scope ha coperto solo `/auth/login`; gli altri lanciano `UnauthorizedException(code-as-message)` con shape NestJS default (no `errorCode` field). Frontend mapping `messageForErrorCode` ricade su `E_UNKNOWN` per quegli endpoint | Bassa (UX cosmetica)       | ~30min           |
+| TD-AK                  | Script `pnpm test:e2e:reset` wrapper con Redis FLUSHDB pre-test (evita rate limit accumulation cross-run, oggi manuale via `docker exec`)                                                                                                                                                                                                                      | Bassa                      | ~10min           |
+| TD-AL                  | Cache Playwright browsers in CI (`actions/cache@v4` su `~/.cache/ms-playwright`) — solo necessario se passiamo a `runs-on: ubuntu-latest` (matrix cross-browser TD-AM)                                                                                                                                                                                         | Bassa                      | ~15min           |
+| TD-AM                  | Matrix Firefox/WebKit opt-in CI via tag `@cross-browser` su test selettivi — oggi Chromium-only default                                                                                                                                                                                                                                                        | Bassa                      | ~30min           |
+| TD-AN                  | `JWT_SECRET_CI` da `secrets.*` GitHub invece di inline test-only (riduce noise SAST scan + impedisce copy-paste accidentale)                                                                                                                                                                                                                                   | Bassa                      | ~10min           |
+| TD-AO                  | Page Object Model refactor selettori inline (quando suite > 15 test)                                                                                                                                                                                                                                                                                           | Bassa                      | 1-2h             |
+| TD-AP                  | Migration role rotation automation (Vault/Doppler post-prod) — sostituisce PLACEHOLDER password manual rotation Discovery #35. Anti-pattern medio-termine                                                                                                                                                                                                      | Media (production-blocker) | 4-6h             |
+| TD-AQ                  | ESLint custom rule `no-playwright-fill-on-email-rhf` per prevenire regression Discovery #34 (RHF email + WebKit `fill()` non triggera onChange). Trigger: 3+ test file con pattern email RHF                                                                                                                                                                   | Bassa                      | ~30min           |
+| TD-AR                  | Pattern `.pgpass` file per `psql` in CI quando si introdurrà secret reale (sostituisce `PGPASSWORD='${{ env.X }}'` plain). Trigger: introduction secret reale GitHub Actions                                                                                                                                                                                   | Bassa                      | ~15min           |
 
 ## Consequences
 

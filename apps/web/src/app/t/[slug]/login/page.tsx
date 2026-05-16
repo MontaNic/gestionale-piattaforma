@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { apiPost, ApiError } from '@/lib/api';
 import { setTokens } from '@/lib/auth';
+import { messageForErrorCode } from '@/lib/error-codes';
 import type { LoginResponse } from '@/lib/types';
 
 // TD-2 ADR-0012 resolution: slug runtime da URL (`/t/<slug>/login`) via
@@ -52,11 +53,9 @@ export default function LoginPage() {
       router.push(`/t/${tenantSlug}/dashboard`);
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.errorCode === 'E_AUTH_INVALID_CREDENTIALS') {
-          setServerError('Email o password non corrette');
-        } else {
-          setServerError(`Errore: ${err.message}`);
-        }
+        // TD-AJ: backend emette errorCode esplicito (auth.service.throwInvalidCredentials).
+        // Mapping i18n-ready via ERROR_CODE_MESSAGES (lib/error-codes.ts).
+        setServerError(messageForErrorCode(err.errorCode));
       } else {
         setServerError('Errore di connessione al server');
       }
