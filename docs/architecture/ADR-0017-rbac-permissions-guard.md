@@ -191,6 +191,36 @@ Reversibilità parziale (es. rimuovere solo cache Redis mantenendo Guard): ~5min
 - TD-AJ ADR-0016 (backend errorCode 401) resta tracked — candidato PR 2 sessione 11
 - TD-H ADR-0013 (lockout per-tenant) resta tracked — candidato PR 2 sessione 11
 
+## Convention — `audit_log.entityType` naming (Resolution TD-AV sessione 13)
+
+Quando si scrive un evento audit con `entityType`, applicare la seguente convention:
+
+- **Formato**: PascalCase singolare
+- **Semantica**: il nome dell'entità o concetto target dell'evento (non sempre coincide con il subject)
+
+### Esempi correnti
+
+| Audit action             | `entityType`           | `entityId` | Razionale                                                                                                          |
+| ------------------------ | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `auth.login_success`     | `'User'`               | `userId`   | L'utente è subject + target dell'evento auth                                                                       |
+| `auth.permission_denied` | `'AuthorizationCheck'` | `userId`   | L'evento è un check di autorizzazione, l'utente è subject ma non target dell'entità "autorizzazione" (sessione 13) |
+| `tenant.created`         | `'Tenant'`             | `tenantId` | Operazione sull'entità Tenant (fix outlier `'tenant'` lowercase sessione 13 Sub-DP AV-3)                           |
+
+### Anti-pattern
+
+- ❌ `'user'` (lowercase) — viola PascalCase
+- ❌ `'tenant'` (lowercase) — viola PascalCase
+- ❌ `'Users'` (plural) — viola singolare
+- ❌ `'AuthCheck'` (acronym) — preferire forma estesa esplicita
+
+### Resolution Discovery — Sub-DP AV-3 (sessione 13)
+
+Sessione 11 review pre-merge aveva flaggato `permissions.guard.ts` audit `entityType: 'User'` come semantica imprecisa (TD-AV: l'evento è un AuthorizationCheck, non modifica l'entità User).
+Sessione 13 STOP 1 verifica empirica ha rivelato outlier latente in `tenants.service.ts:167` con `'tenant'` lowercase (incoerente con `'User'` PascalCase usato altrove).
+Fix applicato atomicamente in commit TD-AV insieme alla semantic resolution per chiudere drift in 1 atomic operation + documentazione convention preventiva drift futuro.
+
+DB column `entity_type` è `text` libero (no enum Postgres): la convention è applicativa, enforcement via review pre-merge + grep `entityType:` su `apps/api/src/**/*.ts`.
+
 ## Consequences
 
 ### Positive

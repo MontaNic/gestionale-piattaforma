@@ -1067,7 +1067,7 @@ Resolution carry-over **TD #3 ADR-0010** (sessione 4): macro-task RBAC enforceme
 
 **TD candidate emersi cleanup PR #27 (sessione 11 post-merge review)**:
 
-- **TD-AV ADR-0017** — `audit_log.entityType` semantica per access control event. Issue Media emersa review pre-merge: `PermissionsGuard.logPermissionDenied` insert audit `auth.permission_denied` con `entityType: 'User'` + `entityId: userId`. Semanticamente debatable (l'evento è AuthorizationCheck, non modifica User). Verifica empirica `schema.prisma` audit_log → decidere se refactor a `'AuthorizationCheck'` o accept pragmatico. Trigger: F1+ aggiunge altri access control events (es. tenant-level permission denied). Stima: ~30min refactor + verifica E2E.
+- **TD-AV ADR-0017** — `audit_log.entityType` semantica per access control event. Issue Media emersa review pre-merge: `PermissionsGuard.logPermissionDenied` insert audit `auth.permission_denied` con `entityType: 'User'` + `entityId: userId`. Semanticamente debatable (l'evento è AuthorizationCheck, non modifica User). Verifica empirica `schema.prisma` audit_log → decidere se refactor a `'AuthorizationCheck'` o accept pragmatico. Trigger: F1+ aggiunge altri access control events (es. tenant-level permission denied). Stima: ~30min refactor + verifica E2E. ✅ **RESOLVED sessione 13** — vedi [§TD-AV cleanup sessione 13](#td-av-cleanup-sessione-13--entitytype-semantica--convention-pascalcase-2026-05-16).
 
 - **TD-AW ADR-0017** — Raw SQL fixture `seedRbacFixtures` (`rbac-permissions.e2e-spec.ts`) → valutare refactor a Prisma client direct dentro fixture per type-safety. Trade-off: complexity inject Prisma vs raw SQL diretto (schema drift risk vs Prisma TS error compile-time). Decisione corrente: raw SQL pragmatico (coerente con `seedMinimal` helper esistente). Trigger: schema drift rilevato (es. rename column audit_log). Stima: ~20min refactor.
 
@@ -1149,6 +1149,30 @@ Pattern consolidato Sezione 0.6 Pattern 5 (cleanup follow-up post-merge come PR 
 - **TD-AY ADR-0016** (scope espanso): da "Coverage errorCode altri 401 endpoint" a "Allineamento taxonomy `errorCode` unificata cross-endpoint COMPLETA — 3 punti: (1) 401 endpoint mancanti, (2) 429 `LockoutExceptionFilter` `code` → `errorCode` rename, (3) 400 custom `ValidationPipe` exception factory". Stima: ~30min → **~45-60min realistic**. Priorità: Bassa (UX legacy gap, no security). Trigger re-eval: F1+ aggiunge endpoint 400/429 con UX visible OR smoke browser segnala alert generico come blocker UX.
 
 **Foundation per**: taxonomy `errorCode` unificata cross-endpoint pronta per TD-AY follow-up (priorità modulata da feedback UX F1+).
+
+### TD-AV cleanup sessione 13 — entityType semantica + convention PascalCase (2026-05-16)
+
+**Branch**: `feat/td-av-aw-cleanup-session-11` · **Tipo**: refactor semantico audit + documentazione convention · **ADR**: [ADR-0017 §Convention `audit_log.entityType` naming](docs/architecture/ADR-0017-rbac-permissions-guard.md#convention--audit_logentitytype-naming-resolution-td-av-sessione-13)
+
+Resolution carry-over **TD-AV ADR-0017** (review sessione 11 post-merge PR #27). STOP 1 verifica empirica ha confermato `audit_log.entity_type` è `text` libero (no enum DB), aprendo a refactor semantico zero-migration.
+
+**Decision points lockati (STOP 1 sessione 13)**:
+
+- **DP-AV-1** = B → schema `text`, no migration richiesta (verifica live live container: `entity_type | text`)
+- **DP-AV-2** = A → `'AuthorizationCheck'` literal in `permissions.guard.ts:243` (PascalCase compound, semantica precisa: l'evento è check di autorizzazione, non modifica User)
+- **Sub-DP AV-3** = C (emersa STOP 1) → outlier latente `tenants.service.ts:167` con `entityType: 'tenant'` lowercase fixato a `'Tenant'` PascalCase + convention naming documentata in ADR-0017 per prevenire drift futuro
+- **DP-PR** = A → 1 PR, 2 commit atomic (TD-AV semantica audit + TD-AW typesafety fixture in commit 2 separato)
+
+**Deliverables commit 1 (~+30/-3 LOC, code +2/-2 + docs +28/-1)**:
+
+- `apps/api/src/rbac/guards/permissions.guard.ts:243` (+1/-1): `entityType: 'User'` → `'AuthorizationCheck'`
+- `apps/api/src/tenants/tenants.service.ts:167` (+1/-1): `entityType: 'tenant'` → `'Tenant'` (fix outlier Sub-DP AV-3)
+- `docs/architecture/ADR-0017-rbac-permissions-guard.md` (+28/-1): nuova sezione `## Convention — audit_log.entityType naming` con tabella esempi + anti-pattern + resolution Sub-DP AV-3
+- `PROGRESS.md` (+/- this section): TD-AV inline annotation RESOLVED + nuova entry
+
+**Convention enforcement**: applicativa via review pre-merge + grep `entityType:` su `apps/api/src/**/*.ts` (3 occorrenze tutte PascalCase singolare post-fix: `'AuthorizationCheck'`, `'Tenant'`, `'User'`).
+
+**Foundation per**: futuri audit events (es. `device.linked`, `pin.changed`, F1+ business actions) seguono convention PascalCase senza ricerca semantica caso-per-caso.
 
 ## 🚧 In corso / Prossimo task
 
