@@ -240,7 +240,7 @@ export class PermissionsGuard implements CanActivate {
           tenantId,
           userId,
           action: 'auth.permission_denied',
-          entityType: 'User',
+          entityType: 'AuthorizationCheck',
           entityId: userId,
           afterValue: {
             endpoint,

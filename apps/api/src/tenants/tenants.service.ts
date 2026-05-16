@@ -164,7 +164,7 @@ export class TenantsService {
           tenantId: tenant.id,
           userId: createdBy,
           action: 'tenant.created',
-          entityType: 'tenant',
+          entityType: 'Tenant',
           entityId: tenant.id,
           afterValue: {
             slug: tenant.slug,
