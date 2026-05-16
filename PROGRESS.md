@@ -5,9 +5,9 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 15 maggio 2026 (sessione 11 PR 1 — RBAC enforcement Guard `@RequirePermissions`)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + **RBAC enforcement Guard** completi. **Stack security/scaling F1 completa**: ogni endpoint business futuro avrà `@RequirePermissions(...)` standard. **Test totali**: 45 unit (era 25, +20 rbac) + **7 e2e Testcontainers** (era 4, +3 rbac) + 11/11 Playwright Chromium + smoke cross-browser (invariato).
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + **RBAC enforcement Guard** + **PR 2 TD-H/TD-AJ lockout per-tenant + errorCode** completi. **Stack security/scaling F1 completa**: ogni endpoint business futuro avrà `@RequirePermissions(...)` standard, lockout cross-tenant isolation production-safe, errorCode taxonomy i18n-ready su `/auth/login`. **Test totali**: 48 unit (era 45, +3 cross-tenant) + **8 e2e Testcontainers** (era 7, +1 TD-H smoke) + 11/11 Playwright Chromium + smoke cross-browser (invariato).
 
-> ✅ **RBAC Guard RESOLVED** (carry-over ADR-0010 TD #3 sessione 4): `@RequirePermissions(...)` decorator AND default + opt-in OR via `{mode:'OR'}` signature overload, PermissionsGuard APP_GUARD globale con cache Redis TTL 60s + fallback DB (Pattern fail-open layered 4° livello), audit action `auth.permission_denied` (12° TS union) + dedupe Redis 60s anti-flood. POST /tenants refactor: inline check rimosso (-15 LOC net), decorator controller single source of truth. 3 nuove discoveries (#36-38: APP_GUARDs cross-module ordering, Guard stage RLS no-context wrap, seedMinimal gap createTenant). 3 nuovi TD tracciati (TD-AS/AT/AU). Vedi [ADR-0017](docs/architecture/ADR-0017-rbac-permissions-guard.md). Discoveries cumulative: **38**. Prossimo task: PR 2 sessione 11 (TD-H lockout per-tenant + TD-AJ errorCode 401).
+> ✅ **PR 2 sessione 12 RESOLVED** (TD-H ADR-0013 + TD-AJ ADR-0016 atomic): lockout key `/auth/login` da `email:<email>` a `tenant:<tenantId>:email:<email>` (cross-tenant DoS isolation) + errorCode 401 enum centralizzato `apps/api/src/common/error-codes.ts` con shape `{statusCode, errorCode, message, timestamp}` (DP3.1 scope `/auth/login`) + frontend mapping table i18n-ready `apps/web/src/lib/error-codes.ts`. Sub-DP raccomandate lockate (A1-E1): composition opaque preserved (LockoutService API stabile), test cross-tenant in `auth.service.spec.ts` composition layer, no global exception filter. 3 nuove discoveries (#39-41: `noUncheckedIndexedAccess` strict, "extend don't create" smoke pattern, sibling helper `seedSecondTenant`). 1 nuovo TD tracciato (TD-AY: coverage errorCode altri 401 endpoint). Vedi [ADR-0013 §TD-H resolution](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016 §TD-AJ resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2). Discoveries cumulative: **41**. Prossimo task: TBD (TD-AY o TD-7 candidate prioritari).
 
 ---
 
@@ -1073,13 +1073,66 @@ Resolution carry-over **TD #3 ADR-0010** (sessione 4): macro-task RBAC enforceme
 
 **Foundation per**: F1 endpoint business (menu, tavoli, ordini, cassa, reports) con `@RequirePermissions(...)` standard. Pattern fail-open layered consolidato a 4 livelli (Lockout/Mail/Throttler/RBAC).
 
+### PR 2 sessione 12 — TD-H lockout per-tenant + TD-AJ errorCode 401 (2026-05-16)
+
+**Branch**: `feat/pr2-td-h-td-aj-lockout-pertenant-errorcode` · **Status**: completato, PR merge pending · **ADR**: [ADR-0013](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2)
+
+Resolution carry-over **TD-H ADR-0013** (B1 sessione 8) + **TD-AJ ADR-0016** (Playwright sessione 10). PR atomic per ridurre churn auth surface (entrambi toccano `auth.service.ts:login()` flow).
+
+**Decision points lockati**:
+
+- **DP1** lockout key naming `tenant:<tenantId>:email:<email>` (Sub-DP A1: prefix `lockout:locked:` esistente mantenuto, no LockoutService rename — coerente con login-pin pattern `pin:tenant:<id>:device:<id>`)
+- **DP2** migration Redis: nota release notes (cleanup `redis-cli --scan --pattern "lockout:locked:email:*" | xargs DEL`), no migration script LOC
+- **DP3** errorCode enum centralizzato `apps/api/src/common/error-codes.ts`
+- **DP3.1** scope coverage SOLO `/auth/login` (refresh/logout/login-pin/pin-setup → TD-AY)
+- **DP4** frontend parseError chain via `messageForErrorCode()` mapping table i18n-ready
+- **DP5** smoke E2E backend Testcontainers (extend `auth-login.e2e-spec.ts`, no script standalone — Discovery #40)
+
+**Sub-DP raccomandate lockate**: A1 (prefix opaque preserved), B1 (LockoutService signature stabile), C1 (test cross-tenant in `auth.service.spec.ts` composition layer), D1 (`throwInvalidCredentials()` helper inline, no global filter), E1 (`apps/web/src/lib/error-codes.ts` separato, NO refactor `api.ts`).
+
+**Deliverables (~261 LOC net)**:
+
+- `apps/api/src/common/error-codes.ts` (22 LOC NEW): enum `AuthErrorCode.INVALID_CREDENTIALS` + `CommonErrorCode.UNKNOWN`
+- `apps/api/src/auth/dto/auth-error-response.dto.ts` (22 LOC NEW): interface `AuthErrorResponse`
+- `apps/api/src/auth/auth.service.ts` (modificato +23/-12): `LOCKOUT_KEY_LOGIN(tenantId, email)` + helper `throwInvalidCredentials()` + cleanup TODO obsoleto
+- `apps/api/src/auth/auth.service.spec.ts` (modificato +95/-10): 3 nuovi test cross-tenant (Test 7/8/9 isolation `recordFailedAttempt`/`checkLockout`/`resetAttempts`) + Test 2/3 shape update TD-AJ
+- `apps/api/test/e2e/helpers/test-app.ts` (modificato +47/0): nuovo helper `seedSecondTenant(url, {email?})` per shared-email scenarios
+- `apps/api/test/e2e/auth-login.e2e-spec.ts` (modificato +51/-11): Test 2 shape TD-AJ + nuovo Test 4 TD-H cross-tenant lockout isolation
+- `apps/web/src/lib/error-codes.ts` (21 LOC NEW): `ERROR_CODE_MESSAGES` table + `messageForErrorCode()` i18n-ready
+- `apps/web/src/app/t/[slug]/login/page.tsx` (modificato +4/-6): refactor mapping inline → `messageForErrorCode()`
+- `apps/web/e2e/specs/auth-login.spec.ts` (modificato +26/-14): intercept response 401 + assert shape TD-AJ + alert italian-localized
+
+**Test outcomes**:
+
+| Test type                                       | Result          | Tempo |
+| ----------------------------------------------- | --------------- | ----- |
+| Unit `auth.service.spec.ts` (cross-tenant +3)   | 9/9 PASS        | 17ms  |
+| Unit totale apps/api                            | 48/48 PASS      | ~1s   |
+| E2E `auth-login.e2e-spec.ts` (Test 4 nuovo)     | 4/4 PASS        | 8.4s  |
+| E2E Testcontainers totale (3 file)              | 8/8 PASS        | 14s   |
+| Typecheck API + Web                             | OK              | -     |
+
+**Empirical discoveries (#39-41, +3 cumulative → totale 41)**:
+
+- **#39** — `noUncheckedIndexedAccess` strict frontend: `Record<string, string>` lookup ritorna sempre `string | undefined`, anche dot-access. Fix in `error-codes.ts`: estratto `FALLBACK_MESSAGE` const literal evita doppio coalesce. Pattern da seguire per future mapping table.
+- **#40** — Smoke server-side standalone NON necessario quando esiste infra E2E Testcontainers: pattern "extend, don't create" — `auth-login.e2e-spec.ts` con `seedMinimal` + helper preferibile a `apps/api/scripts/smoke-pr2-td-h.ts` standalone. 1 infra di test = no drift.
+- **#41** — `seedMinimal` E2E helper monolitico richiede estensione via sibling helper `seedSecondTenant` (NON flag opzionale): backward-compat strict + single-responsibility + `email` configurabile per shared-email DoS-proof scenarios.
+
+**Tech debt tracking**:
+
+- **TD-H ADR-0013**: ✅ RESOLVED
+- **TD-AJ ADR-0016**: ✅ RESOLVED
+- **TD-AY ADR-0016** (nuovo) — Coverage `errorCode` altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`): oggi DP3.1 ha coperto solo `/auth/login`, gli altri usano `UnauthorizedException(code-as-message)` con shape NestJS default. Frontend `messageForErrorCode` fallback `E_UNKNOWN` per quei flow. Bassa, ~30min.
+
+**Foundation per**: lockout cross-tenant isolation production-safe (un attacker che conosce un'email blocca SOLO il tenant target, non cross-tenant) + i18n login error UX i18n-ready (estensione futura nestjs-i18n keep API stabile).
+
 ## 🚧 In corso / Prossimo task
 
-**Macro-task: PR 2 sessione 11 (raccomandato) — TD-H lockout per-tenant + TD-AJ errorCode 401 backend.**
+**Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
 
-Candidate (in ordine di priorità suggerito, da validare con Nicolò all'apertura della prossima sessione):
+Candidate (in ordine di priorità suggerito):
 
-1. **PR 2 sessione 11** — TD-H lockout key per-tenant (B1 ADR-0013 carry-over): backend `LOCKOUT_KEY_LOGIN(email)` → `${tenantId}:${email}`. Sblocca futuro multi-tenant lockout granularity. Stima ~30min + smoke. Combinabile con **TD-AJ ADR-0016** (backend errorCode 401 esplicito per UX i18n login fail, ~15min).
+1. **TD-AY ADR-0016** — Coverage `errorCode` esplicito altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`). Estende il pattern DP3.1 PR 2 a tutto il dominio auth. Stima ~30min.
 2. **TD-7 ADR-0012 fix** (cross-tenant token UX edge) — Guard backend cross-check JWT.tenantId vs X-Tenant-Slug + frontend manda header anche post-auth. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` diventa regression guard.
 3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
 4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.

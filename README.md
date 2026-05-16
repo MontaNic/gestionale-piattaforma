@@ -225,7 +225,7 @@ Custom tracker `userId` per `tenant-create` impedisce IP rotation di un attacker
 **Strato 2 — Account lockout** (`LockoutService` Redis sliding window):
 
 - 10 tentativi falliti in 15min → blocco 15min (env: `LOCKOUT_THRESHOLD`, `LOCKOUT_WINDOW_MS`, `LOCKOUT_DURATION_MS`)
-- Chiavi lockout: `email:<email>` per `/auth/login` (TD-H: per-tenant post multi-tenant slug), `pin:tenant:<tenantId>:device:<deviceId>` per `/auth/login-pin` (D2b §8)
+- Chiavi lockout per-tenant (TD-H RESOLVED PR 2 sessione 12): `tenant:<tenantId>:email:<email>` per `/auth/login`, `pin:tenant:<tenantId>:device:<deviceId>` per `/auth/login-pin` (D2b §8). Cross-tenant DoS-by-account-name isolato a livello key Redis
 - Check PRE-DB lookup (anti-timing-leak utenti esistenti vs non)
 - `Retry-After: 900` **fissi** anti user-enumeration (TD-J)
 - Audit `auth.account_locked` su transizione → locked (PII masked: `afterValue.lockoutKeyHash` = sha256[0:8])
@@ -245,6 +245,19 @@ done
 # Retry-After: 900
 # {"statusCode":429,"code":"E_AUTH_ACCOUNT_LOCKED","message":"Account temporaneamente bloccato..."}
 ```
+
+**Error response shape `/auth/login` 401** (TD-AJ RESOLVED PR 2 sessione 12, vedi [ADR-0016](./docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2)): backend emette `errorCode` esplicito + `timestamp` ISO per i18n-ready frontend mapping. Wrong password / user not found / tenant mismatch → identica shape (no info leak).
+
+```json
+{
+  "statusCode": 401,
+  "errorCode": "E_AUTH_INVALID_CREDENTIALS",
+  "message": "Credenziali non valide",
+  "timestamp": "2026-05-16T10:54:21.123Z"
+}
+```
+
+Scope DP3.1: solo `/auth/login`. Altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`) → coverage tracciata come **TD-AY**.
 
 #### Email notifications (B2a)
 

@@ -142,3 +142,50 @@ export async function seedMinimal(databaseUrl: string): Promise<SeedResult> {
   await client.end();
   return { tenantId, sedeId, adminUserId };
 }
+
+// =============================================================================
+// seedSecondTenant — aggiunge tenant 'acme' (TD-H cross-tenant lockout test PR 2)
+// =============================================================================
+// Chiamare DOPO seedMinimal. Crea tenant 'acme' + sede + utente con email
+// configurabile (default admin@acme.local). Per smoke cross-tenant lockout
+// isolation passare `email: 'admin@demo.local'` per shared-email scenario:
+// stessa email su 2 tenant → 2 lockout key Redis distinte (TD-H proof).
+// =============================================================================
+export async function seedSecondTenant(
+  databaseUrl: string,
+  opts: { email?: string } = {},
+): Promise<SeedResult> {
+  const { Client } = await import('pg');
+  const { uuidv7 } = await import('uuidv7');
+  const argon2 = await import('argon2');
+
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+
+  const tenantId = uuidv7();
+  const sedeId = uuidv7();
+  const adminUserId = uuidv7();
+  const adminPasswordHash = await argon2.hash('Admin123!', { type: argon2.argon2id });
+  const email = opts.email ?? 'admin@acme.local';
+
+  await client.query(
+    `INSERT INTO tenants (id, name, slug, is_active, created_at, updated_at)
+     VALUES ($1, 'Acme Tenant', 'acme', true, NOW(), NOW());`,
+    [tenantId],
+  );
+
+  await client.query(
+    `INSERT INTO sedi (id, tenant_id, name, address, city, postal_code, country, timezone, currency, is_active, created_at, updated_at)
+     VALUES ($1, $2, 'Sede Acme', 'Via Acme 1', 'Roma', '00100', 'IT', 'Europe/Rome', 'EUR', true, NOW(), NOW());`,
+    [sedeId, tenantId],
+  );
+
+  await client.query(
+    `INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, is_active, failed_login_attempts, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 'Admin', 'Acme', true, 0, NOW(), NOW());`,
+    [adminUserId, tenantId, email, adminPasswordHash],
+  );
+
+  await client.end();
+  return { tenantId, sedeId, adminUserId };
+}

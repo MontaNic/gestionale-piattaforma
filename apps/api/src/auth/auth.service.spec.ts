@@ -18,7 +18,6 @@
 // Instanziamo AuthService manualmente con i mock cast a tipo dei collaboratori.
 // Niente perdita di significato: stiamo testando la business logic, non il DI.
 
-import { UnauthorizedException } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -213,13 +212,22 @@ describe('AuthService', () => {
   });
 
   // ─── Test 2 — login wrong password ─────────────────────────────────────────
-  it('login wrong password: throws + increments failed_login_attempts', async () => {
+  it('login wrong password: throws 401 with errorCode + increments failed_login_attempts', async () => {
     users.findByTenantEmail.mockResolvedValue(baseUser);
     vi.mocked(argon2.verify).mockResolvedValue(false);
 
+    // TD-AJ resolution: body 401 esplicito con errorCode + message localizzato + timestamp.
     await expect(
       auth.login(TENANT_ID, baseUser.email, 'WrongPass!', { ip: '10.0.0.1' }),
-    ).rejects.toThrow(UnauthorizedException);
+    ).rejects.toMatchObject({
+      status: 401,
+      response: {
+        statusCode: 401,
+        errorCode: 'E_AUTH_INVALID_CREDENTIALS',
+        message: 'Credenziali non valide',
+        timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+    });
 
     expect(users.incrementFailedAttempts).toHaveBeenCalledWith(USER_ID);
     expect(prisma.session.create).not.toHaveBeenCalled();
@@ -231,15 +239,20 @@ describe('AuthService', () => {
   });
 
   // ─── Test 3 — login email/tenant invalid (no info leak) ────────────────────
-  it('login user not found: throws E_AUTH_INVALID_CREDENTIALS (no info leak)', async () => {
+  it('login user not found: throws 401 errorCode E_AUTH_INVALID_CREDENTIALS (no info leak)', async () => {
     users.findByTenantEmail.mockResolvedValue(null);
 
+    // Stesso shape body di "wrong password" + "user disabled" → no enumeration.
     await expect(
       auth.login(TENANT_ID, 'unknown@nowhere.local', 'Whatever123!', { ip: '10.0.0.1' }),
-    ).rejects.toThrow(
-      // Stesso messaggio di "wrong password" + "user disabled" -> no enumeration
-      expect.objectContaining({ message: 'E_AUTH_INVALID_CREDENTIALS' }),
-    );
+    ).rejects.toMatchObject({
+      status: 401,
+      response: {
+        statusCode: 401,
+        errorCode: 'E_AUTH_INVALID_CREDENTIALS',
+        message: 'Credenziali non valide',
+      },
+    });
 
     // Niente increment failed attempts (no user da incrementare)
     expect(users.incrementFailedAttempts).not.toHaveBeenCalled();
@@ -318,6 +331,84 @@ describe('AuthService', () => {
     const auditCall = prisma.auditLog.create.mock.calls[0]?.[0]?.data;
     expect(auditCall.action).toBe('auth.pin.setup');
     expect(auditCall.afterValue).toMatchObject({ wasReset: false });
+  });
+
+  // ─── Test 7 — TD-H: lockout key cross-tenant isolation (recordFailedAttempt) ─
+  // Stessa email su tenant A vs tenant B → key Redis differenti, NO leak DoS
+  // cross-tenant (un attacker che conosce email NON blocca altri tenant).
+  it('TD-H: recordFailedAttempt uses tenant-scoped key (cross-tenant isolation)', async () => {
+    const TENANT_A = '00000000-0000-7000-8000-aaaaaaaaaaaa';
+    const TENANT_B = '00000000-0000-7000-8000-bbbbbbbbbbbb';
+    const SHARED_EMAIL = 'admin@shared.local';
+
+    users.findByTenantEmail.mockResolvedValue(null); // user_not_found path
+
+    await expect(
+      auth.login(TENANT_A, SHARED_EMAIL, 'Wrong!', { ip: '1.1.1.1' }),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      auth.login(TENANT_B, SHARED_EMAIL, 'Wrong!', { ip: '1.1.1.1' }),
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(lockout.recordFailedAttempt).toHaveBeenCalledTimes(2);
+    const keyA = lockout.recordFailedAttempt.mock.calls[0]?.[0];
+    const keyB = lockout.recordFailedAttempt.mock.calls[1]?.[0];
+    expect(keyA).toBe(`tenant:${TENANT_A}:email:${SHARED_EMAIL}`);
+    expect(keyB).toBe(`tenant:${TENANT_B}:email:${SHARED_EMAIL}`);
+    expect(keyA).not.toBe(keyB);
+  });
+
+  // ─── Test 8 — TD-H: checkLockout uses tenant-scoped key ───────────────────
+  // Lockout su tenant A → tentativo login tenant B chiama checkLockout con
+  // key diversa → NON blocked (cross-tenant DoS prevented).
+  it('TD-H: checkLockout uses tenant-scoped key (lockout A does NOT block tenant B)', async () => {
+    const TENANT_A = '00000000-0000-7000-8000-aaaaaaaaaaaa';
+    const TENANT_B = '00000000-0000-7000-8000-bbbbbbbbbbbb';
+    const SHARED_EMAIL = 'admin@shared.local';
+
+    // Tenant A → checkLockout ritorna locked, tenant B → null (not locked).
+    lockout.checkLockout.mockImplementation((key: string) =>
+      Promise.resolve(
+        key.startsWith(`tenant:${TENANT_A}:`) ? { locked: true, retryAfterSec: 600 } : null,
+      ),
+    );
+    users.findByTenantEmail.mockResolvedValue(baseUser);
+    vi.mocked(argon2.verify).mockResolvedValue(true);
+
+    // Tenant A: throws (lockout active)
+    await expect(
+      auth.login(TENANT_A, SHARED_EMAIL, 'Pass!', { ip: '1.1.1.1' }),
+    ).rejects.toMatchObject({ status: 429 });
+
+    // Tenant B: success (no lockout su key tenant B)
+    const tokens = await auth.login(TENANT_B, SHARED_EMAIL, 'Pass!', { ip: '1.1.1.1' });
+    expect(tokens.accessToken).toBe('eyJ.mocked.token');
+
+    expect(lockout.checkLockout).toHaveBeenCalledTimes(2);
+    expect(lockout.checkLockout.mock.calls[0]?.[0]).toBe(
+      `tenant:${TENANT_A}:email:${SHARED_EMAIL}`,
+    );
+    expect(lockout.checkLockout.mock.calls[1]?.[0]).toBe(
+      `tenant:${TENANT_B}:email:${SHARED_EMAIL}`,
+    );
+  });
+
+  // ─── Test 9 — TD-H: resetAttempts uses tenant-scoped key ──────────────────
+  // Login success tenant A → resetAttempts SOLO per key tenant A. Lockout
+  // hypothetical tenant B persiste (key isolation su reset).
+  it('TD-H: resetAttempts uses tenant-scoped key (clear A does NOT reset tenant B)', async () => {
+    const TENANT_A = '00000000-0000-7000-8000-aaaaaaaaaaaa';
+    const SHARED_EMAIL = 'admin@shared.local';
+
+    users.findByTenantEmail.mockResolvedValue(baseUser);
+    vi.mocked(argon2.verify).mockResolvedValue(true);
+
+    await auth.login(TENANT_A, SHARED_EMAIL, 'Pass!', { ip: '1.1.1.1' });
+
+    expect(lockout.resetAttempts).toHaveBeenCalledOnce();
+    expect(lockout.resetAttempts.mock.calls[0]?.[0]).toBe(
+      `tenant:${TENANT_A}:email:${SHARED_EMAIL}`,
+    );
   });
 
   // ─── Test 6 — loginPin success (D2b) ──────────────────────────────────────
