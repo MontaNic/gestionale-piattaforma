@@ -7,7 +7,7 @@
 **Ultimo aggiornamento:** 15 maggio 2026 (sessione 11 PR 1 — RBAC enforcement Guard `@RequirePermissions`)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + **RBAC enforcement Guard** + **PR 2 TD-H/TD-AJ lockout per-tenant + errorCode** completi. **Stack security/scaling F1 completa**: ogni endpoint business futuro avrà `@RequirePermissions(...)` standard, lockout cross-tenant isolation production-safe, errorCode taxonomy i18n-ready su `/auth/login`. **Test totali**: 48 unit (era 45, +3 cross-tenant) + **8 e2e Testcontainers** (era 7, +1 TD-H smoke) + 11/11 Playwright Chromium + smoke cross-browser (invariato).
 
-> ✅ **PR 2 sessione 12 RESOLVED** (TD-H ADR-0013 + TD-AJ ADR-0016 atomic): lockout key `/auth/login` da `email:<email>` a `tenant:<tenantId>:email:<email>` (cross-tenant DoS isolation) + errorCode 401 enum centralizzato `apps/api/src/common/error-codes.ts` con shape `{statusCode, errorCode, message, timestamp}` (DP3.1 scope `/auth/login`) + frontend mapping table i18n-ready `apps/web/src/lib/error-codes.ts`. Sub-DP raccomandate lockate (A1-E1): composition opaque preserved (LockoutService API stabile), test cross-tenant in `auth.service.spec.ts` composition layer, no global exception filter. 3 nuove discoveries (#39-41: `noUncheckedIndexedAccess` strict, "extend don't create" smoke pattern, sibling helper `seedSecondTenant`). 1 nuovo TD tracciato (TD-AY: coverage errorCode altri 401 endpoint). Vedi [ADR-0013 §TD-H resolution](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016 §TD-AJ resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2). Discoveries cumulative: **41**. Prossimo task: TBD (TD-AY o TD-7 candidate prioritari).
+> ✅ **PR 2 sessione 12 RESOLVED** (TD-H ADR-0013 + TD-AJ ADR-0016 atomic): lockout key `/auth/login` da `email:<email>` a `tenant:<tenantId>:email:<email>` (cross-tenant DoS isolation) + errorCode 401 enum centralizzato `apps/api/src/common/error-codes.ts` con shape `{statusCode, errorCode, message, timestamp}` (DP3.1 scope `/auth/login`) + frontend mapping table i18n-ready `apps/web/src/lib/error-codes.ts`. Sub-DP raccomandate lockate (A1-E1): composition opaque preserved (LockoutService API stabile), test cross-tenant in `auth.service.spec.ts` composition layer, no global exception filter. 3 nuove discoveries (#39-41: `noUncheckedIndexedAccess` strict, "extend don't create" smoke pattern, sibling helper `seedSecondTenant`). 1 nuovo TD tracciato (TD-AY: coverage errorCode altri 401 endpoint). Vedi [ADR-0013 §TD-H resolution](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016 §TD-AJ resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2). **PR cleanup post-merge sessione 12 docs-only** (2 nuove discovery #42-43 da smoke browser Nicolò: LockoutExceptionFilter naming + DTO validation shape, TD-AY scope expansion 30→45-60min) — vedi [§PR cleanup post-merge PR 2 sessione 12](#pr-cleanup-post-merge-pr-2-sessione-12-2026-05-16). Discoveries cumulative: **43**. Prossimo task: TBD (TD-AY o TD-7 candidate prioritari).
 
 ---
 
@@ -1122,9 +1122,33 @@ Resolution carry-over **TD-H ADR-0013** (B1 sessione 8) + **TD-AJ ADR-0016** (Pl
 
 - **TD-H ADR-0013**: ✅ RESOLVED
 - **TD-AJ ADR-0016**: ✅ RESOLVED
-- **TD-AY ADR-0016** (nuovo) — Coverage `errorCode` altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`): oggi DP3.1 ha coperto solo `/auth/login`, gli altri usano `UnauthorizedException(code-as-message)` con shape NestJS default. Frontend `messageForErrorCode` fallback `E_UNKNOWN` per quei flow. Bassa, ~30min.
+- **TD-AY ADR-0016** (nuovo) — Coverage `errorCode` altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`): oggi DP3.1 ha coperto solo `/auth/login`, gli altri usano `UnauthorizedException(code-as-message)` con shape NestJS default. Frontend `messageForErrorCode` fallback `E_UNKNOWN` per quei flow. Bassa, ~30min. ⚠️ **Scope espanso in PR cleanup sessione 12** — vedi [§PR cleanup post-merge PR 2 sessione 12](#pr-cleanup-post-merge-pr-2-sessione-12-2026-05-16).
 
 **Foundation per**: lockout cross-tenant isolation production-safe (un attacker che conosce un'email blocca SOLO il tenant target, non cross-tenant) + i18n login error UX i18n-ready (estensione futura nestjs-i18n keep API stabile).
+
+### PR cleanup post-merge PR 2 sessione 12 (2026-05-16)
+
+**Branch**: `docs/cleanup-pr2-post-merge` · **Tipo**: docs-only (zero code change funzionale) · **Trigger**: smoke browser Nicolò post-merge `feat(auth): TD-H + TD-AJ` (commit `17c3526`) + cross-link correction Discovery #39
+
+Pattern consolidato Sezione 0.6 Pattern 5 (cleanup follow-up post-merge come PR docs: separata). Captura 2 nuove discovery emerse da smoke + corregge attribution Discovery #39 (era erroneamente in ADR-0013, semanticamente è frontend TS = ADR-0016).
+
+**Deliverables (~+47/-7 LOC docs-only)**:
+
+- `docs/architecture/ADR-0013-auth-e2e-hardening-b1.md` (+15/-3): rimossa Discovery #39 (moved to ADR-0016) + aggiunta Discovery #42 "LockoutExceptionFilter naming inconsistency" + cross-link TD-AY
+- `docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md` (+31/-2): Discovery #39 moved da ADR-0013 + Discovery #43 nuovo "DTO class-validator shape" + §TD-AY scope espanso (3 punti: 401 endpoint + 429 lockout rename + 400 validation factory) + header §Empirical discoveries fix math drift (Sub-DP G)
+- `PROGRESS.md` (+15/-8): bump Discovery counter 41→43 + sezione dedicata + TD-AY annotation scope espanso + candidate prossima sessione stima rivista
+- `README.md` (condizionale): nota inline shape legacy 429 lockout `{code, message}` vs nuova 401 `{errorCode, ...}` taxonomy (se applicabile dopo audit empirico)
+
+**Empirical discoveries (#42-43, +2 cumulative → totale 43)**:
+
+- **#42** — `LockoutExceptionFilter` naming inconsistency: filter B1 sessione 8 emette body 429 con field `code: 'E_AUTH_ACCOUNT_LOCKED'`, naming legacy precedente alla taxonomy `errorCode` introdotta da TD-AJ PR 2. Smoke browser empirical: alert 429 mostra raw `body.message` italian-localized (UX non rotta), ma frontend `parseError()` ricade su fallback `E_UNKNOWN` (no i18n-ready per future locale switch). Fix scope TD-AY scope expansion (out of scope PR 2 DP3.1).
+- **#43** — DTO `class-validator` shape non coerente con taxonomy TD-AJ: NestJS `ValidationPipe` default emette `{statusCode: 400, error: 'Bad Request', message: [array of strings]}` — manca `errorCode`, `message` è array non string (incompatibile con `ApiError.message: string` frontend), manca `timestamp`. Frontend `parseError()` fallback `E_UNKNOWN` → UX generica "Si è verificato un errore. Riprova" perde dettaglio validation field-specific. Fix scope TD-AY scope expansion (richiede custom `ValidationPipe.exceptionFactory`).
+
+**Tech debt update**:
+
+- **TD-AY ADR-0016** (scope espanso): da "Coverage errorCode altri 401 endpoint" a "Allineamento taxonomy `errorCode` unificata cross-endpoint COMPLETA — 3 punti: (1) 401 endpoint mancanti, (2) 429 `LockoutExceptionFilter` `code` → `errorCode` rename, (3) 400 custom `ValidationPipe` exception factory". Stima: ~30min → **~45-60min realistic**. Priorità: Bassa (UX legacy gap, no security). Trigger re-eval: F1+ aggiunge endpoint 400/429 con UX visible OR smoke browser segnala alert generico come blocker UX.
+
+**Foundation per**: taxonomy `errorCode` unificata cross-endpoint pronta per TD-AY follow-up (priorità modulata da feedback UX F1+).
 
 ## 🚧 In corso / Prossimo task
 
@@ -1132,7 +1156,7 @@ Resolution carry-over **TD-H ADR-0013** (B1 sessione 8) + **TD-AJ ADR-0016** (Pl
 
 Candidate (in ordine di priorità suggerito):
 
-1. **TD-AY ADR-0016** — Coverage `errorCode` esplicito altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`). Estende il pattern DP3.1 PR 2 a tutto il dominio auth. Stima ~30min.
+1. **TD-AY ADR-0016** (scope espanso) — Allineamento taxonomy `errorCode` unificata cross-endpoint completa: 401 endpoint mancanti + 429 `LockoutExceptionFilter` rename + 400 custom `ValidationPipe.exceptionFactory`. Stima ~45-60min realistic.
 2. **TD-7 ADR-0012 fix** (cross-tenant token UX edge) — Guard backend cross-check JWT.tenantId vs X-Tenant-Slug + frontend manda header anche post-auth. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` diventa regression guard.
 3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
 4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.

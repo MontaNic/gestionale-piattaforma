@@ -300,9 +300,7 @@ Pattern composition opaque-identifier conservato: `LockoutService` API (`recordF
 
 **Rejected alternativa**: refactor signature `LockoutService.recordFailedAttempt(email, tenantId)` come parametri espliciti. Motivazione reject: SRP-violation (LockoutService non deve conoscere multi-tenancy), API churn inutile, login-pin già usa pattern composito `pin:tenant:<id>:device:<id>` con stesso approccio.
 
-### Discovery empirica #39 — `noUncheckedIndexedAccess` strict frontend
-
-`tsconfig` apps/web ha `noUncheckedIndexedAccess: true` → `Record<string, string>` lookup ritorna sempre `string | undefined`, anche su dot-access. Fix in `apps/web/src/lib/error-codes.ts`: estratto `FALLBACK_MESSAGE` come const literal evita doppio coalesce. Pattern da seguire per future mapping table i18n-ready.
+> **Note:** Discovery #39 (frontend `noUncheckedIndexedAccess` strict + `FALLBACK_MESSAGE` const literal pattern) emersa durante l'implementazione TD-AJ — semanticamente è frontend TS, quindi documentata in [ADR-0016 §Discovery #39](./ADR-0016-playwright-e2e-frontend-ci.md). Cross-link corretto in cleanup post-merge PR 2.
 
 ### Lesson learned: lockout key naming convention per-tenant
 
@@ -320,6 +318,20 @@ redis-cli --scan --pattern "lockout:attempts:email:*" | xargs -r redis-cli DEL
 ```
 
 Operation read-safe (DEL key inesistenti = no-op). Eseguire DOPO deploy nuova versione per evitare race vs login flow concorrente.
+
+### Discovery #42 — LockoutExceptionFilter naming inconsistency (`code` vs `errorCode`)
+
+**Macro-task:** PR cleanup post-merge sessione 12 (formalizzazione empirica di nota già presente in [ADR-0016 §TD-AJ resolution](./ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2) lesson learned point 4).
+
+**Root cause:** `LockoutExceptionFilter` (B1 sessione 8, [apps/api/src/auth/filters/lockout-exception.filter.ts](../../apps/api/src/auth/filters/lockout-exception.filter.ts)) emette body 429 con field `code: 'E_AUTH_ACCOUNT_LOCKED'`. Naming legacy precedente alla taxonomy `errorCode` introdotta da [TD-AJ PR 2](./ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2) (`apps/api/src/common/error-codes.ts` enum centralizzato). Smoke browser post-merge Nicolò ha confermato la divergenza visiva: alert 401 mostra "Email o password non corrette" (mapping `messageForErrorCode(errorCode)`), alert 429 mostra raw message "Account temporaneamente bloccato..." (parseError frontend non riconosce `code` → fallback `E_UNKNOWN` → però `body.message` è già localizzato in italiano, quindi UX non rotta, solo non i18n-ready per future locale switch).
+
+**Fix applicato in PR 2:** nessuno (out of scope DP3.1 lockato su `/auth/login` 401). Scope allargato in TD-AY ADR-0016 — vedi sezione dedicata.
+
+**Lesson generalizzabile:** ogni nuovo exception filter che emette error body strutturato deve usare la taxonomy `errorCode` standardizzata definita in [apps/api/src/common/error-codes.ts](../../apps/api/src/common/error-codes.ts). Pattern senior NestJS: enum centralizzato + DTO type → no field naming drift cross-endpoint (`code` vs `errorCode` vs `error` ecc.) → frontend `parseError()` legge UN solo field con fallback semantico predicibile.
+
+### Tech debt cross-link
+
+- **TD-AY ADR-0016** (scope espanso post-PR cleanup sessione 12): allineamento taxonomy `errorCode` unificata cross-endpoint, include LockoutExceptionFilter (`code` → `errorCode` rename) come 1 dei 3 punti scope. Vedi [ADR-0016 §TD-AY](./ADR-0016-playwright-e2e-frontend-ci.md#tech-debt-registrato-8--1-update--7-nuovi).
 
 ## Related ADRs
 
