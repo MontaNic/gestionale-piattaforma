@@ -244,6 +244,7 @@ done
 # HTTP/1.1 429 Too Many Requests
 # Retry-After: 900
 # {"statusCode":429,"code":"E_AUTH_ACCOUNT_LOCKED","message":"Account temporaneamente bloccato..."}
+# ⚠️ Nota: shape 429 lockout usa field legacy `code` (non `errorCode`) — TD-AY scope per allineamento taxonomy post-PR2.
 ```
 
 **Error response shape `/auth/login` 401** (TD-AJ RESOLVED PR 2 sessione 12, vedi [ADR-0016](./docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2)): backend emette `errorCode` esplicito + `timestamp` ISO per i18n-ready frontend mapping. Wrong password / user not found / tenant mismatch → identica shape (no info leak).
@@ -257,7 +258,7 @@ done
 }
 ```
 
-Scope DP3.1: solo `/auth/login`. Altri 401 endpoint (`/auth/refresh`, `/auth/logout`, `/auth/login-pin`, `/auth/pin-setup`) → coverage tracciata come **TD-AY**.
+Scope DP3.1: solo `/auth/login`. Coverage altri endpoint (401 `/auth/refresh|logout|login-pin|pin-setup` + 429 lockout `code` → `errorCode` rename + 400 `ValidationPipe` custom exception factory) tracciata come **TD-AY** (scope espanso PR cleanup sessione 12, vedi [PROGRESS.md §PR cleanup post-merge](./PROGRESS.md#pr-cleanup-post-merge-pr-2-sessione-12-2026-05-16)).
 
 #### Email notifications (B2a)
 
