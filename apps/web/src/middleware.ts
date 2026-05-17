@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 // =============================================================================
 // middleware.ts — Multi-tenant slug routing path-based (TD-2 ADR-0012)
+//                  + cookie locale validation (ADR-0018 Sub-DP-A)
 // =============================================================================
 // Pattern: `/t/<slug>/<page>` (es. `/t/demo/login`, `/t/acme/dashboard`).
 //
@@ -14,6 +15,11 @@ import type { NextRequest } from 'next/server';
 // (ADR-0010 D4). Backend `X-Tenant-Slug` header API contract INVARIATO — il
 // frontend client legge slug da `useParams()` (App Router) e lo passa nelle
 // API call.
+//
+// Locale (ADR-0018): cookie `NEXT_LOCALE` se invalido viene resettato a
+// `DEFAULT_LOCALE` (defense-in-depth — utente puo' settare valore arbitrario
+// via document.cookie). Locale resolution effettiva avviene server-side in
+// `src/i18n/request.ts` (next-intl getRequestConfig).
 // =============================================================================
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
@@ -33,6 +39,20 @@ const RESERVED_SLUGS = new Set([
   'favicon.ico',
 ]);
 
+const VALID_LOCALES = new Set(['it', 'en']);
+const DEFAULT_LOCALE = 'it';
+
+function applyLocaleGuard(req: NextRequest, response: NextResponse): NextResponse {
+  const raw = req.cookies.get('NEXT_LOCALE')?.value;
+  if (raw && !VALID_LOCALES.has(raw)) {
+    response.cookies.set('NEXT_LOCALE', DEFAULT_LOCALE, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+  return response;
+}
+
 export function middleware(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
 
@@ -50,7 +70,7 @@ export function middleware(req: NextRequest): NextResponse {
   const tenantMatch = /^\/t\/([^/]+)(?:\/(.*))?$/.exec(pathname);
   if (!tenantMatch) {
     // Pattern non match (es. /not-found, /static) → pass-through, Next.js 404 standard
-    return NextResponse.next();
+    return applyLocaleGuard(req, NextResponse.next());
   }
 
   const slug = tenantMatch[1];
@@ -63,7 +83,7 @@ export function middleware(req: NextRequest): NextResponse {
   // useParams() — header e' optional defense-in-depth.
   const response = NextResponse.next();
   response.headers.set('x-tenant-slug-internal', slug);
-  return response;
+  return applyLocaleGuard(req, response);
 }
 
 export const config = {

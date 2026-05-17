@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 15 maggio 2026 (sessione 11 PR 1 — RBAC enforcement Guard `@RequirePermissions`)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + **RBAC enforcement Guard** + **PR 2 TD-H/TD-AJ lockout per-tenant + errorCode** completi. **Stack security/scaling F1 completa**: ogni endpoint business futuro avrà `@RequirePermissions(...)` standard, lockout cross-tenant isolation production-safe, errorCode taxonomy i18n-ready su `/auth/login`. **Test totali**: 48 unit (era 45, +3 cross-tenant) + **8 e2e Testcontainers** (era 7, +1 TD-H smoke) + 11/11 Playwright Chromium + smoke cross-browser (invariato).
+**Ultimo aggiornamento:** 17 maggio 2026 (sessione 14 — F1 shell Next.js + i18n + auth refactor)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + **F1 shell UI foundation (Sidebar + Topbar + i18n cookie-based + auth refactor)** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system. **Test totali**: 48 unit + 8 e2e Testcontainers backend invariati + target 9/9 Playwright chromium PASS (2 setup + 4 auth-* esistenti + 3 nuovi `shell.spec.ts`).
 
-> ✅ **PR 2 sessione 12 RESOLVED** (TD-H ADR-0013 + TD-AJ ADR-0016 atomic): lockout key `/auth/login` da `email:<email>` a `tenant:<tenantId>:email:<email>` (cross-tenant DoS isolation) + errorCode 401 enum centralizzato `apps/api/src/common/error-codes.ts` con shape `{statusCode, errorCode, message, timestamp}` (DP3.1 scope `/auth/login`) + frontend mapping table i18n-ready `apps/web/src/lib/error-codes.ts`. Sub-DP raccomandate lockate (A1-E1): composition opaque preserved (LockoutService API stabile), test cross-tenant in `auth.service.spec.ts` composition layer, no global exception filter. 3 nuove discoveries (#39-41: `noUncheckedIndexedAccess` strict, "extend don't create" smoke pattern, sibling helper `seedSecondTenant`). 1 nuovo TD tracciato (TD-AY: coverage errorCode altri 401 endpoint). Vedi [ADR-0013 §TD-H resolution](docs/architecture/ADR-0013-auth-e2e-hardening-b1.md#td-h-resolution-pr-2) + [ADR-0016 §TD-AJ resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-aj-resolution-pr-2). **PR cleanup post-merge sessione 12 docs-only** (2 nuove discovery #42-43 da smoke browser Nicolò: LockoutExceptionFilter naming + DTO validation shape, TD-AY scope expansion 30→45-60min) — vedi [§PR cleanup post-merge PR 2 sessione 12](#pr-cleanup-post-merge-pr-2-sessione-12-2026-05-16). Discoveries cumulative: **44** (+1 sessione 13: #44 E2E helper raw SQL pattern intentional). Prossimo task: TBD (TD-AY o TD-7 candidate prioritari).
+> ✅ **F1 shell sessione 14 COMPLETED** (ADR-0018): foundation UI Next.js (Sidebar + Topbar + theme + i18n + auth refactor) come base per 8 future feature F1 (Menu CRUD, Mappa, Comande, Cassa, KDS, Report, Settings, Dashboard widget). Stack: `next-intl@4.12.0` + `next-themes@0.4.6` + 3 shadcn componenti aggiunti (sheet, dropdown-menu, avatar). Pattern: `localePrefix: 'never'` cookie-based (URL invariate), route group `(authenticated)/`, AuthContext refactor estrazione da dashboard inline (pattern TD-6 logout preservato), AUTH_CHANGE_EVENT custom event bus per same-tab sync (Discovery #45). 9 route registrate post-build, smoke `shell.spec.ts` 3/3 PASS + non-regression auth-* 6/6 PASS (target 9/9 in 9.9s). 5 TD nuovi (TD-BA→BE) + 3 discovery nuovi (#45-47). Vedi [ADR-0018](docs/architecture/ADR-0018-f1-shell-ui-foundation.md). Discoveries cumulative: **47** (+3 sessione 14). Prossimo task: feature F1 business (Menu CRUD o Mappa tavoli prioritari) oppure TD-AY+TD-BE atomic cleanup sessione 15.
 
 ---
 
@@ -1189,6 +1189,76 @@ STOP 2B (Commit 2 TD-AW):
 **Foundation per**: futuri audit events (es. `device.linked`, `pin.changed`, F1+ business actions) seguono convention PascalCase + futuri helper E2E seguono pattern raw SQL setup convention senza ricerca semantica caso-per-caso.
 
 **Test**: 48/48 unit + 8/8 E2E + 11/11 Playwright invariati post-PR.
+
+### F1 shell sessione 14 — Next.js shell + i18n + auth refactor (2026-05-17)
+
+**Branch**: `feat/f1-shell` · **Tipo**: 1 PR atomic foundation F1 (no split, file interdipendenti Context+Gate+Layout+Sidebar+Topbar) · **ADR**: [ADR-0018](docs/architecture/ADR-0018-f1-shell-ui-foundation.md) (DP-1→DP-5 + Sub-DP A-E + 5 TD + 3 Discovery refs)
+
+**Macro-task F1-shell completato**: foundation UI shell Next.js (sidebar + topbar + theme + i18n + auth protection) come base per future feature F1 (Menu CRUD, Mappa tavoli, Comande, Cassa, KDS, Report, Settings, Dashboard widget, AI Assistant). 10-STOP workflow incrementale con verifica empirica preliminare + Sub-DP risolti pre-implementation.
+
+**Decision points lockati** (vedi [ADR-0018](docs/architecture/ADR-0018-f1-shell-ui-foundation.md#decisions)):
+
+- **DP-1** UI library: shadcn/ui (continuity E2, +3 componenti: sheet, dropdown-menu, avatar)
+- **DP-2** Layout: Sidebar 240px fixed desktop + Topbar + Sheet drawer mobile
+- **DP-3** i18n: `next-intl@4.12.0` con `localePrefix: 'never'` (cookie-based, no segment URL)
+- **DP-4** Auth protection: AuthContext + AuthGate client-side (TD-BA migration path post-TD-1 httpOnly cookie)
+- **DP-5** Smoke E2E: 3 test happy path `shell.spec.ts` (riusa fixture `auth.setup.ts` storageState)
+
+**Sub-DP resolutions** (4 da STOP 1 verifica empirica + 1 emerso runtime STOP 4):
+
+- **Sub-DP-A** locale routing: A3 `localePrefix: 'never'` cookie-based (alternative A1/A2 scartate, rompono middleware existing `/t/<slug>/<page>`)
+- **Sub-DP-B** AuthContext refactor estrazione da dashboard inline (pattern TD-6 logout server-side preservato)
+- **Sub-DP-C** Provider wrap: `AuthProvider` in `[slug]/layout.tsx` (tenant-scoped) + `ThemeProvider` in root `app/layout.tsx` (user-scoped cross-tenant)
+- **Sub-DP-D** Route group `(authenticated)` introdotto (URL invariate, separa login pubblica da shell autenticato)
+- **Sub-DP-E** Same-tab auth sync via `AUTH_CHANGE_EVENT` custom event (emerso STOP 4, Discovery #45)
+
+**Deliverables (~1164 LOC code + ~460 LOC docs)**:
+
+- 18 nuovi file source + 1 spec test (1114 LOC totale)
+  - `apps/web/src/i18n/{config.ts, request.ts, messages/{it,en}.json}` (196 LOC) — next-intl cookie reader
+  - `apps/web/src/contexts/AuthContext.tsx` (166 LOC) — tenant-scoped state + dual listener (storage + AUTH_CHANGE_EVENT)
+  - `apps/web/src/components/auth/AuthGate.tsx` (48 LOC) — client guard redirect login
+  - `apps/web/src/components/shell/{Sidebar,Topbar,MainLayout,PlaceholderPage}.tsx` (355 LOC) — shell components
+  - `apps/web/src/lib/auth-logout.ts` (39 LOC) — helper TD-6 pattern
+  - `apps/web/src/app/api/set-locale/route.ts` (46 LOC) — POST cookie NEXT_LOCALE setter
+  - `apps/web/src/app/t/[slug]/{layout.tsx, (authenticated)/{layout.tsx, dashboard/page.tsx, 7×placeholder/page.tsx}}` (217 LOC totale) — providers wrap + route group + 7 placeholder + dashboard moved
+  - `apps/web/e2e/specs/shell.spec.ts` (82 LOC) — 3 smoke test
+- 5 file modificati (delta +57 LOC additive)
+  - `apps/web/src/app/layout.tsx` (+14) — ThemeProvider next-themes wrap
+  - `apps/web/src/middleware.ts` (+18) — cookie NEXT_LOCALE guard (slug logic intatta)
+  - `apps/web/src/lib/auth.ts` (+14) — AUTH_CHANGE_EVENT dispatch (Sub-DP-E)
+  - `apps/web/next.config.mjs` (+6) — createNextIntlPlugin wrap
+  - `apps/web/package.json` (+5 deps) — next-intl, next-themes, 3 shadcn peer
+- ADR-0018 (~370 LOC) — DP-1→DP-5 + Sub-DP A-E + Conventions + 5 TD + 3 Discovery refs
+- PROGRESS.md (questa entry) + README.md status bump F1 shell ✅
+
+**Conventions documentate** ([ADR-0018 §Conventions](docs/architecture/ADR-0018-f1-shell-ui-foundation.md#conventions)):
+
+- Cookie naming `NEXT_LOCALE` (Pages Router heritage preserved)
+- Middleware locale guard skip on RedirectResponse (apply only su pass-through)
+- AuthContext fetch `/me` on mount (migration path additivo TD-1)
+- Logout helper shared `auth-logout.ts` (TD-6 POST + `finally clearTokens`)
+- Shared `PlaceholderPage` component (anti-DRY 7 nav placeholder)
+
+**Tech debt tracked (5 nuovi TD)**:
+
+- **TD-BA** — Auth protection client-side → middleware migration post-TD-1 (~30min)
+- **TD-BB** — i18n SEO multi-locale F2 future (route group `(public)` con localePrefix switch) (~1h)
+- **TD-BC** — `/api/set-locale` senza rate limit (low-priority F2+) (~20min)
+- **TD-BD** — Webpack warnings next-intl extractor dynamic require (3 occorrenze, issue noto upstream, cattura preventiva)
+- **TD-BE** — **Sub-1 RESOLVED in questa PR (STOP 8.5)**: `lib/api.ts:parseError` fallback chain `body.errorCode ?? body.code` (backend taxonomy `errorCode` vs `code` inconsistente — TD-AY in flux) + sintetico `E_RATE_LIMITED` su 429 senza errorCode (ThrottlerException default). `lib/error-codes.ts` +2 mapping IT (`E_AUTH_ACCOUNT_LOCKED`, `E_RATE_LIMITED`). Verifica empirica runtime: alert UI mostra ora messaggio specifico invece di fallback generico. **Sub-2 PENDING** cross-ref TD-AY: full suite Playwright flake (NOT regression F1-shell, Discovery #47) richiede test infra tuning (THROTTLE_AUTH_LIMIT bump CI flag / beforeAll backoff / retry-on-429) sessione 15.
+
+**Discoveries cumulative bump 44 → 47** (+3 sessione 14):
+
+- **#45** Same-tab auth sync via custom event. Storage event nativo cross-tab-only — refactor estrazione Context da inline auth richiede event bus same-tab esplicito. Pattern decoupled `AUTH_CHANGE_EVENT` in `lib/auth.ts` dispatcha post setTokens/clearTokens, login page ignora Context. Generalizzabile a future `usePermissionsChange`/`useTenantChange`.
+- **#46** Dev server zombie post `pnpm build` parallelo. `.next/` artefatti misti prod+dev + child `next-server` zombie post parent kill (EADDRINUSE silente). Lesson preventiva: stop dev server prima di build (`pkill -9 -f "next-server"` + `rm -rf .next`). Conferma memoria utente `feedback_debug_porte_zombie_processi.md`.
+- **#47** Full Playwright suite chromium flaky per TD-H lockout per-tenant backend. Multipli login successivi `demo` (auth.setup + 4 auth-* + tenant-isolation) saturano contatore lockout. Fallback `messageForErrorCode` su errorCode non-mapped → cascading failures (3 spec timeout). Pre-existing issue post-merge PR #29 (TD-H lockout per-tenant), **NOT regression F1-shell**. Mitigation futura: TD-BE resolution.
+
+**Test**: 48/48 unit + 8/8 E2E backend invariati + target 9/9 Playwright chromium PASS (2 setup + 4 auth-* esistenti + 3 nuovi shell.spec.ts in 9.9s). Full suite 14/14 affetta da Discovery #47 flake pre-existing — risolta post TD-BE sessione 15.
+
+**Foundation per**: 8 feature F1 successive (Menu CRUD, Mappa tavoli, Comande PWA, Cassa, KDS, Report, Settings, Dashboard widget) hanno shell pronta + i18n + auth refactor + theme. Sessione 15+ implementa una feature alla volta sotto shell esistente.
+
+**Cleanup post-merge**: opzionale follow-up docs/cleanup-f1-shell-post-merge se emergono gap minori in review pre-merge (Pattern 5).
 
 ## 🚧 In corso / Prossimo task
 

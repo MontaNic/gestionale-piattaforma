@@ -409,7 +409,7 @@ pnpm --filter @gestionale/web build
 pnpm --filter @gestionale/web typecheck
 ```
 
-A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). **E2** ha sostituito la home con redirect client-side + introdotto `/login` + `/dashboard`.
+A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). **E2** ha sostituito la home con redirect client-side + introdotto `/login` + `/dashboard`. **F1-shell (sessione 14)** ha aggiunto shell UI completa: Sidebar 8 nav (Dashboard/Menu/Mappa/Comande/Cassa/KDS/Report/Settings) + Topbar (avatar dropdown con theme toggle light/dark/system + locale switcher it/en + logout) + AuthContext+AuthGate refactor estrazione da dashboard inline. i18n via `next-intl@4.12.0` cookie-based (`NEXT_LOCALE`, `localePrefix: 'never'`, no segment URL). 7 placeholder route "Coming soon" pronti per implementation feature business. Vedi [ADR-0018](./docs/architecture/ADR-0018-f1-shell-ui-foundation.md).
 
 Stack version pinning + razionale (Tailwind 3.4 vs 4, React 18.3 vs 19, manual scaffold vs `create-next-app`): [ADR-0011 sezione Decisions](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md#decisions).
 

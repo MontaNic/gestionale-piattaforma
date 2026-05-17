@@ -37,11 +37,19 @@ export interface RequestOptions {
 async function parseError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as {
     errorCode?: string;
+    code?: string;
     message?: string;
   };
+  // TD-BE resolution: backend taxonomy inconsistente (TD-AY in flux):
+  //   - /auth/login (TD-AJ PR 2) emette `errorCode` (preferred)
+  //   - /auth/login 429 lockout (TD-H ADR-0013) emette `code: E_AUTH_ACCOUNT_LOCKED`
+  //   - ThrottlerException default NestJS emette 429 senza errorCode/code
+  // Fallback chain: errorCode → code → sintetico statusCode-based per 429.
+  const explicit = body.errorCode ?? body.code;
+  const synthetic = res.status === 429 ? 'E_RATE_LIMITED' : 'E_UNKNOWN';
   return new ApiError(
     res.status,
-    body.errorCode ?? 'E_UNKNOWN',
+    explicit ?? synthetic,
     body.message ?? `Request failed with status ${res.status}`,
   );
 }
