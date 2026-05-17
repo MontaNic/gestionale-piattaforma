@@ -241,6 +241,32 @@ Mitigation candidate sessione 15 (cross-ref TD-AY ADR-0016):
 
 **Stima rimanente Sub-2:** ~30-45min test infra tuning (parte di TD-AY closure).
 
+### TD-BF — i18n dead-code keys cleanup (RESOLVED post-merge sessione 14)
+
+**Status:** RESOLVED via cleanup PR follow-up (branch `docs/cleanup-f1-shell-post-merge`, Pattern 5 consolidato post-merge F1-shell PR #32).
+
+**Original scope:** rimozione `shell.welcome` unused (placeholder future-use, namespace shell). Catturato in note STOP 10 backup transition sessione 14.
+
+**Expanded scope (Sub-DP cleanup-expanded, verifica empirica STOP cleanup-verifica):**
+
+Grep cross-codebase `useTranslations` calls ha rivelato 7 chiavi `shell.*` unused (NON solo `shell.welcome`):
+
+| Chiave                 | Razionale unused                                                  |
+| ---------------------- | ----------------------------------------------------------------- |
+| `shell.brand`          | Sidebar/Topbar usano literal "Gestionale" hardcoded               |
+| `shell.welcome`        | Dashboard usa `dashboard.welcome`                                 |
+| `shell.tenant`         | Topbar mostra `tenant.slug` direct (no label)                     |
+| `shell.role`           | Topbar mostra `primaryRole` direct (no label)                     |
+| `shell.loading`        | AuthGate hardcoded "Caricamento..."                               |
+| `shell.loggingOut`     | Dashboard usa `dashboard.loggingOut`                              |
+| `shell.topbar.profile` | Topbar non usa `t('profile')`, dropdown trigger usa avatar direct |
+
+**Resolution:** rimozione totale 7 chiavi × 2 locale (it/en) = 14 LOC delta cleanup. Build production verified OK post-cleanup, zero impact runtime (chiavi unused, NON referenziate da source).
+
+**Convention catturata (Pattern 21):** in i18n message files, chiavi vengono aggiunte solo quando effettivamente referenziate da `useTranslations` source. Anti-pattern: preservare chiavi per hypothetical future use ("don't design for hypothetical future requirements"). Reversibility cost trivial — re-add 5s quando feature realmente arriva.
+
+`shell.nav.*` (8 nav) e `shell.topbar.*` rimanenti (openMenu, userMenu, logout, theme.\*, language.\*) preservati: tutti referenziati attivamente da Sidebar/Topbar.
+
 ---
 
 ## Files

@@ -1,11 +1,5 @@
 {
   "shell": {
-    "brand": "Gestionale",
-    "welcome": "Benvenuto, {name}",
-    "tenant": "Tenant",
-    "role": "Ruolo",
-    "loading": "Caricamento...",
-    "loggingOut": "Uscita...",
     "nav": {
       "dashboard": "Dashboard",
       "menu": "Menu",
@@ -19,7 +13,6 @@
     "topbar": {
       "openMenu": "Apri menu",
       "userMenu": "Menu utente",
-      "profile": "Profilo",
       "logout": "Esci",
       "theme": {
         "label": "Tema",

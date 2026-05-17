@@ -1260,6 +1260,8 @@ STOP 2B (Commit 2 TD-AW):
 
 **Cleanup post-merge**: opzionale follow-up docs/cleanup-f1-shell-post-merge se emergono gap minori in review pre-merge (Pattern 5).
 
+- **TD-BF ✅ RESOLVED** (cleanup PR post-merge sessione 14 `docs/cleanup-f1-shell-post-merge`) — i18n dead-code keys cleanup. Original scope `shell.welcome` only catturato in note STOP 10. **Expanded scope** (Sub-DP cleanup-expanded, verifica empirica STOP cleanup-verifica) a 7 chiavi `shell.*` unused (`brand`, `welcome`, `tenant`, `role`, `loading`, `loggingOut`, `topbar.profile`) via grep cross-codebase `useTranslations` calls. Rimosse 7 chiavi × 2 locale = 14 LOC delta. Convention "i18n keys solo quando usate" catturata in [ADR-0018 §TD-BF](docs/architecture/ADR-0018-f1-shell-ui-foundation.md#td-bf--i18n-dead-code-keys-cleanup-resolved-post-merge-sessione-14).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
