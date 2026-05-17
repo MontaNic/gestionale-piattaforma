@@ -1,0 +1,76 @@
+{
+  "shell": {
+    "brand": "Gestionale",
+    "welcome": "Benvenuto, {name}",
+    "tenant": "Tenant",
+    "role": "Ruolo",
+    "loading": "Caricamento...",
+    "loggingOut": "Uscita...",
+    "nav": {
+      "dashboard": "Dashboard",
+      "menu": "Menu",
+      "mappa": "Mappa tavoli",
+      "comande": "Comande",
+      "cassa": "Cassa",
+      "kds": "KDS",
+      "report": "Report",
+      "settings": "Impostazioni"
+    },
+    "topbar": {
+      "openMenu": "Apri menu",
+      "userMenu": "Menu utente",
+      "profile": "Profilo",
+      "logout": "Esci",
+      "theme": {
+        "label": "Tema",
+        "light": "Chiaro",
+        "dark": "Scuro",
+        "system": "Sistema"
+      },
+      "language": {
+        "label": "Lingua",
+        "it": "Italiano",
+        "en": "Inglese"
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Welcome {firstName} {lastName}",
+    "roles": "Ruoli",
+    "permissionsCount": "Permessi ({count})",
+    "profileUnavailable": "Profilo non disponibile",
+    "logoutButton": "Esci",
+    "loggingOut": "Uscita..."
+  },
+  "placeholder": {
+    "comingSoon": "Coming soon",
+    "menu": {
+      "title": "Menu",
+      "desc": "CRUD Menu — disponibile nelle prossime sessioni F1."
+    },
+    "mappa": {
+      "title": "Mappa tavoli",
+      "desc": "Editor mappa tavoli — disponibile nelle prossime sessioni F1."
+    },
+    "comande": {
+      "title": "Comande",
+      "desc": "PWA comande mobile — disponibile nelle prossime sessioni F1."
+    },
+    "cassa": {
+      "title": "Cassa",
+      "desc": "Punto cassa + scontrino — disponibile nelle prossime sessioni F1."
+    },
+    "kds": {
+      "title": "KDS",
+      "desc": "Kitchen Display System — disponibile nelle prossime sessioni F1."
+    },
+    "report": {
+      "title": "Report",
+      "desc": "Reportistica vendite + turni — disponibile nelle prossime sessioni F1."
+    },
+    "settings": {
+      "title": "Impostazioni",
+      "desc": "Configurazione tenant + utenti — disponibile nelle prossime sessioni F1."
+    }
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "shell": {
+    "brand": "Gestionale",
+    "welcome": "Welcome, {name}",
+    "tenant": "Tenant",
+    "role": "Role",
+    "loading": "Loading...",
+    "loggingOut": "Logging out...",
+    "nav": {
+      "dashboard": "Dashboard",
+      "menu": "Menu",
+      "mappa": "Table map",
+      "comande": "Orders",
+      "cassa": "Checkout",
+      "kds": "KDS",
+      "report": "Reports",
+      "settings": "Settings"
+    },
+    "topbar": {
+      "openMenu": "Open menu",
+      "userMenu": "User menu",
+      "profile": "Profile",
+      "logout": "Log out",
+      "theme": {
+        "label": "Theme",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "language": {
+        "label": "Language",
+        "it": "Italian",
+        "en": "English"
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Welcome {firstName} {lastName}",
+    "roles": "Roles",
+    "permissionsCount": "Permissions ({count})",
+    "profileUnavailable": "Profile unavailable",
+    "logoutButton": "Esci",
+    "loggingOut": "Uscita..."
+  },
+  "placeholder": {
+    "comingSoon": "Coming soon",
+    "menu": {
+      "title": "Menu",
+      "desc": "Menu CRUD — available in upcoming F1 sessions."
+    },
+    "mappa": {
+      "title": "Table map",
+      "desc": "Table map editor — available in upcoming F1 sessions."
+    },
+    "comande": {
+      "title": "Orders",
+      "desc": "Mobile orders PWA — available in upcoming F1 sessions."
+    },
+    "cassa": {
+      "title": "Checkout",
+      "desc": "Point of sale + receipt — available in upcoming F1 sessions."
+    },
+    "kds": {
+      "title": "KDS",
+      "desc": "Kitchen Display System — available in upcoming F1 sessions."
+    },
+    "report": {
+      "title": "Reports",
+      "desc": "Sales + shifts reporting — available in upcoming F1 sessions."
+    },
+    "settings": {
+      "title": "Settings",
+      "desc": "Tenant + users configuration — available in upcoming F1 sessions."
+    }
+  }
+}
