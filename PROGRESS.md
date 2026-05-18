@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 19 maggio 2026 (sessione 15 — TD-AY + TD-BE Sub-2 atomic closure)
+**Ultimo aggiornamento:** 19 maggio 2026 (sessione 15 — TD-AY + TD-BE Sub-2 + cleanup post-merge TD-BI)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + **F1 shell UI foundation (Sidebar + Topbar + i18n cookie-based + auth refactor)** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system. **Test totali**: 48 unit + 8 e2e Testcontainers backend invariati + target 9/9 Playwright chromium PASS (2 setup + 4 auth-* esistenti + 3 nuovi `shell.spec.ts`).
 
-> ✅ **TD-AY + TD-BE Sub-2 sessione 15 COMPLETED** (ADR-0016 §TD-AY + §TD-BE Sub-2 resolution): `GlobalHttpExceptionFilter` `@Catch(HttpException)` registrato globalmente normalizza shape errore HTTP cross-endpoint a `{statusCode, errorCode: 'E_*', message, ...extras}` single source of truth. 4 detection branches (DTO esplicito + legacy `code` + NestJS taxonomy-in-message + ValidationPipe array). `LockoutExceptionFilter` refactor `extends GlobalHttpExceptionFilter` per DI priority preservation. TD-BE Sub-2 risolto via env override CI surgical (`THROTTLE_AUTH_LIMIT 5→100` solo job `e2e-playwright`). 2 TD nuovi (TD-BG convergenza stilistica call site + TD-BH security logging). Discoveries cumulative: **49** (+2 sessione 15). Foundation cleanup carry-over sessioni 11-14: **100% ✅**. Prossimo task: sessione 16 jump a F1 Menu CRUD (prima feature business).
+> ✅ **TD-AY + TD-BE Sub-2 sessione 15 COMPLETED** (ADR-0016 §TD-AY + §TD-BE Sub-2 resolution): `GlobalHttpExceptionFilter` `@Catch(HttpException)` registrato globalmente normalizza shape errore HTTP cross-endpoint a `{statusCode, errorCode: 'E_*', message, ...extras}` single source of truth. 4 detection branches (DTO esplicito + legacy `code` + NestJS taxonomy-in-message + ValidationPipe array). `LockoutExceptionFilter` refactor `extends GlobalHttpExceptionFilter` per DI priority preservation. TD-BE Sub-2 risolto via env override CI surgical (`THROTTLE_AUTH_LIMIT 5→100` solo job `e2e-playwright`). 2 TD nuovi (TD-BG convergenza stilistica call site + TD-BH security logging). **Cleanup follow-up PR #35**: TD-BI fix stale `tenant-isolation.spec.ts` (rivelato da PR #34 CI failure) + Discovery #50 capture ADR-0012 §TD-7 (F1-shell AuthGate side-effect chiude parzialmente gap UI, backend invariato → TD-7 priority bump da cosmetico a necessario). Discoveries cumulative: **50** (+3 sessione 15). Foundation cleanup carry-over sessioni 11-14: **100% ✅**. F1 cleanup carry-over sessione 15: **100% ✅**. Prossimo task: sessione 16 jump a F1 Menu CRUD (prima feature business).
 
 ---
 
@@ -1319,6 +1319,41 @@ STOP 2B (Commit 2 TD-AW):
 - F1 shell UI: 100% (invariato sessione 14)
 - Next: sessione 16 jump a F1 Menu CRUD (prima feature business) con tabula rasa cleanup.
 
+### Cleanup follow-up post-merge — PR #35 (TD-BI + Discovery #50) (2026-05-19)
+
+**Branch**: `docs/cleanup-td-bi-discovery-50-post-merge` · **Tipo**: 1 PR cleanup follow-up · **ADR**: [ADR-0012 §TD-7 sessione 15 update](docs/architecture/ADR-0012-frontend-auth-flow.md#sessione-15-update--f1-shell-side-effect-discovery-50)
+
+**Scope:** chiusura TD-BI stale test + capture Discovery #50 ADR-0012 §TD-7.
+
+**Decisioni:**
+
+- **TD-BI** — F1 riformulazione spec `tenant-isolation.spec.ts` per nuova semantica F1-shell (redirect implicito cross-tenant). Spec funge da regression guard contro futuri refactor F1-shell che potrebbero accidentalmente riaprire il gap UI.
+- **Discovery #50** capture in ADR-0012 §TD-7 sessione 15 update — gap parzialmente mitigato UI (side-effect AuthGate + AuthContext F1-shell), backend invariato.
+- **TD-7 priority bump**: non più cosmetico, **necessario** per defense-in-depth backend (client non-browser, mobile app future, integrazioni API, security audit). Candidate sessione 16+ post Menu CRUD.
+
+**Discoveries cumulative bump 49 → 50** (+1 vs PR #34):
+
+- **Discovery #50** — F1-shell AuthGate side-effect: cross-tenant access pattern `demo_storageState + /t/acme/dashboard` innesca redirect implicito a `/t/acme/login` durante navigation + render flow F1-shell. UI parzialmente chiusa (lato UX, side-effect non intenzionale), backend `/me` invariato (`tenant.middleware.ts:43` skippa cross-check se `req.user` post-JwtAuthGuard). Rivelato da PR #34 CI failure su stale spec sessione 14 (locator `getByText(/^welcome\s+/i)` non match login form `Accedi` renderizzato al timeout invece di dashboard).
+
+**Tech debt:**
+
+- ✅ **TD-BI RESOLVED** (riformulazione spec come regression guard nuovo comportamento UI)
+- 🔼 **TD-7 priority bump** ([ADR-0012 §TD-7 sessione 15 update](docs/architecture/ADR-0012-frontend-auth-flow.md#sessione-15-update--f1-shell-side-effect-discovery-50)) — backend Guard cross-check defense-in-depth necessario, candidate sessione 16+
+
+**Files modificati (3):**
+
+- `apps/web/e2e/specs/tenant-isolation.spec.ts` — riformulazione integrale (+~30 LOC commenti evoluzione semantica + nuove assertion regression guard redirect implicito)
+- `docs/architecture/ADR-0012-frontend-auth-flow.md` — sub-sezione `Sessione 15 update — F1-shell side-effect (Discovery #50)` dopo Update sessione 10 (+~40 righe)
+- `PROGRESS.md` — header bump 49→50 + sub-sezione cleanup PR #35 + candidate list update
+
+**Foundation status (invariato post-PR #34):**
+
+- Foundation security/scaling F1: 100%
+- Foundation cleanup carry-over sessioni 11-14: 100% ✅
+- F1 shell UI: 100% (sessione 14)
+- F1 cleanup carry-over sessione 15: **100% ✅** (TD-BI chiuso)
+- Next: sessione 16 jump a F1 Menu CRUD con tabula rasa cleanup.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
@@ -1326,7 +1361,7 @@ STOP 2B (Commit 2 TD-AW):
 Candidate (in ordine di priorità suggerito):
 
 1. **F1 Menu CRUD** (prima feature business F1) — tabula rasa post-cleanup sessioni 11-15. Foundation shell + auth + RBAC + i18n pronti. Stima da definire.
-2. **TD-7 ADR-0012 fix** (cross-tenant token UX edge) — Guard backend cross-check JWT.tenantId vs X-Tenant-Slug + frontend manda header anche post-auth. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` diventa regression guard.
+2. **TD-7 ADR-0012 fix** 🔼 **priority bump POST-Discovery #50** (cross-tenant token UX edge) — backend Guard cross-check JWT.tenantId vs X-Tenant-Slug header defense-in-depth (gap UI mitigato side-effect F1-shell, **backend invariato** → curl/mobile/integrazioni API ancora vulnerabili). Frontend AuthContext passa X-Tenant-Slug + valida match profilo. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` regression guard diventa funzionale (oggi UI-only).
 3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
 4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
 5. **TD-BG ADR-0016** — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO `AuthErrorResponse` pattern + restringi `isTaxonomyCode` regex. Non-urgente. Stima ~45min.
