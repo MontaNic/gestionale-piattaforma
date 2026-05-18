@@ -371,6 +371,48 @@ Sezione esplicita per non nascondere il debito tra altre note. Ogni voce ha trig
   - Assert attuale: `await expect(page).toHaveURL('/t/acme/dashboard')` + verifica email demo visibile
   - Assert post-fix: `await page.waitForURL(/\/t\/demo\/dashboard|\/t\/.*\/login/)` (redirect a tenant proprio O login)
 
+#### Sessione 15 update — F1-shell side-effect (Discovery #50)
+
+**Status:** GAP PARZIALMENTE MITIGATO lato UI, **BACKEND INVARIATO**.
+
+##### Cosa è cambiato
+
+F1-shell sessione 14 (PR #32) ha introdotto `AuthGate` + `AuthContext` client-side senza intento di chiudere TD-7. **Side-effect non intenzionale:**
+
+- `AuthContext.loadProfile()` fetch `/me` (SENZA X-Tenant-Slug)
+- Risposta contiene `tenantSlug` profilo (JWT subject)
+- Cross-tenant access pattern `demo_storageState + /t/acme/dashboard`:
+  - AuthContext popola state con dati demo
+  - `AuthGate` valuta `isAuthenticated=true` → passa
+  - Ma: durante navigation + render flow F1-shell, redirect implicito a `/t/acme/login`
+    (meccanismo esatto da investigare in TD-7 fix completo)
+
+##### Implicazioni
+
+| Lato                | Stato post-F1-shell                                      | Note                                                             |
+| ------------------- | -------------------------------------------------------- | ---------------------------------------------------------------- |
+| UI browser          | **Mitigato** — redirect implicito a login del tenant URL | Side-effect AuthGate + AuthContext flow                          |
+| Backend API diretto | **INVARIATO** — `/me` ignora slug URL                    | curl, client non-browser, mobile app future leggono cross-tenant |
+
+##### Priority bump roadmap
+
+TD-7 fix backend Guard cross-check JWT.tenantId vs X-Tenant-Slug header (defense-in-depth) **non è più cosmetico** ma **necessario** per chiusura completa gap su client non-browser (mobile app future, integrazioni API, security audit).
+
+Stima: ~1h. Candidate sessione 16+ post Menu CRUD.
+
+##### Spec regression guard
+
+`apps/web/e2e/specs/tenant-isolation.spec.ts` riformulato sessione 15 (TD-BI fix in PR #35):
+
+- Documenta nuovo comportamento UI (redirect implicito a `/t/{slug}/login`)
+- Funge da regression guard contro futuri refactor F1-shell che potrebbero accidentalmente riaprire il gap UI
+
+##### Refs
+
+- Discovery #50 — F1-shell AuthGate cross-tenant redirect implicit (rivelato da PR #34 CI failure su stale spec sessione 14)
+- TD-BI — fix stale spec (PR #35 cleanup follow-up)
+- [ADR-0018](./ADR-0018-f1-shell-ui-foundation.md) §AuthContext + §AuthGate (F1-shell foundation)
+
 **Foundation per**: TD-H lockout key per-tenant (B1 ADR-0013 carry-over, ora sbloccato lato frontend) + future macro-task multi-tenant routing (tenant switching UI, tenant-aware command palette, ecc.).
 
 ## Consequences
