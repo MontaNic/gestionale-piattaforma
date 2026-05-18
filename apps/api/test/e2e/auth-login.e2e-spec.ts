@@ -74,9 +74,11 @@ describe('Auth login flow (E2E)', () => {
       .send({ email: 'admin@demo.local', password: 'Admin123!' });
 
     expect(res.status).toBe(401);
-    // Note: questo flow lancia da controller `new UnauthorizedException()` con
-    // shape NestJS default (no errorCode). Out-of-scope DP3.1 → TD-AY coverage.
-    expect(res.body.message).toBe('E_AUTH_TENANT_REQUIRED');
+    // TD-AY resolution: GlobalHttpExceptionFilter normalizza
+    // `new UnauthorizedException('E_AUTH_TENANT_REQUIRED')` (raw=string taxonomy)
+    // → body.errorCode='E_AUTH_TENANT_REQUIRED' + body.message='Unauthorized'.
+    expect(res.body.errorCode).toBe('E_AUTH_TENANT_REQUIRED');
+    expect(res.body.statusCode).toBe(401);
   });
 
   // ─── Test TD-H cross-tenant lockout isolation (PR 2 sessione 12) ─────────
@@ -102,7 +104,9 @@ describe('Auth login flow (E2E)', () => {
       .set('X-Tenant-Slug', 'demo')
       .send({ email: 'admin@demo.local', password: 'WrongPassword!' });
     expect(demoLocked.status).toBe(429);
-    expect(demoLocked.body.code).toBe('E_AUTH_ACCOUNT_LOCKED');
+    // TD-AY: body field rinominato `code` → `errorCode` per uniformità taxonomy
+    // cross-endpoint (vedi throwAccountLocked in auth.service.ts).
+    expect(demoLocked.body.errorCode).toBe('E_AUTH_ACCOUNT_LOCKED');
 
     // Stesso istante: tentativo wrong password su acme → 401 (NOT 429).
     // Cross-tenant isolation: key Redis è `tenant:<acmeId>:email:...`, distinta.

@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 17 maggio 2026 (sessione 14 — F1 shell Next.js + i18n + auth refactor)
+**Ultimo aggiornamento:** 19 maggio 2026 (sessione 15 — TD-AY + TD-BE Sub-2 atomic closure)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + **F1 shell UI foundation (Sidebar + Topbar + i18n cookie-based + auth refactor)** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system. **Test totali**: 48 unit + 8 e2e Testcontainers backend invariati + target 9/9 Playwright chromium PASS (2 setup + 4 auth-* esistenti + 3 nuovi `shell.spec.ts`).
 
-> ✅ **F1 shell sessione 14 COMPLETED** (ADR-0018): foundation UI Next.js (Sidebar + Topbar + theme + i18n + auth refactor) come base per 8 future feature F1 (Menu CRUD, Mappa, Comande, Cassa, KDS, Report, Settings, Dashboard widget). Stack: `next-intl@4.12.0` + `next-themes@0.4.6` + 3 shadcn componenti aggiunti (sheet, dropdown-menu, avatar). Pattern: `localePrefix: 'never'` cookie-based (URL invariate), route group `(authenticated)/`, AuthContext refactor estrazione da dashboard inline (pattern TD-6 logout preservato), AUTH_CHANGE_EVENT custom event bus per same-tab sync (Discovery #45). 9 route registrate post-build, smoke `shell.spec.ts` 3/3 PASS + non-regression auth-* 6/6 PASS (target 9/9 in 9.9s). 5 TD nuovi (TD-BA→BE) + 3 discovery nuovi (#45-47). Vedi [ADR-0018](docs/architecture/ADR-0018-f1-shell-ui-foundation.md). Discoveries cumulative: **47** (+3 sessione 14). Prossimo task: feature F1 business (Menu CRUD o Mappa tavoli prioritari) oppure TD-AY+TD-BE atomic cleanup sessione 15.
+> ✅ **TD-AY + TD-BE Sub-2 sessione 15 COMPLETED** (ADR-0016 §TD-AY + §TD-BE Sub-2 resolution): `GlobalHttpExceptionFilter` `@Catch(HttpException)` registrato globalmente normalizza shape errore HTTP cross-endpoint a `{statusCode, errorCode: 'E_*', message, ...extras}` single source of truth. 4 detection branches (DTO esplicito + legacy `code` + NestJS taxonomy-in-message + ValidationPipe array). `LockoutExceptionFilter` refactor `extends GlobalHttpExceptionFilter` per DI priority preservation. TD-BE Sub-2 risolto via env override CI surgical (`THROTTLE_AUTH_LIMIT 5→100` solo job `e2e-playwright`). 2 TD nuovi (TD-BG convergenza stilistica call site + TD-BH security logging). Discoveries cumulative: **49** (+2 sessione 15). Foundation cleanup carry-over sessioni 11-14: **100% ✅**. Prossimo task: sessione 16 jump a F1 Menu CRUD (prima feature business).
 
 ---
 
@@ -1262,18 +1262,77 @@ STOP 2B (Commit 2 TD-AW):
 
 - **TD-BF ✅ RESOLVED** (cleanup PR post-merge sessione 14 `docs/cleanup-f1-shell-post-merge`) — i18n dead-code keys cleanup. Original scope `shell.welcome` only catturato in note STOP 10. **Expanded scope** (Sub-DP cleanup-expanded, verifica empirica STOP cleanup-verifica) a 7 chiavi `shell.*` unused (`brand`, `welcome`, `tenant`, `role`, `loading`, `loggingOut`, `topbar.profile`) via grep cross-codebase `useTranslations` calls. Rimosse 7 chiavi × 2 locale = 14 LOC delta. Convention "i18n keys solo quando usate" catturata in [ADR-0018 §TD-BF](docs/architecture/ADR-0018-f1-shell-ui-foundation.md#td-bf--i18n-dead-code-keys-cleanup-resolved-post-merge-sessione-14).
 
+### TD-AY + TD-BE Sub-2 atomic closure sessione 15 (2026-05-19)
+
+**Branch**: `chore/td-ay-td-be-sub2-cleanup` · **Tipo**: 1 PR atomic single commit · **ADR**: [ADR-0016 §TD-AY resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-ay-resolution-sessione-15) + [§TD-BE Sub-2 resolution](docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md#td-be-sub-2-resolution-sessione-15)
+
+**Macro-task**: Cleanup foundation carry-over sessioni 11-14 — chiusura definitiva TD-AY (taxonomy errorCode cross-endpoint) + TD-BE Sub-2 (Playwright full suite determinism).
+
+**Decisioni:**
+
+- **DP-1 C** atomic single PR (vs 2 PR separate): TD-AY + TD-BE Sub-2 logicamente accoppiati (entrambi affect auth error contract end-to-end).
+- **DP-2 A2** `GlobalHttpExceptionFilter` single source of truth shape (vs A1 enum+DTO refactor 7+ call site, vs A3 endpoint-per-endpoint patch): scope contenuto + drop-in compatibility frontend `parseError` esistente.
+- **DP-3 α1** env override CI surgical (`THROTTLE_AUTH_LIMIT 5→100` job `e2e-playwright`) vs γ Redis reset `beforeEach`: drop-in vs ~1h+ scaffolding `globalSetup` + endpoint admin (verifica empirica STOP 0: NO helper esistente).
+
+**Implementazione (Pattern 4 layered review, STOP 0-3):**
+
+- **STOP 0** verifica empirica codebase pre-strategia: confermato NO Redis cleanup helper, NO `beforeEach`/`globalSetup` Playwright, NO endpoint admin reset throttler, `LockoutExceptionFilter` usa `body.code` + `extends BaseExceptionFilter`, 7+ call site `UnauthorizedException('E_*')` legacy.
+- **STOP 1** implementazione + smoke server-side: 48/48 unit + 8/8 E2E Testcontainers PASS dopo 2 fix iterativi (Discovery #48 + #49 emerse da E2E test failure 1° run).
+- **STOP 2** review pre-merge file-by-file Pattern 4 layered: 4 batch (filter + wiring + lockout refactor + test/CI), 8 minor concerns / 0 blocker. 1 fix pre-commit (DI priority comment esplicito in `auth.module.ts`).
+- **STOP 3** commit atomic + ADR update + PROGRESS entry + PR create.
+
+**Files modificati (7 + 2 docs):**
+
+- `apps/api/src/common/filters/global-http-exception.filter.ts` (new, 184 LOC) — `@Catch(HttpException)` 4 detection branches + extras preservation
+- `apps/api/src/main.ts` (+8) — `useGlobalFilters(new GlobalHttpExceptionFilter())`
+- `apps/api/src/auth/filters/lockout-exception.filter.ts` (refactor) — `extends GlobalHttpExceptionFilter` (era BaseExceptionFilter), `isLockoutResponse` usa `errorCode`
+- `apps/api/src/auth/auth.service.ts` (+/-3) — `throwAccountLocked` body `code` → `errorCode`
+- `apps/api/src/auth/auth.module.ts` (+/-6) — commento APP_FILTER DI priority + TD-AY rationale
+- `apps/api/test/e2e/auth-login.e2e-spec.ts` (+/-12) — assertion `body.code` → `body.errorCode` × 2 + bonus statusCode assert
+- `.github/workflows/ci.yml` (+7) — `THROTTLE_AUTH_LIMIT` 5→100 + commento TD-BE Sub-2 rationale
+- `docs/architecture/ADR-0016-playwright-e2e-frontend-ci.md` (+93/-1) — §TD-AY resolution + §TD-BE Sub-2 resolution + TD table row update
+- `PROGRESS.md` (+entries) — sessione 15 entry + header bump
+
+**Discoveries cumulative bump 47 → 49** (+2 sessione 15):
+
+- **#48** — `extras` field preservation contract DTO custom: filter v1 stripava `timestamp` field di `AuthErrorResponse` TD-AJ → E2E test failure 1° run. Fix `extractExtras()` + spread `...extras` PRIMA dei field normalizzati (precedenza esplicita normalizzati safe by-design).
+- **#49** — NestJS `UnauthorizedException(code)` body semantica controintuitiva: il code finisce in `body.message` (NOT `body.errorCode`). Filter v1 fallback faceva risolvere `body.errorCode='E_UNAUTHORIZED'` invece di taxonomy reale `E_AUTH_TENANT_REQUIRED` → E2E test failure 1° run. Detection branch dedicata (taxonomy in body.message) necessaria per backward-compat 7+ legacy call site senza refactor.
+
+**Tech debt:**
+
+- ✅ **TD-AY RESOLVED** (ADR-0016 §TD-AY resolution sessione 15)
+- ✅ **TD-BE Sub-2 RESOLVED** (ADR-0016 §TD-BE Sub-2 resolution sessione 15)
+- 🆕 **TD-BG** (proposta) — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO esplicito (`AuthErrorResponse` pattern) + restringi `isTaxonomyCode` regex post-migration. Non-urgente, capture in ADR-0016 trade-off.
+- 🆕 **TD-BH** (proposta) — structured security logging 401/403 ripetuti (fraud detection observability). Oggi `Logger.error` solo 500+ per design (4xx atteso no noise). Non-urgente.
+
+**Test:**
+
+- ✅ Unit backend: 48/48 PASS
+- ✅ E2E Testcontainers backend: 8/8 PASS (15.26s)
+- ⏸ Curl smoke server-side: SKIP (API dev :3000 down localmente, coverage via Testcontainers)
+- ⏳ Playwright full suite 9/9: verify post-merge CI run (env override TD-BE Sub-2)
+
+**Foundation status post-merge:**
+
+- Foundation security/scaling F1: 100% (invariato)
+- Foundation cleanup carry-over sessioni 11-14: **100% ✅** (chiusura definitiva TD-AY + TD-BE Sub-2)
+- F1 shell UI: 100% (invariato sessione 14)
+- Next: sessione 16 jump a F1 Menu CRUD (prima feature business) con tabula rasa cleanup.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
 
 Candidate (in ordine di priorità suggerito):
 
-1. **TD-AY ADR-0016** (scope espanso) — Allineamento taxonomy `errorCode` unificata cross-endpoint completa: 401 endpoint mancanti + 429 `LockoutExceptionFilter` rename + 400 custom `ValidationPipe.exceptionFactory`. Stima ~45-60min realistic.
+1. **F1 Menu CRUD** (prima feature business F1) — tabula rasa post-cleanup sessioni 11-15. Foundation shell + auth + RBAC + i18n pronti. Stima da definire.
 2. **TD-7 ADR-0012 fix** (cross-tenant token UX edge) — Guard backend cross-check JWT.tenantId vs X-Tenant-Slug + frontend manda header anche post-auth. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` diventa regression guard.
 3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
 4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
-5. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-6. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+5. **TD-BG ADR-0016** — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO `AuthErrorResponse` pattern + restringi `isTaxonomyCode` regex. Non-urgente. Stima ~45min.
+6. **TD-BH ADR-0016** — structured security logging 401/403 ripetuti (fraud detection observability). Non-urgente. Stima ~30min.
+7. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+8. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 

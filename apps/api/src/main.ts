@@ -10,6 +10,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
+import { GlobalHttpExceptionFilter } from './common/filters/global-http-exception.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -36,6 +37,13 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+
+  // TD-AY: GlobalHttpExceptionFilter normalizza shape errori HTTP cross-endpoint
+  // (`{statusCode, errorCode, message}`). LockoutExceptionFilter (APP_FILTER in
+  // AuthModule) extends questa classe → super.catch() condivide la normalizzazione
+  // dopo aver settato Retry-After. Registrazione globale qui copre tutti i moduli
+  // non-auth (tenant middleware, ValidationPipe 400, generici 401/403/etc).
+  app.useGlobalFilters(new GlobalHttpExceptionFilter());
 
   // Abilita gli shutdown hooks (SIGTERM/SIGINT) per propagare onModuleDestroy
   // ai provider — necessario per il graceful $disconnect del Prisma client
