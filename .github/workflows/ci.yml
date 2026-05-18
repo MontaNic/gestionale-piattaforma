@@ -118,7 +118,12 @@ jobs:
       THROTTLE_DEFAULT_TTL_MS: '60000'
       THROTTLE_DEFAULT_LIMIT: '60'
       THROTTLE_AUTH_TTL_MS: '60000'
-      THROTTLE_AUTH_LIMIT: '5'
+      # TD-BE Sub-2: bump 5 → 100 per Playwright suite. Le auth.setup.ts +
+      # specs cumulano > 5 login (multi-tenant fixture demo+acme + auth spec
+      # negative cases) entro 60s → cascading 429 da rate limit causava flake
+      # intermittent (6/9 → 9/9 PASS). Backend default (.env) resta 5 (prod
+      # safety). Throttler legge env, no code change backend richiesto.
+      THROTTLE_AUTH_LIMIT: '100'
       THROTTLE_TENANT_CREATE_TTL_MS: '3600000'
       THROTTLE_TENANT_CREATE_LIMIT: '3'
       THROTTLE_AUTH_PIN_TTL_MS: '60000'

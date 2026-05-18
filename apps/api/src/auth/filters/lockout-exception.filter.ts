@@ -1,12 +1,13 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
-import { BaseExceptionFilter } from '@nestjs/core';
+
+import { GlobalHttpExceptionFilter } from '../../common/filters/global-http-exception.filter';
 
 // =============================================================================
 // LockoutExceptionFilter — Retry-After: 900 fissi su E_AUTH_ACCOUNT_LOCKED
 // =============================================================================
 // (decisione lockata STOP 3, TD-J):
 //
-// Quando AuthService lancia HttpException(429) con body { code:
+// Quando AuthService lancia HttpException(429) con body { errorCode:
 // 'E_AUTH_ACCOUNT_LOCKED', ... }, questo filter intercetta PRIMA del default
 // NestJS handler e setta `Retry-After: 900` (15 min) sull'header response.
 //
@@ -18,19 +19,18 @@ import { BaseExceptionFilter } from '@nestjs/core';
 //
 // Trade-off documentato in ADR-0013 TD-J.
 //
-// Inheritance: extends BaseExceptionFilter per delegare il rendering del body
-// JSON al default NestJS handler (super.catch). Niente duplicazione del
-// format response standard (`{statusCode, message, error, code, ...}`).
+// Inheritance: extends GlobalHttpExceptionFilter (TD-AY) per condividere la
+// normalizzazione shape `{statusCode, errorCode, message}` via super.catch().
+// LockoutExceptionFilter aggiunge SOLO il side-effect Retry-After header,
+// poi delega la response al parent. Pre-TD-AY estendeva BaseExceptionFilter
+// che emetteva la shape NestJS default — inconsistente con altri endpoint.
 //
-// Wire: APP_FILTER globale in AuthModule. Funziona per QUALSIASI HttpException
-// (non solo lockout): se body.code !== 'E_AUTH_ACCOUNT_LOCKED' → pass-through
-// puro al default handler.
+// Wire: APP_FILTER globale in AuthModule (DI priority sopra useGlobalFilters
+// di main.ts). Funziona per QUALSIASI HttpException: se body.errorCode !==
+// 'E_AUTH_ACCOUNT_LOCKED' → no Retry-After, ma normalize comunque applicata.
 // =============================================================================
 @Catch(HttpException)
-export class LockoutExceptionFilter extends BaseExceptionFilter implements ExceptionFilter {
-  // Niente constructor: BaseExceptionFilter risolve HttpAdapterHost via DI
-  // quando registrato come APP_FILTER. Custom constructor con arg opzionale
-  // confonde il DI ("UnknownDependenciesException").
+export class LockoutExceptionFilter extends GlobalHttpExceptionFilter implements ExceptionFilter {
   override catch(exception: HttpException, host: ArgumentsHost): void {
     const body = exception.getResponse();
     if (this.isLockoutResponse(body)) {
@@ -46,8 +46,8 @@ export class LockoutExceptionFilter extends BaseExceptionFilter implements Excep
     return (
       typeof body === 'object' &&
       body !== null &&
-      'code' in body &&
-      (body as { code: unknown }).code === 'E_AUTH_ACCOUNT_LOCKED'
+      'errorCode' in body &&
+      (body as { errorCode: unknown }).errorCode === 'E_AUTH_ACCOUNT_LOCKED'
     );
   }
 }

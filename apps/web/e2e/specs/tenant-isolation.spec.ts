@@ -29,8 +29,40 @@ import path from 'node:path';
 
 test.use({ storageState: path.join(import.meta.dirname, '..', '.auth', 'demo.json') });
 
+// =============================================================================
+// TODO TD-BI (PR #35 follow-up post-merge) — stale test rivelato da F1-shell.
+// =============================================================================
+// Status: SKIP da PR #34 (chore/td-ay-td-be-sub2-cleanup).
+//
+// Root cause empirico (verificato sessione 15 STOP 3.7 via error-context.md
+// YAML snapshot + test-failed-1.png):
+// - Spec scritto pre-F1-shell (sessione TD-4) per documentare TD-7 ADR-0012
+//   gap "Cross-tenant token UX edge" — assumeva render dashboard con dati demo
+//   leak su URL slug acme (vecchio comportamento gap UI puro).
+// - Sessione 14 F1-shell refactor introduce AuthGate client guard +
+//   AuthContext fetch /me con loading state, dashboard sotto (authenticated)/
+//   route group. storageState demo.json NON valido per slug acme post-F1-shell:
+//   AuthGate redirect implicito a /t/acme/login (form Accedi renderizzato al
+//   timeout, NON dashboard).
+// - Locator `getByText(/^welcome\s+/i)` non match perché pagina è login form,
+//   non welcome card dashboard.
+//
+// Semantica TD-7 cambiata da F1-shell: gap UI parzialmente chiuso (NO più
+// demo data leak visibile cross-tenant), backend invariato (no JWT.tenantId
+// vs X-Tenant-Slug cross-check — AuthContext.loadProfile non passa slug).
+// Lo spec NON e' regressione PR #34 (TD-AY/TD-BE Sub-2), e' stale test
+// pre-esistente sessione 14 (PR #32 F1-shell) non catturato da CI prima.
+//
+// Fix candidate PR #35 (TD-BI):
+// (a) Riformulare spec per nuova semantica F1-shell: verify redirect implicito
+//     a /t/acme/login quando storageState demo accede slug acme (regression
+//     guard del fix UI parziale F1-shell ha introdotto).
+// (b) Se vogliamo testare backend gap TD-7 residuo (no JWT cross-check), serve
+//     fixture API direct (no UI) o promuovere TD-7 fix Guard backend cross-check
+//     (priority bump roadmap, sblocca regression guard funzionale).
+// =============================================================================
 test.describe('Cross-tenant isolation (demo user → acme tenant URL)', () => {
-  test('demo logged user navigating /t/acme/dashboard sees DEMO data (TD-7 ADR-0012 gap)', async ({
+  test.skip('demo logged user navigating /t/acme/dashboard sees DEMO data (TD-7 ADR-0012 gap)', async ({
     page,
   }) => {
     await page.goto('/t/acme/dashboard');

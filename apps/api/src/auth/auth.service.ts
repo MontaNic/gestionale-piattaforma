@@ -107,11 +107,12 @@ export class AuthService {
 
   private throwAccountLocked(): never {
     // 429 (NOT 401): distinguibile lato client per UX e auto-retry policy.
-    // Body code dedicato letto da LockoutExceptionFilter per Retry-After: 900.
+    // Body errorCode (TD-AY: ex `code:`, allineato a taxonomy cross-endpoint)
+    // letto da LockoutExceptionFilter per Retry-After: 900.
     throw new HttpException(
       {
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
-        code: 'E_AUTH_ACCOUNT_LOCKED',
+        errorCode: 'E_AUTH_ACCOUNT_LOCKED',
         message: 'Account temporaneamente bloccato per troppi tentativi falliti',
       },
       HttpStatus.TOO_MANY_REQUESTS,

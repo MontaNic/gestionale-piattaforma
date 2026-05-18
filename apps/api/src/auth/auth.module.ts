@@ -37,8 +37,12 @@ if (!JWT_SECRET) {
     // APP_GUARD multipli in module diversi → ordine non garantito.
     JwtAuthGuard,
     // LockoutExceptionFilter globale (B1 STOP 3): intercetta HttpException
-    // con body.code='E_AUTH_ACCOUNT_LOCKED' e setta Retry-After: 900 fissi
+    // con body.errorCode='E_AUTH_ACCOUNT_LOCKED' e setta Retry-After: 900 fissi
     // (anti user-enumeration TD-J). Pass-through per altre HttpException.
+    // TD-AY: extends GlobalHttpExceptionFilter → shape normalizzata via super.catch().
+    // DI priority: APP_FILTER runna PRIMA di useGlobalFilters (main.ts) →
+    // inheritance garantisce shape consistency anche su lockout path (senza
+    // inheritance, super.catch() invierebbe response bypassando il global).
     { provide: APP_FILTER, useClass: LockoutExceptionFilter },
   ],
   exports: [AuthService, JwtAuthGuard],
