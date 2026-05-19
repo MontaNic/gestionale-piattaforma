@@ -26,6 +26,8 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_AUTH_INVALID_CREDENTIALS: 'Email o password non corrette',
   E_AUTH_ACCOUNT_LOCKED:
     'Account temporaneamente bloccato per troppi tentativi falliti. Riprova tra qualche minuto.',
+  E_AUTH_TENANT_REQUIRED: 'Tenant non specificato. Riprova accedendo dal link corretto.',
+  E_AUTH_TENANT_MISMATCH: 'Accesso non autorizzato a questo tenant. Effettua nuovamente il login.',
   E_RATE_LIMITED: 'Troppe richieste. Attendi qualche istante e riprova.',
   E_UNKNOWN: FALLBACK_MESSAGE,
 };

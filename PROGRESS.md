@@ -4,10 +4,10 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 19 maggio 2026 (sessione 15 — TD-AY + TD-BE Sub-2 + cleanup post-merge TD-BI)
-**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + **F1 shell UI foundation (Sidebar + Topbar + i18n cookie-based + auth refactor)** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system. **Test totali**: 48 unit + 8 e2e Testcontainers backend invariati + target 9/9 Playwright chromium PASS (2 setup + 4 auth-* esistenti + 3 nuovi `shell.spec.ts`).
+**Ultimo aggiornamento:** 20 maggio 2026 (sessione 16 — TD-7 backend Guard cross-tenant defense-in-depth)
+**Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
-> ✅ **TD-AY + TD-BE Sub-2 sessione 15 COMPLETED** (ADR-0016 §TD-AY + §TD-BE Sub-2 resolution): `GlobalHttpExceptionFilter` `@Catch(HttpException)` registrato globalmente normalizza shape errore HTTP cross-endpoint a `{statusCode, errorCode: 'E_*', message, ...extras}` single source of truth. 4 detection branches (DTO esplicito + legacy `code` + NestJS taxonomy-in-message + ValidationPipe array). `LockoutExceptionFilter` refactor `extends GlobalHttpExceptionFilter` per DI priority preservation. TD-BE Sub-2 risolto via env override CI surgical (`THROTTLE_AUTH_LIMIT 5→100` solo job `e2e-playwright`). 2 TD nuovi (TD-BG convergenza stilistica call site + TD-BH security logging). **Cleanup follow-up PR #35**: TD-BI fix stale `tenant-isolation.spec.ts` (rivelato da PR #34 CI failure) + Discovery #50 capture ADR-0012 §TD-7 (F1-shell AuthGate side-effect chiude parzialmente gap UI, backend invariato → TD-7 priority bump da cosmetico a necessario). Discoveries cumulative: **50** (+3 sessione 15). Foundation cleanup carry-over sessioni 11-14: **100% ✅**. F1 cleanup carry-over sessione 15: **100% ✅**. Prossimo task: sessione 16 jump a F1 Menu CRUD (prima feature business).
+> ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 
 ---
 
@@ -1354,20 +1354,78 @@ STOP 2B (Commit 2 TD-AW):
 - F1 cleanup carry-over sessione 15: **100% ✅** (TD-BI chiuso)
 - Next: sessione 16 jump a F1 Menu CRUD con tabula rasa cleanup.
 
+### TD-7 backend Guard cross-tenant defense-in-depth — sessione 16 (2026-05-20)
+
+**Branch**: `feat/td-7-tenant-consistency-guard` · **Tipo**: 1 PR feature backend lean (4 file scope + 2 docs) · **ADR**: [ADR-0012 §TD-7 sessione 16 update](docs/architecture/ADR-0012-frontend-auth-flow.md#sessione-16-update--td-7-resolved-pr-36)
+
+**Scope:** chiusura TD-7 ADR-0012 (priority bumped sessione 15 da Discovery #50). Defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API).
+
+**Decisioni:**
+
+- **1A SPLIT** — TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 Menu reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5, session carving multi-sessione raccomandato S17-S20: schema+CRUD base, listini, varianti, foto upload)
+- **1A TenantConsistencyGuard APP_GUARD globale** post-`JwtAuthGuard` pre-`PermissionsGuard` (ADR-0017 ordering preservato)
+- **5A KISS inline lookup** in Guard — NO `TenantLookupService` extraction prematuro (refactor solo quando 4° consumer compare; oggi 3 luoghi: `tenant.middleware.ts`, `tenants.service.ts`, `tenant-consistency.guard.ts`)
+- **Cache Redis 60s TTL** (RedisService riuso) + fallback Postgres `withSystemContext` (resiliency: Redis down NON rompe auth)
+- **E_AUTH_TENANT_REQUIRED + E_AUTH_TENANT_MISMATCH** aggiunti FE+BE taxonomy
+
+**Discoveries cumulative bump 50 → 51** (+1 vs sessione 15):
+
+- **Discovery #51 candidate** — Redis cache TTL persistence cross-test artifact. Cache positiva TTL > test duration richiede flush selettivo `beforeEach` su test suite che muta dati cached. In test E2E `truncateDatabase` rigenera tenant UUID ad ogni `beforeEach`, ma cache Redis (TTL 60s) restituisce UUID stale del run precedente → JWT.tenantId (nuovo run) ≠ cached slugTenantId → false positive mismatch 401. Test-only artefact (prod immutable UUID), convention test infra non TD. Fix applicato: `flushTenantSlugCache(host, port)` helper in `beforeEach` (DEL via SCAN keyspace `tenant:slug:*`).
+
+**Tech debt:**
+
+- ✅ **TD-7 RESOLVED** ([ADR-0012 §TD-7 sessione 16 update](docs/architecture/ADR-0012-frontend-auth-flow.md#sessione-16-update--td-7-resolved-pr-36)) — `TenantConsistencyGuard` defense-in-depth backend
+- 🆕 **TD-BJ candidate** — Cache invalidation `DEL tenant:slug:${slug}` su endpoint manage tenant lifecycle futuro (eventual consistency 60s TTL-only oggi)
+- 🆕 **TD-BK candidate** — Audit log persistente `tenant_mismatch_attempt` (coerente pattern `permission_denied` PermissionsGuard, oggi solo `Logger.warn`)
+
+**Pattern senior consolidati:**
+
+- **Pattern 29** (Empirical re-scoping STOP 0) confermato — scope endpoint 2 reali (`/me`, `/tenants`) vs assumed N. APP_GUARD globale cattura automaticamente futuri controller Menu senza opt-in
+- **Pattern 24 / Errore #20 prevention** applicato 4x in STOP 1: DbService path (NON `DatabaseService`), `withSystemContext` signature (callback no-args NON prisma-arg), error-codes structure (Record IT-only NON dict it/en), seed helpers split (`seedMinimal` + `seedSecondTenant` NON `seedDemoAndAcme` unico). Tutti auto-corretti via empirical check pre-edit
+- **Pattern 28** spot-check massivo bash unico per PR feature lean (4 file): 0 anomalie blocker
+
+**Files modificati (6):**
+
+| File                                                            | Type | LOC                  |
+| --------------------------------------------------------------- | ---- | -------------------- |
+| `apps/api/src/auth/guards/tenant-consistency.guard.ts`          | new  | 188                  |
+| `apps/api/test/e2e/tenant-consistency.e2e-spec.ts`              | new  | 152                  |
+| `apps/api/src/app.module.ts`                                    | mod  | +7/-1                |
+| `apps/web/src/lib/error-codes.ts`                               | mod  | +3                   |
+| `docs/architecture/ADR-0012-frontend-auth-flow.md`              | mod  | sessione 16 update   |
+| `PROGRESS.md`                                                   | mod  | sessione 16 entry    |
+
+**Test:**
+
+- Unit backend: **48/48 PASS** ✅ (zero regressioni)
+- E2E Testcontainers backend: **13/13 PASS** ✅ (5 nuovi `tenant-consistency` + 8 esistenti regression)
+- Curl smoke locale: SKIP (API dev down, coverage via Testcontainers sufficiente)
+- Spot-check Pattern 28 cluster: 0 anomalie blocker
+
+**Foundation status post-merge:**
+
+- Foundation security/scaling F1: **100%** (invariato + defense-in-depth ESTESO via TD-7)
+- Foundation cleanup carry-over sessioni 11-15: **100% ✅** (invariato)
+- F1 shell UI: 100% (invariato sessione 14)
+- F1 cleanup carry-over sessione 15: 100% ✅ (invariato)
+- **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16)
+- Next: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma — re-eval scope BRIEF sessione 16 STOP 0.5).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
 
 Candidate (in ordine di priorità suggerito):
 
-1. **F1 Menu CRUD** (prima feature business F1) — tabula rasa post-cleanup sessioni 11-15. Foundation shell + auth + RBAC + i18n pronti. Stima da definire.
-2. **TD-7 ADR-0012 fix** 🔼 **priority bump POST-Discovery #50** (cross-tenant token UX edge) — backend Guard cross-check JWT.tenantId vs X-Tenant-Slug header defense-in-depth (gap UI mitigato side-effect F1-shell, **backend invariato** → curl/mobile/integrazioni API ancora vulnerabili). Frontend AuthContext passa X-Tenant-Slug + valida match profilo. Stima ~1h. Quando fixato, `tenant-isolation.spec.ts` regression guard diventa funzionale (oggi UI-only).
-3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
-4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
-5. **TD-BG ADR-0016** — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO `AuthErrorResponse` pattern + restringi `isTaxonomyCode` regex. Non-urgente. Stima ~45min.
-6. **TD-BH ADR-0016** — structured security logging 401/403 ripetuti (fraud detection observability). Non-urgente. Stima ~30min.
-7. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-8. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **F1 Menu CRUD schema completo F1** (prima feature business F1) 🔼 **priority #1 promoted sessione 16** — tabula rasa post-cleanup sessioni 11-15 + TD-7 RESOLVED. Foundation shell + auth + RBAC + i18n + defense-in-depth backend completo. Scope verificato sessione 16 STOP 0.5 (BRIEF B3 + gate accettazione D5): ~5-7 modelli Prisma (Menu, Categoria, Articolo, Listino, ArticoloListino M:N, Variante, Allergene, ArticoloAllergene M:N). Session carving multi-sessione raccomandato: **S17** schema completo F1 + migration + CRUD base backend (Menu/Categoria/Articolo) · **S18** listini multipli + varianti/modificatori · **S19** foto upload (decisione storage prima: locale uploads/ vs S3-compat vs Cloudinary) · **S20** UI completa drag&drop ordine + bulk edit. CO2 score + dynamic pricing fuori scope F1 (deferred F2 esplicito BRIEF line 308, 167).
+2. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+3. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
+4. **TD-BG ADR-0016** — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO `AuthErrorResponse` pattern + restringi `isTaxonomyCode` regex. Non-urgente. Stima ~45min.
+5. **TD-BH ADR-0016** — structured security logging 401/403 ripetuti (fraud detection observability). Non-urgente. Stima ~30min.
+6. **TD-BJ ADR-0012** 🆕 sessione 16 — Cache invalidation `DEL tenant:slug:${slug}` su endpoint manage tenant lifecycle futuro (eventual consistency 60s TTL-only oggi). Trigger: arrivo primo endpoint "manage tenant lifecycle" (rename slug, soft-delete, reactivate). Stima ~15min (1 DEL call + smoke).
+7. **TD-BK ADR-0012** 🆕 sessione 16 — Audit log persistente `tenant_mismatch_attempt` (coerente pattern `permission_denied` PermissionsGuard). Oggi solo `Logger.warn` 2 paths rifiuto. Stima ~30min (audit insert + fraud detection observability).
+8. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+9. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 
