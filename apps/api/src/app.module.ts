@@ -5,6 +5,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { TenantConsistencyGuard } from './auth/guards/tenant-consistency.guard';
 import { TenantContextInterceptor } from './context/tenant-context.interceptor';
 import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
@@ -58,10 +59,15 @@ import { UsersModule } from './users/users.module';
     // garantisce sequence deterministica per providers array di app.module:
     //   1. AppThrottlerGuard (rate-limit, no req.user dependency)
     //   2. JwtAuthGuard (auth, popola req.user)
-    //   3. PermissionsGuard (RBAC, legge req.user popolato da #2)
+    //   3. TenantConsistencyGuard (defense-in-depth cross-tenant, sessione 16
+    //      ADR-0012 §TD-7 closure, Discovery #50): compara JWT.tenantId vs
+    //      header X-Tenant-Slug. Skip @Public / req.user assente / header
+    //      assente. Cache Redis TTL 60s + fallback Postgres.
+    //   4. PermissionsGuard (RBAC, legge req.user popolato da #2)
     // JwtAuthGuard globale: ogni endpoint richiede JWT valido di default;
     // @Public() decorator opt-out (decisione E ADR-0008).
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: TenantConsistencyGuard },
     // PermissionsGuard globale: legge metadata @RequirePermissions(...) via
     // Reflector. Endpoint SENZA decorator → allow (opt-in). Lazy lookup
     // permission via UsersService.hasPermission con cache Redis TTL 60s +

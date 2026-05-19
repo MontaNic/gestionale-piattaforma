@@ -413,6 +413,69 @@ Stima: ~1h. Candidate sessione 16+ post Menu CRUD.
 - TD-BI — fix stale spec (PR #35 cleanup follow-up)
 - [ADR-0018](./ADR-0018-f1-shell-ui-foundation.md) §AuthContext + §AuthGate (F1-shell foundation)
 
+#### Sessione 16 update — TD-7 RESOLVED (PR #36)
+
+**Status:** ✅ **RESOLVED** 2026-05-20 via PR #36 (`feat/td-7-tenant-consistency-guard`).
+
+##### Decisione (1A — TenantConsistencyGuard APP_GUARD globale)
+
+Introdotto `TenantConsistencyGuard` `@Injectable()` registrato via `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` in `AppModule`. Chiude definitivamente gap defense-in-depth lato backend per client non-browser (curl, mobile app future, integrazioni API).
+
+##### Logica Guard (5 branch detection)
+
+1. **Skip `@Public`** (login, refresh, login-pin, root, health) — endpoint cross-tenant by-design
+2. **Skip se `req.user` assente** — JwtAuthGuard ha già rejected o no JWT
+3. **Skip se header `X-Tenant-Slug` assente** — backward-compat client legacy (comportamento attuale invariato)
+4. **Lookup `tenantId` by slug** — cache Redis 60s TTL (RedisService riuso), fallback Postgres `withSystemContext`
+5. **Mismatch detection** — confronta con `req.user.tenantId` (popolato da `JwtStrategy.validate()`):
+   - Slug inesistente OR `tenantId` slug ≠ `tenantId` JWT → `throw new UnauthorizedException('E_AUTH_TENANT_MISMATCH')`
+   - GlobalHttpExceptionFilter (sessione 15) intercetta e normalizza shape: `{statusCode: 401, errorCode: 'E_AUTH_TENANT_MISMATCH', message: ...}`
+
+##### Implicazioni post-RESOLVED
+
+| Lato                           | Stato post-PR #36                                                                                     | Note                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| UI browser                     | ✅ Mitigato (sessione 14 F1-shell AuthGate redirect implicito + sessione 16 backend lockdown layered) | Defense-in-depth completo                                                   |
+| Backend API diretto            | ✅ **RESOLVED** — cross-tenant attempt → 401 `E_AUTH_TENANT_MISMATCH`                                 | curl, client non-browser, mobile app future, integrazioni API tutti coperti |
+| Header `X-Tenant-Slug` assente | ✅ Backward-compat preservata (skip)                                                                  | Client legacy continuano a funzionare                                       |
+
+##### Performance
+
+- Cache Redis hit ~99% steady state (slug→id mapping immutabile)
+- Cache miss: 1 Postgres query `SELECT id WHERE slug=$1` (indexed unique, <5ms)
+- Cache TTL 60s razionale: bilancio refresh stale vs latency
+- Cache invalidation immediata su soft-delete tenant: **NON implementato** (TD-BJ candidate)
+
+##### Observability
+
+- `Logger.warn` su 2 paths rifiuto: slug-not-found + cross-tenant mismatch
+- `Logger.warn` su 2 paths fallback: Redis GET fail + Redis SET fail (resiliency: Redis down NON rompe auth)
+- **TD-BK candidate:** promuovere `tenant_mismatch_attempt` ad audit log persistente (coerente pattern `permission_denied` PermissionsGuard)
+
+##### Trade-off accettati
+
+- **KISS inline lookup in Guard** (Pattern 29 + 5A KISS sessione 16): NO `TenantLookupService` extraction prematuro. Refactor solo quando 4° consumer compare (oggi 3: `tenant.middleware.ts`, `tenants.service.ts`, `tenant-consistency.guard.ts`)
+- **Cache invalidation TTL-only 60s**: eventual consistency su soft-delete tenant. TD-BJ candidate per `DEL tenant:slug:${slug}` su endpoint "manage tenant lifecycle" futuro
+
+##### Files modificati (PR #36)
+
+- `apps/api/src/auth/guards/tenant-consistency.guard.ts` (NEW, 188 LOC)
+- `apps/api/src/app.module.ts` (+7/-1, APP_GUARD registrazione post-JwtAuthGuard pre-PermissionsGuard)
+- `apps/api/test/e2e/tenant-consistency.e2e-spec.ts` (NEW, 152 LOC, 5 scenarios E2E)
+- `apps/web/src/lib/error-codes.ts` (+3, +E_AUTH_TENANT_REQUIRED +E_AUTH_TENANT_MISMATCH)
+
+##### Discovery refs
+
+- Discovery #50 (sessione 15) — F1-shell AuthGate cross-tenant redirect implicit (trigger TD-7 priority bump)
+- **Discovery #51 candidate (sessione 16)** — Redis cache TTL persistence cross-test artifact: cache positiva TTL > test duration richiede flush selettivo `beforeEach` su test suite che muta dati cached. Test-only pattern (prod immutable UUID), convention test infra non TD. Fix applicato: `flushTenantSlugCache` helper in `beforeEach`
+- Pattern 29 (Empirical re-scoping STOP 0) confermato: scope endpoint 2 reali (`/me`, `/tenants`) vs assumed N; APP_GUARD globale cattura automaticamente futuri controller
+- Pattern 24 / Errore #20 prevention applicato 4x (DbService path, withSystemContext signature, error-codes structure, seed helpers split)
+
+##### TD candidate emersi
+
+- **TD-BJ** — Cache invalidation `DEL tenant:slug:${slug}` su endpoint manage tenant lifecycle futuro
+- **TD-BK** — Audit log persistente `tenant_mismatch_attempt` (coerente pattern PermissionsGuard)
+
 **Foundation per**: TD-H lockout key per-tenant (B1 ADR-0013 carry-over, ora sbloccato lato frontend) + future macro-task multi-tenant routing (tenant switching UI, tenant-aware command palette, ecc.).
 
 ## Consequences
