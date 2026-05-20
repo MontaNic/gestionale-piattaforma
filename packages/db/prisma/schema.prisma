@@ -45,10 +45,17 @@ model Tenant {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  sedi      Sede[]
-  users     User[]
-  roles     Role[]
-  auditLogs AuditLog[]
+  sedi           Sede[]
+  users          User[]
+  roles          Role[]
+  auditLogs      AuditLog[]
+  menus          Menu[]
+  menuCategories MenuCategory[]
+  articles       Article[]
+  priceLists     PriceList[]
+  articlePrices  ArticlePrice[]
+  recipes        Recipe[]
+  pricingRules   PricingRule[]
 
   @@map("tenants")
 }
@@ -293,4 +300,238 @@ model AuditLog {
   @@index([tenantId, timestamp(sort: Desc)])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+// =============================================================================
+// F1 Menu domain (sessione 17, ADR-0019)
+// =============================================================================
+// 5 modelli business: Menu, MenuCategory, Article, PriceList, ArticlePrice
+// 2 placeholder PRE F2 (Gate D29): Recipe, PricingRule
+// 5 enum nuovi: Allergen, DietaryTag, PrintDepartment, ArticleAvailability, Channel
+//
+// Sub-DP risolti (vedi ADR-0019):
+//   1. Listini -> tabella separata PriceList + ArticlePrice (M:N con price override)
+//   2. Allergeni -> enum Allergen[] (14 valori UE Reg. 1169/2011)
+//   3. Tag dietetici -> enum DietaryTag[] (4 valori)
+//   4. Reparto stampa -> enum PrintDepartment (3 valori, F2 -> tabella se serve custom)
+//   5. Recipe + PricingRule -> skeleton minimal (popolati F2)
+//   6. Varianti/Modificatori -> DEFERRED S18+ (workflow Comande)
+//
+// Convention: snake_case plurale @@map, FK RESTRICT business, CASCADE su tenantId,
+// soft-delete su entita' business (no su ArticlePrice join puro), Decimal(10,2)
+// monetario, Decimal(10,4) CO2 (precision higher per kgCO2eq fine-grained).
+// =============================================================================
+
+enum Allergen {
+  // Lista standard UE (Allegato II Reg. UE 1169/2011, 14 allergeni)
+  cereali_glutine
+  crostacei
+  uova
+  pesce
+  arachidi
+  soia
+  latte
+  frutta_guscio
+  sedano
+  senape
+  semi_sesamo
+  anidride_solforosa
+  lupini
+  molluschi
+
+  @@map("allergen")
+}
+
+enum DietaryTag {
+  vegano
+  vegetariano
+  gluten_free
+  piccante
+
+  @@map("dietary_tag")
+}
+
+enum PrintDepartment {
+  cucina
+  pizzeria
+  bar
+
+  @@map("print_department")
+}
+
+enum ArticleAvailability {
+  in_carta
+  esaurito
+  sospeso
+
+  @@map("article_availability")
+}
+
+enum Channel {
+  cassa
+  menu_online
+  asporto
+  delivery
+
+  @@map("channel")
+}
+
+model Menu {
+  id          String    @id
+  tenantId    String    @map("tenant_id")
+  name        String
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categories MenuCategory[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("menus")
+}
+
+model MenuCategory {
+  id        String    @id
+  tenantId  String    @map("tenant_id")
+  menuId    String    @map("menu_id")
+  name      String
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  articles Article[]
+
+  @@unique([tenantId, menuId, name])
+  @@index([tenantId])
+  @@index([menuId])
+  @@map("menu_categories")
+}
+
+model Article {
+  id                     String              @id
+  tenantId               String              @map("tenant_id")
+  categoryId             String              @map("category_id")
+  name                   String
+  descriptionShort       String              @map("description_short")
+  descriptionLong        String?             @map("description_long")
+  photoUrl               String?             @map("photo_url")
+  basePrice              Decimal             @map("base_price") @db.Decimal(10, 2)
+  vatPercent             Int                 @map("vat_percent") // 4, 10, 22 (validato in DTO)
+  allergens              Allergen[]
+  dietaryTags            DietaryTag[]        @map("dietary_tags")
+  printDepartment        PrintDepartment     @map("print_department")
+  preparationTimeMinutes Int?                @map("preparation_time_minutes")
+  availability           ArticleAvailability @default(in_carta)
+  sortOrder              Int                 @default(0) @map("sort_order")
+  channelVisibility      Channel[]           @map("channel_visibility")
+  co2KgEq                Decimal?            @map("co2_kg_eq") @db.Decimal(10, 4) // [PRE F2 B14]
+  pricingRuleId          String?             @map("pricing_rule_id") // [PRE F2 B10]
+  recipeId               String?             @map("recipe_id") // [PRE F2 B5]
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+  deletedAt              DateTime?           @map("deleted_at")
+
+  // Relations
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category    MenuCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  recipe      Recipe?        @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  pricingRule PricingRule?   @relation(fields: [pricingRuleId], references: [id], onDelete: SetNull)
+  prices      ArticlePrice[]
+
+  // Unique compound (Sub-DP residua S17 STOP 1.5 opzione A): consente upsert
+  // idempotente nel seed + vincolo business (no articoli omonimi stessa categoria).
+  @@unique([tenantId, categoryId, name])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@map("articles")
+}
+
+model PriceList {
+  id            String    @id
+  tenantId      String    @map("tenant_id")
+  name          String
+  channels      Channel[]
+  validFromDate DateTime? @map("valid_from_date") @db.Date
+  validToDate   DateTime? @map("valid_to_date") @db.Date
+  priority      Int       @default(0) // R2: tie-break futuro multi-match
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  // Relations
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prices ArticlePrice[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("price_lists")
+}
+
+model ArticlePrice {
+  // Join puro Article <-> PriceList con price override. NO soft-delete: eredita
+  // lifecycle dei parent (Restrict su FK previene orphan). R1: solo price, no vatPercent
+  // (IVA e' proprieta' Article, non varia per listino — BRIEF L304).
+  id          String   @id
+  tenantId    String   @map("tenant_id")
+  articleId   String   @map("article_id")
+  priceListId String   @map("price_list_id")
+  price       Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  article   Article   @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Restrict)
+
+  @@unique([articleId, priceListId])
+  @@index([tenantId])
+  @@index([articleId])
+  @@index([priceListId])
+  @@map("article_prices")
+}
+
+model Recipe {
+  // [PRE F2 B5 Magazzino] Placeholder predisposto per Gate D29.
+  // Campi business (ingredients BOM, food cost) -> macro-task Magazzino F2.
+  id        String    @id
+  tenantId  String    @map("tenant_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  articles Article[]
+
+  @@index([tenantId])
+  @@map("recipes")
+}
+
+model PricingRule {
+  // [PRE F2 B10 Pricing rules] Placeholder predisposto per Gate D29.
+  // Campi business (conditions, override) -> macro-task Pricing F2.
+  id        String    @id
+  tenantId  String    @map("tenant_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  articles Article[]
+
+  @@index([tenantId])
+  @@map("pricing_rules")
 }

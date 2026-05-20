@@ -64,6 +64,53 @@ export const prisma: ExtendedPrismaClient = createPrismaClient();
 export { PrismaClient, Prisma };
 
 // -----------------------------------------------------------------------------
+// Domain enum re-exports (consumer-friendly, no direct @prisma/client dep)
+// -----------------------------------------------------------------------------
+// Pattern: i package consumer (apps/api, future apps/web SSR) non dichiarano
+// @prisma/client come dep diretta — accedono ai tipi/valori via @gestionale/db.
+// Le enum Prisma sono sia valore (runtime, per IsEnum class-validator) sia
+// tipo. Re-export named per supportare entrambi gli usi.
+//
+// Quando aggiungi un nuovo enum a schema.prisma, aggiungilo qui per renderlo
+// disponibile cross-package senza bumpare dep root.
+// -----------------------------------------------------------------------------
+
+export {
+  DeviceType,
+  Allergen,
+  DietaryTag,
+  PrintDepartment,
+  ArticleAvailability,
+  Channel,
+} from '@prisma/client';
+
+// -----------------------------------------------------------------------------
+// Domain model type re-exports (per annotare return type lato consumer e
+// evitare TS2742 con tsconfig declaration:true). Tipi only (no runtime).
+// -----------------------------------------------------------------------------
+
+export type {
+  Tenant,
+  Sede,
+  User,
+  Role,
+  Permission,
+  SystemRoleTemplate,
+  SystemRoleTemplatePermission,
+  RolePermission,
+  UserRole,
+  Session,
+  AuditLog,
+  Menu,
+  MenuCategory,
+  Article,
+  PriceList,
+  ArticlePrice,
+  Recipe,
+  PricingRule,
+} from '@prisma/client';
+
+// -----------------------------------------------------------------------------
 // RLS API re-exports (ALS context + helpers + error type)
 // -----------------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { AppController } from './app.controller';
+import { ArticlesModule } from './articles/articles.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantConsistencyGuard } from './auth/guards/tenant-consistency.guard';
@@ -11,6 +12,9 @@ import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { MeModule } from './me/me.module';
+import { MenuCategoriesModule } from './menu-categories/menu-categories.module';
+import { MenusModule } from './menus/menus.module';
+import { PriceListsModule } from './price-lists/price-lists.module';
 import { PermissionsGuard } from './rbac/guards/permissions.guard';
 import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
@@ -39,6 +43,10 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     TenantsModule,
     RbacModule,
+    MenusModule,
+    MenuCategoriesModule,
+    ArticlesModule,
+    PriceListsModule,
   ],
   controllers: [AppController],
   providers: [
