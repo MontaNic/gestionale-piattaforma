@@ -130,6 +130,76 @@ STOP 1.5: `prisma migrate reset --force` bloccato dal classifier auto-mode Claud
 
 `Decimal` (`@db.Decimal`) ed enum array PostgreSQL (`Allergen[]`, `DietaryTag[]`, `Channel[]`) sono prima introduzione. `prisma validate` + migration apply + E2E confermano supporto nativo Prisma 6.19.3.
 
+## Sessione 18 update — TD-BS scomposto (Sub-1 RESOLVED / Sub-2 deferred)
+
+TD-BS aperto in sessione 17 (4 test validation 400 `.skip`). Sessione 18: diagnosi
+approfondita, tentativo di fix harness E2E abbandonato, **scomposizione in Sub-1 +
+Sub-2**.
+
+### Tentativo fix harness E2E — abbandonato
+
+Opzione A (STOP 0): spostare il plugin `unplugin-swc` dentro il `test.projects[e2e]`
+(vitest 3.x non eredita i `plugins` root nei projects → il project e2e cadeva su
+esbuild → no `emitDecoratorMetadata` → `design:paramtypes` assente). 4 tentativi
+documentati (STOP 1), tutti falliti:
+
+- `module: es6` → l'interop ESM→CJS dei re-export enum di `@gestionale/db` perde i
+  named export → `@IsEnum(Channel)` riceve `undefined`
+- `module: commonjs` → SWC emette `require()` relativi che vite-node non risolve
+- 2 istanze SWC (src CJS + test ESM) → resolution rotta
+- `server.deps.inline` → enum ancora `undefined`
+
+Conclusione: interop SWC × vite-node × Prisma dual-package non risolvibile senza
+scope creep. **Pivot a opzione 1**: validation coverage via unit test class-validator.
+
+### Root cause #1 (scoperto sessione 18) — `dist/` `@gestionale/db` stale
+
+Scrivendo gli unit test è emerso che `@IsEnum(Channel)` falliva **anche nel project
+`unit`** (esbuild, non SWC) con `Cannot convert undefined or null to object`. Causa:
+il `dist/` di `@gestionale/db` era **stale** — mai ri-buildato dopo la sessione 17
+che aggiunse i re-export degli enum a `src/index.ts`. `vitest` carica
+`@gestionale/db` via la condition `import` → `dist/index.mjs` obsoleto → enum assenti.
+
+Causa a monte: `turbo.json` task **`test` non aveva `dependsOn: ["^build"]`** (a
+differenza di `test:e2e` e `typecheck`). `turbo run test` non builda i workspace
+package → `dist/` stale. Questo spiega anche perché gli E2E sessione 17 passavano
+(`test:e2e` ha `^build` → `@gestionale/db` ri-buildato fresh).
+
+**Fix**: `turbo.json` → `test` task `dependsOn: ["^build"]`. + `reflect-metadata`
+aggiunto a `apps/api/test/setup.ts` (project `unit`: i DTO con `@Type()`/`@IsEnum()`
+richiedono `Reflect.getMetadata` a class-definition time; il project `e2e` lo aveva
+già via `setup-env.ts`).
+
+### Root cause #2 (TD-BS originale) — harness E2E `design:paramtypes`
+
+Confermato STOP 0: il project `e2e` non emette `emitDecoratorMetadata` (vitest 3.x
+non eredita i `plugins` root). `ValidationPipe.toValidate()` riceve `metatype
+undefined` → salta la validazione DTO body. Indipendente dal #1. Resta aperto.
+
+### TD-BS Sub-1 — RESOLVED
+
+Validation constraint coperti da **44 unit test class-validator co-located**
+(`apps/api/src/<entity>/dto/*.spec.ts`, 5 file). Verificano `@MinLength`/`@MaxLength`,
+`@IsIn` VAT `[4,10,22]`, `@ArrayMinSize` channels, `@IsEnum`, `@IsUUID`, `@Min`.
+`plainToInstance` + `validate()` — non dipendono da `design:paramtypes` (class-validator
+usa il proprio MetadataStorage). Enum import confermato OK nel project unit dopo il
+rebuild di `@gestionale/db`.
+
+### TD-BS Sub-2 — DEFERRED (priority MEDIA, era ALTA)
+
+Copertura E2E integration `ValidationPipe → controller → HTTP 400` bloccata da root
+cause #2 (harness `design:paramtypes`). I 4 `.skip` E2E restano con ref Sub-2.
+Declassato ALTA→MEDIA: l'integrazione è garantita in produzione dalla toolchain
+`tsc`; il valore incrementale di testarla in E2E è basso vs il costo del fix harness.
+Richiede opzione 2 (apps/api importa enum da `@prisma/client` diretto) o opzione 3
+(rebuild `@gestionale/db` con enum bundled) con STOP 0 prototipo dedicato.
+
+### Confine di copertura esplicito
+
+Gli unit test verificano **cosa il DTO valida** (i constraint). NON verificano il
+montaggio della `ValidationPipe` né la shape dell'errore 400 normalizzata dal
+`GlobalHttpExceptionFilter` — quella resta garantita in produzione.
+
 ## File creati / modificati
 
 ### Creati

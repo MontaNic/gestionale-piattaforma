@@ -6,7 +6,7 @@
 //   6. POST su menu inesistente → 404 E_MENU_NOT_FOUND
 //   7. POST stesso name stesso menu → 409 E_MENU_CATEGORY_NAME_EXISTS
 //   8. permission deny 403
-//   9. validation → .skip TD-BS
+//   9. validation → .skip TD-BS Sub-2 (constraint coperti da unit test)
 // =============================================================================
 
 import type { INestApplication } from '@nestjs/common';
@@ -189,8 +189,10 @@ describe('MenuCategories CRUD E2E — /api/v1/menus/:menuId/categories', () => {
     expect(res.body.errorCode).toBe('E_AUTH_INSUFFICIENT_PERMISSIONS');
   });
 
-  // TODO TD-BS: ValidationPipe inattiva in harness E2E (SWC paramtypes)
-  it.skip('9. POST validation 400 (name troppo corto) — BLOCKED TD-BS', async () => {
+  // SKIP TD-BS Sub-2 (deferred): integrazione ValidationPipe→400 E2E bloccata
+  // dal harness (no design:paramtypes runtime — vedi ADR-0019 §TD-BS sessione
+  // 18). Constraint DTO coperti da create-menu-category.dto.spec.ts (Sub-1).
+  it.skip('9. POST validation 400 (name troppo corto) — BLOCKED TD-BS Sub-2', async () => {
     const res = await request(app.getHttpServer())
       .post(`/api/v1/menus/${menuId}/categories`)
       .set('Authorization', `Bearer ${adminJwt}`)

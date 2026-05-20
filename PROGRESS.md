@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 21 maggio 2026 (sessione 17 — F1 Menu CRUD schema + backend base)
+**Ultimo aggiornamento:** 22 maggio 2026 (sessione 18 — TD-BS Sub-1 RESOLVED, validation unit coverage)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
@@ -1465,22 +1465,72 @@ STOP 2B (Commit 2 TD-AW):
 - **F1 Menu CRUD schema + backend base: 100% ✅** (sessione 17)
 - Next: sessione 18 — TD-BS harness fix (pre-requisito) → poi F1 Menu UI scaffold.
 
+### TD-BS scomposto — Sub-1 RESOLVED (validation unit coverage) / Sub-2 deferred — sessione 18 (2026-05-22)
+
+**Branch**: `fix/td-bs-e2e-harness-validation` · **Tipo**: 1 PR test + fix infra (unit test + setup + turbo) · **ADR**: [ADR-0019 §TD-BS sessione 18](docs/architecture/ADR-0019-f1-menu-crud-schema.md)
+
+**Scope:** chiusura parziale TD-BS (aperto sessione 17). Diagnosi approfondita harness E2E + pivot a validation coverage via unit test.
+
+**Tentativo harness fix abbandonato:** opzione A (plugin `unplugin-swc` per-project + `module:es6`) provata, 4 tentativi documentati STOP 1, tutti falliti — interop SWC × vite-node × Prisma dual-package non risolvibile senza scope creep. Pivot a opzione 1 (unit test class-validator).
+
+**Decisioni:**
+
+- **TD-BS scomposto Sub-1 / Sub-2** — Sub-1 (constraint DTO via unit test) chiudibile subito; Sub-2 (integrazione E2E `ValidationPipe→400`) deferred
+- **Sub-1 RESOLVED**: 44 unit test class-validator co-located (`apps/api/src/<entity>/dto/*.spec.ts`, 5 file). `plainToInstance` + `validate()` — verificano `@MinLength`/`@MaxLength`, `@IsIn` VAT `[4,10,22]`, `@ArrayMinSize` channels, `@IsEnum`, `@IsUUID`, `@Min`. Non dipendono da `design:paramtypes`
+- **Sub-2 DEFERRED priority MEDIA** (era TD-BS ALTA): integrazione E2E `ValidationPipe→controller→400` bloccata dal harness (`design:paramtypes` non emesso). 4 `.skip` E2E restano con ref Sub-2. Integrazione garantita in prod da toolchain `tsc`
+
+**Root cause #1 (scoperto sessione 18) — `dist/` `@gestionale/db` stale:** gli unit test `@IsEnum(Channel)` fallivano anche nel project `unit` (esbuild, non SWC) → enum `undefined`. Causa: `dist/` di `@gestionale/db` mai ri-buildato dopo sessione 17. Causa a monte: `turbo.json` task `test` **senza `dependsOn: ["^build"]`** (a differenza di `test:e2e`/`typecheck`). Spiega anche perché gli E2E S17 passavano (`test:e2e` ha `^build`). **Fix**: `turbo.json` `test` → `^build` + `reflect-metadata` aggiunto a `apps/api/test/setup.ts` (project unit).
+
+**Root cause #2 (TD-BS originale) — harness E2E `design:paramtypes`:** vitest 3.x non eredita i `plugins` root nei `test.projects` → project e2e su esbuild → no `emitDecoratorMetadata`. Resta aperto come Sub-2.
+
+**Discoveries cumulative bump 52 → 53** (+1 vs sessione 17):
+
+- **Discovery #53** — `turbo.json` task `test` senza `dependsOn: ["^build"]` → i workspace package non vengono ri-buildati prima dei test unit → `dist/` stale → import di simboli aggiunti al `src/` dopo l'ultimo build (es. enum re-exportati) falliscono **silenziosamente** (named export `undefined`). Generalizzabile: ogni task turbo che esegue codice dipendente dal `dist/` di un workspace package interno deve dichiarare `dependsOn: ["^build"]`.
+
+**Tech debt:**
+
+- ✅ **TD-BS Sub-1 RESOLVED** — validation constraint coperti da 44 unit test class-validator
+- 🔶 **TD-BS Sub-2 DEFERRED** (priority MEDIA, era ALTA) — E2E integration `ValidationPipe→400`, bloccata da harness `design:paramtypes`
+
+**Test:**
+
+- Unit: **91/91 PASS** ✅ (47 pre-esistenti + 44 nuovi validation; `turbo run test` builda `@gestionale/db` prima)
+- E2E: invariato **45 pass / 4 skip** (i 4 `.skip` aggiornati con ref TD-BS Sub-2)
+- typecheck + lint API: PASS
+
+**File:**
+
+| File | Type |
+|---|---|
+| `apps/api/src/{menus,menu-categories,articles,price-lists}/dto/*.dto.spec.ts` (5) | new |
+| `apps/api/test/setup.ts` | mod (+`reflect-metadata`) |
+| `turbo.json` | mod (`test` → `dependsOn: ["^build"]`) |
+| `apps/api/test/e2e/*-crud.e2e-spec.ts` (4) | mod (commento skip → Sub-2) |
+| `docs/architecture/ADR-0019-f1-menu-crud-schema.md` | mod (§TD-BS sessione 18) |
+| `PROGRESS.md` | mod (entry sessione 18) |
+
+**Foundation status post-merge:**
+
+- **F1 Menu CRUD: 100% ✅** (invariato sessione 17) + validation constraint coverage unit (Sub-1)
+- TD-BS Sub-2 deferred MEDIA — non più bloccante pre-requisito per F1 Menu UI
+- Next: sessione 19 — F1 Menu UI scaffold.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
 
 Candidate (in ordine di priorità suggerito):
 
-1. **TD-BS — harness E2E SWC `ValidationPipe` inattiva** 🔼 **priority #1 ALTA sessione 17** — il harness E2E (Vitest + `unplugin-swc`) non emette `design:paramtypes` runtime sui metodi controller → `ValidationPipe` salta la validazione DTO body. Gap latente pre-esistente. Pre-requisito per testare validation 400 in E2E (4 test S17 in `.skip`). Include fix `vitest.config.mts` SWC `decoratorMetadata` + registrare `GlobalHttpExceptionFilter` in `test-app.ts` (allineamento `main.ts`). Da risolvere pre-UI sessione 18 o come hotfix standalone.
-2. **F1 Menu UI scaffold** — dopo TD-BS. Carving S18-S20: UI scaffold Menu, listini multipli UI, foto upload pipeline (decisione storage: locale `uploads/` vs S3-compat vs Cloudinary — vedi TD-BO), varianti/modificatori. Backend schema + CRUD base completati sessione 17 (ADR-0019).
-4. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
-5. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
-6. **TD-BG ADR-0016** — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO `AuthErrorResponse` pattern + restringi `isTaxonomyCode` regex. Non-urgente. Stima ~45min.
-7. **TD-BH ADR-0016** — structured security logging 401/403 ripetuti (fraud detection observability). Non-urgente. Stima ~30min.
-8. **TD-BJ ADR-0012** 🆕 sessione 16 — Cache invalidation `DEL tenant:slug:${slug}` su endpoint manage tenant lifecycle futuro (eventual consistency 60s TTL-only oggi). Trigger: arrivo primo endpoint "manage tenant lifecycle" (rename slug, soft-delete, reactivate). Stima ~15min (1 DEL call + smoke).
-9. **TD-BK ADR-0012** 🆕 sessione 16 — Audit log persistente `tenant_mismatch_attempt` (coerente pattern `permission_denied` PermissionsGuard). Oggi solo `Logger.warn` 2 paths rifiuto. Stima ~30min (audit insert + fraud detection observability).
-10. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
-11. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
+1. **F1 Menu UI scaffold** 🔼 **priority #1 sessione 19** — backend schema + CRUD base completati sessione 17 (ADR-0019), validation constraint coperti da unit test (TD-BS Sub-1 sessione 18). Carving S19-S21: UI scaffold Menu, listini multipli UI, foto upload pipeline (decisione storage: locale `uploads/` vs S3-compat vs Cloudinary — vedi TD-BO), varianti/modificatori.
+2. **TD-BS Sub-2 — E2E integration `ValidationPipe→400`** 🔶 priority MEDIA (deferred sessione 18) — copertura E2E dell'integrazione `ValidationPipe→controller→HTTP 400`, bloccata dal harness che non emette `design:paramtypes` (vitest 3.x non eredita i `plugins` root nei `test.projects`). 4 `.skip` E2E in attesa. Richiede STOP 0 prototipo dedicato (opzione: apps/api importa enum da `@prisma/client` diretto, o rebuild `@gestionale/db` enum bundled). Integrazione già garantita in prod da toolchain `tsc` → valore incrementale basso.
+3. **`withSystemContextRaw` helper** — fix proper F3 D4 (forceDelete + RLS bypass). ~30 LOC in rls.ts + smoke verify. Bassa priorita' finche' raw ops in withSystemContext sono ops one-shot.
+4. **F1 refactor wave** (TD-AG + TD-AH): JWT_SECRET top-level → ConfigService runtime + prisma singleton eager → factory pattern DI. Anti-pattern testability emersi B2b. Stima ~1.5h combinati.
+5. **TD-BG ADR-0016** — convergenza stilistica 7+ call site `UnauthorizedException('E_*')` → DTO `AuthErrorResponse` pattern + restringi `isTaxonomyCode` regex. Non-urgente. Stima ~45min.
+6. **TD-BH ADR-0016** — structured security logging 401/403 ripetuti (fraud detection observability). Non-urgente. Stima ~30min.
+7. **TD-BJ ADR-0012** 🆕 sessione 16 — Cache invalidation `DEL tenant:slug:${slug}` su endpoint manage tenant lifecycle futuro (eventual consistency 60s TTL-only oggi). Trigger: arrivo primo endpoint "manage tenant lifecycle" (rename slug, soft-delete, reactivate). Stima ~15min (1 DEL call + smoke).
+8. **TD-BK ADR-0012** 🆕 sessione 16 — Audit log persistente `tenant_mismatch_attempt` (coerente pattern `permission_denied` PermissionsGuard). Oggi solo `Logger.warn` 2 paths rifiuto. Stima ~30min (audit insert + fraud detection observability).
+9. **Miglioramento pre-push hook** — parsing stdin formato git pre-push per distinguere push regolari da delete. Stima: 15-20 min.
+10. **Dependabot / Renovate** — security updates automatici dipendenze. Stima: 20-30 min.
 
 ### Owner: Claude Code in VS Code Remote-SSH (con stop intermedi a Nicolò)
 

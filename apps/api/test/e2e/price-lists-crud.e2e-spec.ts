@@ -7,7 +7,7 @@
 //   5. idempotenza upsert (stesso articleId+priceListId → update, no duplicate)
 //   6-7. PATCH/DELETE article price
 //   8. permission deny 403
-//   9. validation channels → .skip TD-BS
+//   9. validation channels → .skip TD-BS Sub-2 (constraint coperti da unit test)
 // =============================================================================
 
 import type { INestApplication } from '@nestjs/common';
@@ -227,8 +227,11 @@ describe('PriceLists + ArticlePrice CRUD E2E — /api/v1/price-lists', () => {
     expect(res.body.errorCode).toBe('E_AUTH_INSUFFICIENT_PERMISSIONS');
   });
 
-  // TODO TD-BS: ValidationPipe inattiva in harness E2E (SWC paramtypes)
-  it.skip('8. POST validation 400 (channels vuoto) — BLOCKED TD-BS', async () => {
+  // SKIP TD-BS Sub-2 (deferred): integrazione ValidationPipe→400 E2E bloccata
+  // dal harness (no design:paramtypes runtime — vedi ADR-0019 §TD-BS sessione
+  // 18). Constraint DTO (incluso channels @ArrayMinSize) coperti da
+  // create-price-list.dto.spec.ts (Sub-1).
+  it.skip('8. POST validation 400 (channels vuoto) — BLOCKED TD-BS Sub-2', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/price-lists')
       .set('Authorization', `Bearer ${adminJwt}`)

@@ -6,7 +6,7 @@
 //   5. filtro ?categoryId= e ?menuId=
 //   6. cambio categoria via PATCH + conflict check destination (Sub-DP 5)
 //   7. permission deny 403
-//   8. validation VAT → .skip TD-BS
+//   8. validation VAT → .skip TD-BS Sub-2 (constraint coperti da unit test)
 // =============================================================================
 
 import type { INestApplication } from '@nestjs/common';
@@ -232,8 +232,11 @@ describe('Articles CRUD E2E — /api/v1/articles', () => {
     expect(JSON.stringify(res.body)).toContain('E_MENU_CATEGORY_NOT_FOUND');
   });
 
-  // TODO TD-BS: ValidationPipe inattiva in harness E2E (SWC paramtypes)
-  it.skip('8. POST validation VAT 400 (aliquota non valida) — BLOCKED TD-BS', async () => {
+  // SKIP TD-BS Sub-2 (deferred): integrazione ValidationPipe→400 E2E bloccata
+  // dal harness (no design:paramtypes runtime — vedi ADR-0019 §TD-BS sessione
+  // 18). Constraint DTO (incluso VAT @IsIn[4,10,22]) coperti da
+  // create-article.dto.spec.ts (Sub-1).
+  it.skip('8. POST validation VAT 400 (aliquota non valida) — BLOCKED TD-BS Sub-2', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/articles')
       .set('Authorization', `Bearer ${adminJwt}`)

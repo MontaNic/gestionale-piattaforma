@@ -159,13 +159,12 @@ describe('Menus CRUD E2E — /api/v1/menus', () => {
     expect(list.body.data.find((m: { id: string }) => m.id === menuId)).toBeUndefined();
   });
 
-  // TODO TD-BS: ValidationPipe inattiva in harness E2E (SWC paramtypes).
-  // Il harness E2E SWC non emette design:paramtypes sui metodi controller →
-  // ValidationPipe riceve metatype undefined → skip validazione. Bug latente
-  // pre-esistente del harness (vale anche per TenantsController). La validazione
-  // DTO e' corretta e attiva in produzione (tsc/ts-node-dev). Riattivare questo
-  // test quando TD-BS risolve il harness.
-  it.skip('6. POST /menus validation 400 (name troppo corto) — BLOCKED TD-BS', async () => {
+  // SKIP TD-BS Sub-2 (deferred): integrazione ValidationPipe→400 E2E bloccata
+  // dal harness E2E che non emette design:paramtypes runtime (vitest 3.x non
+  // eredita i plugin root nei test.projects → esbuild, no emitDecoratorMetadata
+  // — vedi ADR-0019 §TD-BS sessione 18). I constraint del DTO sono coperti da
+  // unit test co-located create-menu.dto.spec.ts (TD-BS Sub-1 RESOLVED).
+  it.skip('6. POST /menus validation 400 (name troppo corto) — BLOCKED TD-BS Sub-2', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/menus')
       .set('Authorization', `Bearer ${adminJwt}`)
