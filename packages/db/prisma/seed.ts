@@ -346,6 +346,236 @@ async function seedDevTenant(params: SeedDevTenantParams): Promise<void> {
   } else {
     console.log(`  user_roles: ${userInfo.email} -> Super Admin (tenant-wide) already exists`);
   }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 7. F1 Menu domain (sessione 17, ADR-0019) — dimostrativo per tenant dev
+  // ───────────────────────────────────────────────────────────────────────────
+  // Menu "Pranzo" + 3 categorie (Antipasti, Primi, Pizze) + 5 articoli +
+  // 1 PriceList "Base" (4 canali) + 5 ArticlePrice (price == basePrice).
+  // Idempotente: upsert su unique compound (vedi @@unique nello schema).
+  // ───────────────────────────────────────────────────────────────────────────
+  await seedDevMenu(tenant.id, tenantInfo.slug);
+}
+
+interface ArticleSeed {
+  name: string;
+  descriptionShort: string;
+  basePrice: string;
+  vatPercent: number;
+  categoryName: 'Antipasti' | 'Primi' | 'Pizze';
+  printDepartment: 'cucina' | 'pizzeria' | 'bar';
+  allergens: string[];
+  dietaryTags: string[];
+  preparationTimeMinutes: number;
+  sortOrder: number;
+}
+
+// 5 articoli dimostrativi (2 antipasti + 1 primo + 2 pizze).
+const DEMO_ARTICLES: ArticleSeed[] = [
+  {
+    name: 'Bruschetta al pomodoro',
+    descriptionShort: 'Pane tostato, pomodoro fresco, basilico',
+    basePrice: '6.50',
+    vatPercent: 10,
+    categoryName: 'Antipasti',
+    printDepartment: 'cucina',
+    allergens: ['cereali_glutine'],
+    dietaryTags: ['vegetariano', 'vegano'],
+    preparationTimeMinutes: 5,
+    sortOrder: 0,
+  },
+  {
+    name: 'Tartare di manzo',
+    descriptionShort: 'Manzo battuto al coltello, tuorlo, capperi',
+    basePrice: '14.00',
+    vatPercent: 10,
+    categoryName: 'Antipasti',
+    printDepartment: 'cucina',
+    allergens: ['uova'],
+    dietaryTags: [],
+    preparationTimeMinutes: 8,
+    sortOrder: 1,
+  },
+  {
+    name: 'Spaghetti alla carbonara',
+    descriptionShort: 'Guanciale, uova, pecorino romano, pepe',
+    basePrice: '12.00',
+    vatPercent: 10,
+    categoryName: 'Primi',
+    printDepartment: 'cucina',
+    allergens: ['cereali_glutine', 'uova', 'latte'],
+    dietaryTags: [],
+    preparationTimeMinutes: 12,
+    sortOrder: 0,
+  },
+  {
+    name: 'Pizza Margherita',
+    descriptionShort: 'Pomodoro, fior di latte, basilico',
+    basePrice: '8.00',
+    vatPercent: 10,
+    categoryName: 'Pizze',
+    printDepartment: 'pizzeria',
+    allergens: ['cereali_glutine', 'latte'],
+    dietaryTags: ['vegetariano'],
+    preparationTimeMinutes: 7,
+    sortOrder: 0,
+  },
+  {
+    name: 'Pizza Diavola',
+    descriptionShort: 'Pomodoro, fior di latte, salame piccante',
+    basePrice: '10.00',
+    vatPercent: 10,
+    categoryName: 'Pizze',
+    printDepartment: 'pizzeria',
+    allergens: ['cereali_glutine', 'latte'],
+    dietaryTags: ['piccante'],
+    preparationTimeMinutes: 7,
+    sortOrder: 1,
+  },
+];
+
+async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> {
+  // ── 7.1 Menu "Pranzo"
+  const menu = await prisma.menu.upsert({
+    where: { tenantId_name: { tenantId, name: 'Pranzo' } },
+    create: {
+      id: id(),
+      tenantId,
+      name: 'Pranzo',
+      description: 'Menu pranzo dimostrativo (sessione 17)',
+      isActive: true,
+      sortOrder: 0,
+    },
+    update: {
+      description: 'Menu pranzo dimostrativo (sessione 17)',
+      isActive: true,
+    },
+  });
+  console.log(`  Menu 'Pranzo' (${tenantSlug}): ${menu.id}`);
+
+  // ── 7.2 Categorie (Antipasti, Primi, Pizze)
+  const categoryDefs: Array<{ name: 'Antipasti' | 'Primi' | 'Pizze'; sortOrder: number }> = [
+    { name: 'Antipasti', sortOrder: 0 },
+    { name: 'Primi', sortOrder: 1 },
+    { name: 'Pizze', sortOrder: 2 },
+  ];
+
+  const categoryByName = new Map<string, { id: string }>();
+  for (const c of categoryDefs) {
+    const cat = await prisma.menuCategory.upsert({
+      where: { tenantId_menuId_name: { tenantId, menuId: menu.id, name: c.name } },
+      create: {
+        id: id(),
+        tenantId,
+        menuId: menu.id,
+        name: c.name,
+        sortOrder: c.sortOrder,
+      },
+      update: { sortOrder: c.sortOrder },
+    });
+    categoryByName.set(c.name, { id: cat.id });
+  }
+  console.log(`  Categorie (${tenantSlug}): ${categoryByName.size}`);
+
+  // ── 7.3 Articoli (5)
+  const articleByName = new Map<string, { id: string; basePrice: string }>();
+  const channelsAll: ('cassa' | 'menu_online' | 'asporto' | 'delivery')[] = [
+    'cassa',
+    'menu_online',
+    'asporto',
+    'delivery',
+  ];
+
+  for (const a of DEMO_ARTICLES) {
+    const category = categoryByName.get(a.categoryName);
+    if (!category) throw new Error(`Category missing: ${a.categoryName}`);
+
+    const article = await prisma.article.upsert({
+      where: {
+        tenantId_categoryId_name: {
+          tenantId,
+          categoryId: category.id,
+          name: a.name,
+        },
+      },
+      create: {
+        id: id(),
+        tenantId,
+        categoryId: category.id,
+        name: a.name,
+        descriptionShort: a.descriptionShort,
+        basePrice: a.basePrice,
+        vatPercent: a.vatPercent,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        allergens: a.allergens as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        dietaryTags: a.dietaryTags as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        printDepartment: a.printDepartment as any,
+        preparationTimeMinutes: a.preparationTimeMinutes,
+        availability: 'in_carta',
+        sortOrder: a.sortOrder,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        channelVisibility: channelsAll as any,
+      },
+      update: {
+        descriptionShort: a.descriptionShort,
+        basePrice: a.basePrice,
+        vatPercent: a.vatPercent,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        allergens: a.allergens as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        dietaryTags: a.dietaryTags as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        printDepartment: a.printDepartment as any,
+        preparationTimeMinutes: a.preparationTimeMinutes,
+        sortOrder: a.sortOrder,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        channelVisibility: channelsAll as any,
+      },
+    });
+    articleByName.set(a.name, { id: article.id, basePrice: a.basePrice });
+  }
+  console.log(`  Articoli (${tenantSlug}): ${articleByName.size}`);
+
+  // ── 7.4 PriceList "Base"
+  const priceList = await prisma.priceList.upsert({
+    where: { tenantId_name: { tenantId, name: 'Base' } },
+    create: {
+      id: id(),
+      tenantId,
+      name: 'Base',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      channels: channelsAll as any,
+      priority: 0,
+      isActive: true,
+    },
+    update: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      channels: channelsAll as any,
+      isActive: true,
+    },
+  });
+  console.log(`  PriceList 'Base' (${tenantSlug}): ${priceList.id}`);
+
+  // ── 7.5 ArticlePrice (5) — price == basePrice
+  let articlePriceCount = 0;
+  for (const [name, art] of articleByName) {
+    await prisma.articlePrice.upsert({
+      where: { articleId_priceListId: { articleId: art.id, priceListId: priceList.id } },
+      create: {
+        id: id(),
+        tenantId,
+        articleId: art.id,
+        priceListId: priceList.id,
+        price: art.basePrice,
+      },
+      update: { price: art.basePrice },
+    });
+    articlePriceCount++;
+    void name;
+  }
+  console.log(`  ArticlePrices (${tenantSlug}): ${articlePriceCount}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
