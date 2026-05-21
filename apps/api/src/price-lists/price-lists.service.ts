@@ -162,7 +162,12 @@ export class PriceListsService {
         });
       }
 
-      await tx.priceList.delete({ where: { id: priceListId } });
+      // Soft-delete esplicito (ADR-0021 §convention): update `deletedAt` sul tx —
+      // tx.priceList.delete() escaperebbe la tx RLS via softDeleteExtension → P2025.
+      await tx.priceList.update({
+        where: { id: priceListId },
+        data: { deletedAt: new Date() },
+      });
 
       await tx.auditLog.create({
         data: {

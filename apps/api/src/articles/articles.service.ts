@@ -224,7 +224,9 @@ export class ArticlesService {
         });
       }
 
-      await tx.article.delete({ where: { id: articleId } });
+      // Soft-delete esplicito (ADR-0021 §convention): update `deletedAt` sul tx —
+      // tx.article.delete() escaperebbe la tx RLS via softDeleteExtension → P2025.
+      await tx.article.update({ where: { id: articleId }, data: { deletedAt: new Date() } });
 
       await tx.auditLog.create({
         data: {

@@ -127,7 +127,20 @@ export const softDeleteExtension = Prisma.defineExtension((client) =>
         },
 
         // ─────────────────────────────────────────────────────────────────────
-        // INTERCEPT_DELETE — trasforma in update soft
+        // INTERCEPT_DELETE — trasforma `delete` in update soft (deletedAt)
+        // ─────────────────────────────────────────────────────────────────────
+        // ⚠️ TRAP — NON RLS-safe dentro una transazione (ADR-0021).
+        // `delegate` deriva dal `client` catturato alla definizione dell'extension:
+        // NON è transaction-scoped. Se `delete()` viene chiamato DENTRO
+        // `withTenantContextAtomicTx`, questo `update` gira su una connessione
+        // FUORI dalla transazione → senza `SET LOCAL app.tenant_id` → la RLS
+        // policy blocca la riga → Prisma P2025 → HTTP 500.
+        //
+        // CONVENTION (ADR-0021 §convention): per il soft-delete dentro un atomic
+        // tx tenant-scoped usare SEMPRE `tx.<model>.update({ data: { deletedAt:
+        // new Date() } })` esplicito — MAI `tx.<model>.delete()`. Questo
+        // interceptor resta corretto solo per `delete()` NON-transazionali
+        // (system context / chiamate dirette non-RLS). Refactor tx-safe → TD-BW.
         // ─────────────────────────────────────────────────────────────────────
         async delete({ model, args, query }) {
           if (!modelsWithDeletedAt.has(model)) {
@@ -152,6 +165,10 @@ export const softDeleteExtension = Prisma.defineExtension((client) =>
         // chiamante che ha invocato deleteMany senza filtri, ma pattern raro
         // e potenzialmente devastante in dev. Aggiungere where esplicito nei
         // test e nello sviluppo per evitare wipe accidentali.
+        //
+        // ⚠️ Stessa TRAP non-RLS-safe del `delete` sopra (ADR-0021): dentro un
+        // atomic tx tenant-scoped usare `tx.<model>.updateMany({ data: {
+        // deletedAt } })` esplicito — questo interceptor escapa la tx RLS.
         async deleteMany({ model, args, query }) {
           if (!modelsWithDeletedAt.has(model)) {
             return query(args);

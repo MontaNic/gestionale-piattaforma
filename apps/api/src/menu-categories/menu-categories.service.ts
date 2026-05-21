@@ -167,7 +167,12 @@ export class MenuCategoriesService {
         });
       }
 
-      await tx.menuCategory.delete({ where: { id: categoryId } });
+      // Soft-delete esplicito (ADR-0021 §convention): update `deletedAt` sul tx —
+      // tx.menuCategory.delete() escaperebbe la tx RLS via softDeleteExtension → P2025.
+      await tx.menuCategory.update({
+        where: { id: categoryId },
+        data: { deletedAt: new Date() },
+      });
 
       await tx.auditLog.create({
         data: {
