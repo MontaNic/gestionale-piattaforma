@@ -65,5 +65,71 @@
       "title": "Settings",
       "desc": "Tenant + users configuration — available in upcoming F1 sessions."
     }
+  },
+  "menu": {
+    "listTitle": "Menu",
+    "listSubtitle": "Manage the venue menus, categories and items.",
+    "listEmpty": "No menu yet. Create one to get started.",
+    "newMenu": "New menu",
+    "open": "Open",
+    "backToList": "All menus",
+    "detailNotFound": "Menu not found or no longer available.",
+    "categoriesTitle": "Categories",
+    "categoriesEmpty": "No categories yet. Add one to start inserting items.",
+    "newCategory": "New category",
+    "articlesEmpty": "No items in this category.",
+    "newArticle": "New item",
+    "editMenu": "Edit menu",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "active": "Active",
+    "inactive": "Inactive",
+    "save": "Save",
+    "saving": "Saving…",
+    "create": "Create",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "isActive": "Menu active",
+      "sortOrder": "Display order",
+      "categoryName": "Category name",
+      "articleName": "Name",
+      "descriptionShort": "Short description",
+      "descriptionLong": "Long description",
+      "photoUrl": "Photo URL",
+      "basePrice": "Base price (€)",
+      "vat": "VAT",
+      "printDepartment": "Print department",
+      "availability": "Availability",
+      "prepTime": "Preparation time (min)"
+    },
+    "dept": {
+      "cucina": "Kitchen",
+      "pizzeria": "Pizzeria",
+      "bar": "Bar"
+    },
+    "avail": {
+      "in_carta": "On menu",
+      "esaurito": "Sold out",
+      "sospeso": "Suspended"
+    },
+    "meta": {
+      "vat": "VAT {value}%",
+      "prepTime": "{value} min"
+    },
+    "confirm": {
+      "menuTitle": "Delete this menu?",
+      "menuBody": "“{name}” will be removed from the list. This action cannot be undone from this interface.",
+      "categoryTitle": "Delete this category?",
+      "categoryBody": "“{name}” and its items will no longer be visible.",
+      "articleTitle": "Delete this item?",
+      "articleBody": "“{name}” will be removed from the category.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
+    }
   }
 }

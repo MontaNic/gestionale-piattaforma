@@ -1515,6 +1515,71 @@ STOP 2B (Commit 2 TD-AW):
 - TD-BS Sub-2 deferred MEDIA — non più bloccante pre-requisito per F1 Menu UI
 - Next: sessione 19 — F1 Menu UI scaffold.
 
+### F1 Menu UI — list + detail CRUD — sessione 19 (2026-05-22)
+
+**Branch**: `feat/s19-f1-menu-ui` · **Tipo**: 1 PR feature UI (11 nuovi file + 5 modificati) · **ADR**: [ADR-0020](docs/architecture/ADR-0020-f1-menu-ui-crud.md)
+
+**Scope:** prima UI feature business. Route `(authenticated)/menu/` estesa da placeholder a list + detail con CRUD Menu / Categorie / Articoli. Consuma gli endpoint backend S17 (ADR-0019). **Nessuna modifica backend / schema / migration.**
+
+**Scope completato:**
+
+- Routing 2-livelli: `menu/page.tsx` (list) + `menu/[menuId]/page.tsx` (detail) — **primo segment dinamico `[id]` del progetto**. Categorie/articoli inline nel detail (no deep-nesting `[catId]`).
+- `lib/api.ts` esteso: `apiPatch` + `apiDelete`, refactor a `request()` privato (firme `apiGet`/`apiPost` invariate → caller esistenti non toccati).
+- `lib/menu-api.ts` data access client (12 funzioni) + `lib/menu-types.ts` domain types. NO react-query / SWR / Server Actions — stato React locale + refetch on mutation.
+- Form CRUD: RHF + zodResolver + `components/ui/form.tsx` (pattern `login/page.tsx`). 2 nuovi primitive UI: `ui/dialog.tsx`, `ui/textarea.tsx`.
+- Soft-delete con dialog di conferma (`ConfirmDialog`); nessun cestino/ripristino UI (TD-BQ).
+- Permission gating bottoni (branch A5): `menu.categoria.gestisci` / `menu.piatto.crea` / `menu.piatto.modifica` da `useAuth().permissions`.
+- i18n: namespace `menu` aggiunto a `it.json` + `en.json`.
+
+**FASE 0 — verifica empirica A1–A5 (READ-ONLY, bloccante):** A1 (Article 1:N MenuCategory) ✅, A2 (update via `PATCH`) ✅, A3 (`Article.photoUrl` esiste → input URL) ✅, A4 (soft-delete: GET list filtra per `deletedAt` del modello via `softDeleteExtension`, detail di menu cancellato 404 → non devia) ✅, A5 (`useAuth()` espone `permissions`) ✅. Nessuna deviazione bloccante.
+
+**Decisioni** (dettaglio [ADR-0020](docs/architecture/ADR-0020-f1-menu-ui-crud.md)):
+
+- **§prezzo — solo `Article.basePrice`**: la UI S19 NON gestisce `ArticlePrice` / `/articles/:id/prices` (deviazione consapevole dalla lettera spec, scelta delegata dall'owner). Razionale: `basePrice` è già il prezzo obbligatorio dell'articolo; usare `article-prices` richiederebbe 2 chiamate non-atomiche sul create + lookup magic-string del listino "Base"; `ArticlePrice` è il meccanismo dei listini → UI dedicata in S20.
+- **No data-layer**: client fetch + refetch on mutation a grana grossa (no react-query — confine S19).
+- **Form numerici come stringa + regex**: `z.coerce.number()` rompe l'inferenza `zodResolver`/`useForm<z.infer>` → campi numerici stringa, convertiti con `Number()` al submit.
+- **Select enum `<select>` nativo**: confine "nessuna nuova dipendenza" (`@radix-ui/react-select` non installato).
+- **Foto (branch A3)**: solo input URL nel form; display immagine differito (TD-BO).
+- **Campi articolo S19** = sottoinsieme "CRUD base" del DTO; `allergens`/`dietaryTags`/`channelVisibility` differiti (TD-BT).
+
+**Discovery #54** — root `eslint .` (`pnpm -w lint`) non carica il plugin `@next/next` → una direttiva `eslint-disable` per una regola `@next/next/*` è essa stessa un errore («Definition for rule not found»). Conseguenza: codice in `apps/web` non può sopprimere regole Next via comment se viene lintato anche dal root. Generalizzabile: le soppressioni rule-specific funzionano solo sotto il linter che definisce la regola.
+
+**Tech debt:**
+
+- 🆕 **TD-BT** — campi enum-array articolo (`allergens` / `dietaryTags` / `channelVisibility`) non gestiti dal form S19 (richiedono widget multi-select). Allergeni rilevanti Reg. UE 1169/2011 — da gestire prima dell'esposizione menu al cliente finale.
+- 🆕 **TD-BU** — `Sidebar` active-state con match esatto `pathname === href` non evidenzia le sub-route detail (`menu/[menuId]`). Limitazione pre-esistente esposta dal primo segment dinamico. Fix: match per prefisso.
+
+**Discoveries cumulative bump 53 → 54** (+1 vs sessione 18): Discovery #54 ESLint rule-suppression scope per linter.
+
+**Test (GATE vs baseline):**
+
+- Unit: **91/91 PASS** ✅ (invariato — modifiche solo `apps/web`, suite backend non impattata)
+- typecheck workspace: **PASS** ✅ · lint workspace (`eslint .`) + `next lint`: **PASS** ✅
+- `next build` web: **OK** ✅ (13 route, incl. `/t/[slug]/menu` + `/t/[slug]/menu/[menuId]`)
+- Playwright: **non rieseguito** — nessuno spec esercita `/menu` (verifica empirica FASE 0 in `apps/web/e2e/specs/`); i 4 `.skip` E2E backend (TD-BS Sub-2) invariati.
+
+**File:**
+
+| File | Type |
+|---|---|
+| `apps/web/src/lib/{menu-types,menu-api}.ts` (2) | new |
+| `apps/web/src/components/ui/{dialog,textarea}.tsx` (2) | new |
+| `apps/web/src/components/menu/{ConfirmDialog,MenuForm,CategoryForm,ArticleForm,CategorySection}.tsx` (5) | new |
+| `apps/web/src/app/t/[slug]/(authenticated)/menu/[menuId]/page.tsx` | new |
+| `docs/architecture/ADR-0020-f1-menu-ui-crud.md` | new |
+| `apps/web/src/lib/api.ts` | mod (+`apiPatch`/`apiDelete`, refactor `request()`) |
+| `apps/web/src/lib/error-codes.ts` | mod (+`messageForError`) |
+| `apps/web/src/app/t/[slug]/(authenticated)/menu/page.tsx` | mod (placeholder → list) |
+| `apps/web/src/i18n/messages/{it,en}.json` (2) | mod (+namespace `menu`) |
+| `PROGRESS.md` | mod (entry sessione 19) |
+
+**Foundation status post-merge:**
+
+- **F1 Menu UI (list + detail CRUD base): 100% ✅** (sessione 19)
+- F1 Menu CRUD schema + backend: 100% (invariato sessione 17/18)
+- Carving residuo S20+: listini multipli UI + `ArticlePrice`, foto upload pipeline (TD-BO), varianti/modificatori, campi enum-array articolo (TD-BT)
+- Next: sessione 20 — candidate F1 Menu (listini multipli UI / varianti) o TD-BS Sub-2.
+
 ### Fix soft-delete RLS tx-escape — sessione 19 (2026-05-22)
 
 **Branch**: `fix/soft-delete-rls-tx-escape` · **Tipo**: 1 PR bugfix backend data-layer · **ADR**: [ADR-0021](docs/architecture/ADR-0021-soft-delete-rls-tx-escape-fix.md)

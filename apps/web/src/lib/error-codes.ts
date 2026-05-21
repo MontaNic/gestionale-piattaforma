@@ -20,7 +20,10 @@
 // errorCode. Ack: questo mapping diventa subsumed in TD-AY closure sessione 15.
 // =============================================================================
 
+import { ApiError } from './api';
+
 const FALLBACK_MESSAGE = 'Si è verificato un errore. Riprova.';
+const CONNECTION_MESSAGE = 'Errore di connessione al server';
 
 export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_AUTH_INVALID_CREDENTIALS: 'Email o password non corrette',
@@ -97,4 +100,16 @@ export function messageForErrorCode(code: string): string {
   // noUncheckedIndexedAccess (tsconfig web strict): Record lookup ritorna
   // `string | undefined` → fallback constant evita doppio coalesce.
   return ERROR_CODE_MESSAGES[code] ?? FALLBACK_MESSAGE;
+}
+
+/**
+ * Risolve un errore generico `unknown` (catch block) in un messaggio IT per UI.
+ * `ApiError` → mapping `errorCode`; qualunque altro errore (network, parse) →
+ * messaggio connessione. Pattern estratto da `login/page.tsx` (S19 ADR-0020).
+ */
+export function messageForError(err: unknown): string {
+  if (err instanceof ApiError) {
+    return messageForErrorCode(err.errorCode);
+  }
+  return CONNECTION_MESSAGE;
 }
