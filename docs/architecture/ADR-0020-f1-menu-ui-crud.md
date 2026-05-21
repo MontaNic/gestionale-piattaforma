@@ -108,6 +108,14 @@ L'area `(authenticated)` usa uniformemente next-intl (dashboard, 7 placeholder).
 
 `Sidebar.tsx` calcola `isActive` con match esatto `pathname === href`. Con l'introduzione del primo segment dinamico (`menu/[menuId]`), la voce nav "Menu" non risulta attiva quando si è su `/t/<slug>/menu/<id>`. Limitazione pre-esistente **esposta** da S19 (prima sub-route del progetto). Fix: match per prefisso (`pathname === href || pathname.startsWith(href + '/')`). Stima: ~10min + verifica che non crei falsi-positivi tra voci nav con prefisso comune.
 
+### TD-BX — Copertura E2E del CRUD/delete Menu UI assente (solo verifica manuale)
+
+Categoria: **test coverage**. Il CRUD Menu UI (list, detail, create/edit, **soft-delete** Menu/Categoria/Articolo) è stato validato **solo da verifica manuale runtime** (driver Playwright ad-hoc, ruolo non-superuser, 3/3 delete = 200). **Nessuno spec Playwright committato lo esercita in CI** — gli spec esistenti coprono auth/shell/routing/tenant-isolation, non `/menu`.
+
+**Confine di copertura (esplicito):** fino alla chiusura di TD-BX, una regressione su delete/CRUD Menu UI **non viene intercettata in CI** — solo una verifica manuale la rileva. Il GATE statico (typecheck/lint/build) e gli E2E backend non coprono il giro frontend→backend del Menu.
+
+Fix: spec Playwright su `/menu` — list + detail + CRUD + soft-delete Menu/Categoria/Articolo con `ConfirmDialog`. Stima: ~1.5–2h (spec + fixture seed Menu + storageState riuso). Sinergico con TD-BV (E2E come ruolo non-superuser) per coprire anche il path RLS dal frontend.
+
 ## Files
 
 ### Nuovi file

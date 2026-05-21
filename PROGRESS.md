@@ -1548,6 +1548,7 @@ STOP 2B (Commit 2 TD-AW):
 
 - 🆕 **TD-BT** — campi enum-array articolo (`allergens` / `dietaryTags` / `channelVisibility`) non gestiti dal form S19 (richiedono widget multi-select). Allergeni rilevanti Reg. UE 1169/2011 — da gestire prima dell'esposizione menu al cliente finale.
 - 🆕 **TD-BU** — `Sidebar` active-state con match esatto `pathname === href` non evidenzia le sub-route detail (`menu/[menuId]`). Limitazione pre-esistente esposta dal primo segment dinamico. Fix: match per prefisso.
+- 🆕 **TD-BX** — copertura E2E del CRUD/delete Menu UI assente: validato solo da verifica manuale runtime, nessuno spec Playwright committato lo esercita in CI. **Confine:** fino a TD-BX una regressione su delete/CRUD Menu UI non è intercettata in CI — solo la verifica manuale la rileva. Fix: spec Playwright su list + detail + CRUD + soft-delete.
 
 **Discoveries cumulative bump 53 → 54** (+1 vs sessione 18): Discovery #54 ESLint rule-suppression scope per linter.
 
