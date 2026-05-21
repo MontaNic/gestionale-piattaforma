@@ -1515,6 +1515,48 @@ STOP 2B (Commit 2 TD-AW):
 - TD-BS Sub-2 deferred MEDIA — non più bloccante pre-requisito per F1 Menu UI
 - Next: sessione 19 — F1 Menu UI scaffold.
 
+### Fix soft-delete RLS tx-escape — sessione 19 (2026-05-22)
+
+**Branch**: `fix/soft-delete-rls-tx-escape` · **Tipo**: 1 PR bugfix backend data-layer · **ADR**: [ADR-0021](docs/architecture/ADR-0021-soft-delete-rls-tx-escape-fix.md)
+
+**Scope:** bug del data-layer emerso dalla verifica runtime di S19 (ADR-0020). Il soft-delete via `tx.<model>.delete()` dentro `withTenantContextAtomicTx` falliva con **HTTP 500 (Prisma P2025)** in dev/prod — colpiva ogni modello con `deletedAt` (i 4 DELETE F1 Menu: Menu, MenuCategory, Article, PriceList). Task separato dal frontend S19 (S19 parcheggiato come checkpoint sul suo branch).
+
+**Root cause:** l'interceptor `delete` di `softDeleteExtension` riscrive `delete`→`update` usando il `client` catturato (non-transazionale). Dentro un atomic tx, l'`update` escapa la transazione → gira senza `SET LOCAL app.tenant_id` → la RLS policy lo blocca → P2025. Invisibile alla suite E2E perché i Testcontainers connettono come `postgres` superuser (bypassa RLS). S19 è stato il primo codice a esercitare gli endpoint DELETE a runtime contro il ruolo reale `gestionale_app` (non-superuser, RLS `FORCE`).
+
+**Fix:** i 4 service `softDelete` usano `tx.<model>.update({ data: { deletedAt: new Date() } })` esplicito (gira sul `tx` → RLS context attivo). Pattern già usato e funzionante in `.update()`. L'interceptor `delete`/`deleteMany` di `soft-delete.ts` resta (valido per `delete()` non-transazionali) ma è annotato come trap.
+
+**Test di regressione (obbligatorio):** nuovo spec `apps/api/test/e2e/soft-delete-rls.e2e-spec.ts` — primo del progetto che boota l'app come ruolo **`gestionale_app` non-superuser** (RLS enforced). Verificato: **rosso 3/3 (500) sul codice pre-fix**, verde 3/3 (200) post-fix. La suite E2E esistente NON è toccata (resta superuser → TD-BV).
+
+**Convention (ADR-0021 §convention):** dentro un atomic tx tenant-scoped, soft-delete SEMPRE via `tx.<model>.update({ deletedAt })` esplicito — MAI `tx.<model>.delete()`. Documentata in ADR + inline negli interceptor di `soft-delete.ts` e nei commenti dei service.
+
+**Discovery #55** — un Prisma query-extension che riscrive un'operazione chiamando un delegate sul `client` catturato alla definizione esce dalla transazione del chiamante (e dal suo context RLS/GUC). Generalizzabile: i rewrite di operazione dentro le extension devono usare un client transaction-aware, altrimenti rompono atomicità e RLS dentro `$transaction`. (#54 riservato da S19/ADR-0020.)
+
+**Tech debt:**
+
+- 🆕 **TD-BV** — la suite E2E gira come `postgres` superuser → blind spot strutturale: non intercetta alcun bug di interazione con la RLS (questo soft-delete ne è la prova). Valutare conversione suite/subset al ruolo `gestionale_app`.
+- 🆕 **TD-BW** — refactor tx-safe dell'interceptor soft-delete (rewrite dentro `rlsExtension.$allOperations` o model-extension `softDelete()`), così `tx.<model>.delete()` torna sicuro e la §convention diventa superflua.
+
+**Test (GATE):**
+
+- E2E Testcontainers: **48 pass / 4 skip** ✅ (45 pre-esistenti invariati + 3 nuovi `soft-delete-rls`; 4 skip TD-BS Sub-2 invariati)
+- Unit: **91/91 PASS** ✅ · typecheck + lint workspace: **PASS** ✅
+
+**File:**
+
+| File | Type |
+|---|---|
+| `apps/api/src/{menus,menu-categories,articles,price-lists}/*.service.ts` (4) | mod (`softDelete`: delete → update deletedAt) |
+| `packages/db/src/soft-delete.ts` | mod (annotazione trap, no change funzionale) |
+| `apps/api/test/e2e/soft-delete-rls.e2e-spec.ts` | new (regressione non-superuser) |
+| `docs/architecture/ADR-0021-soft-delete-rls-tx-escape-fix.md` | new |
+| `PROGRESS.md` | mod (entry sessione 19 fix) |
+
+**Foundation status post-merge:**
+
+- **Soft-delete RLS-aware: 100% ✅** — funzionante per tutti i modelli con `deletedAt` sotto ruolo non-superuser
+- Sblocca il merge di S19 (F1 Menu UI): post-merge di questo fix, rebase S19 + ri-verifica delete end-to-end
+- Next: rebase `feat/s19-f1-menu-ui` su main aggiornato → ri-verifica → PR S19.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**

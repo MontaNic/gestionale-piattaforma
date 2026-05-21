@@ -150,8 +150,10 @@ export class MenusService {
         throw new NotFoundException({ errorCode: 'E_MENU_NOT_FOUND', message: 'Menu not found' });
       }
 
-      // Soft-delete via extension softDeleteExtension (delete -> update deletedAt).
-      await tx.menu.delete({ where: { id: menuId } });
+      // Soft-delete esplicito via update `deletedAt` sul tx (ADR-0021 §convention):
+      // NON usare tx.menu.delete() — l'interceptor softDeleteExtension lo riscrive
+      // su un client non-transazionale, esce dal context RLS della tx → P2025.
+      await tx.menu.update({ where: { id: menuId }, data: { deletedAt: new Date() } });
 
       await tx.auditLog.create({
         data: {
