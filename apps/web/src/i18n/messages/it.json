@@ -65,5 +65,71 @@
       "title": "Impostazioni",
       "desc": "Configurazione tenant + utenti — disponibile nelle prossime sessioni F1."
     }
+  },
+  "menu": {
+    "listTitle": "Menu",
+    "listSubtitle": "Gestisci i menu del locale, le categorie e gli articoli.",
+    "listEmpty": "Nessun menu presente. Creane uno per iniziare.",
+    "newMenu": "Nuovo menu",
+    "open": "Apri",
+    "backToList": "Tutti i menu",
+    "detailNotFound": "Menu non trovato o non più disponibile.",
+    "categoriesTitle": "Categorie",
+    "categoriesEmpty": "Nessuna categoria. Aggiungine una per inserire gli articoli.",
+    "newCategory": "Nuova categoria",
+    "articlesEmpty": "Nessun articolo in questa categoria.",
+    "newArticle": "Nuovo articolo",
+    "editMenu": "Modifica menu",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "active": "Attivo",
+    "inactive": "Non attivo",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "create": "Crea",
+    "creating": "Creazione…",
+    "cancel": "Annulla",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "fields": {
+      "name": "Nome",
+      "description": "Descrizione",
+      "isActive": "Menu attivo",
+      "sortOrder": "Ordine di visualizzazione",
+      "categoryName": "Nome categoria",
+      "articleName": "Nome",
+      "descriptionShort": "Descrizione breve",
+      "descriptionLong": "Descrizione estesa",
+      "photoUrl": "URL foto",
+      "basePrice": "Prezzo base (€)",
+      "vat": "IVA",
+      "printDepartment": "Reparto di stampa",
+      "availability": "Disponibilità",
+      "prepTime": "Tempo di preparazione (min)"
+    },
+    "dept": {
+      "cucina": "Cucina",
+      "pizzeria": "Pizzeria",
+      "bar": "Bar"
+    },
+    "avail": {
+      "in_carta": "In carta",
+      "esaurito": "Esaurito",
+      "sospeso": "Sospeso"
+    },
+    "meta": {
+      "vat": "IVA {value}%",
+      "prepTime": "{value} min"
+    },
+    "confirm": {
+      "menuTitle": "Eliminare il menu?",
+      "menuBody": "«{name}» sarà rimosso dall'elenco. L'operazione non è annullabile da questa interfaccia.",
+      "categoryTitle": "Eliminare la categoria?",
+      "categoryBody": "«{name}» e i suoi articoli non saranno più visibili.",
+      "articleTitle": "Eliminare l'articolo?",
+      "articleBody": "«{name}» sarà rimosso dalla categoria.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
+    }
   }
 }

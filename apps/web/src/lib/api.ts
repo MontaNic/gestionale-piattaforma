@@ -5,9 +5,14 @@
 //   - `tenantSlug` opzionale → header `X-Tenant-Slug` (pre-auth login/login-pin
 //     scope `/auth/login` + `/auth/login-pin`, backend TenantMiddleware D2a)
 //   - `accessToken` opzionale → header `Authorization: Bearer <token>` (post-auth)
-//   - JSON content-type default per POST
-//   - 204 No Content handling per logout/delete/update (NestJS @HttpCode)
+//   - JSON content-type default per i metodi con body (POST/PATCH)
+//   - 204 No Content handling per logout/delete (NestJS @HttpCode)
 //   - `ApiError` tipizzato con `status` + `errorCode` (NestJS exception body)
+//
+// 4 verbi: `apiGet` / `apiPost` / `apiPatch` / `apiDelete`. Tutti delegano a
+// `request()` privato — un solo punto per fetch + parsing errori (ADR-0020 S19
+// F1 Menu UI: PATCH = verbo update reale dei controller backend; DELETE backend
+// risponde 200 `{ data }`, non 204 — `request()` gestisce entrambi).
 //
 // Pattern `RequestOptions` interface: fields dedicated tipizzati invece di
 // raw `Record<string, string>` per evitare typo header name (es. 'X-Tenant-slug'
@@ -33,6 +38,8 @@ export interface RequestOptions {
   /** Access token JWT per header `Authorization: Bearer <token>` (post-auth). */
   accessToken?: string;
 }
+
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 async function parseError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as {
@@ -62,29 +69,38 @@ function buildHeaders(opts: RequestOptions, withJsonContent: boolean): Record<st
   return headers;
 }
 
-export async function apiPost<T>(
+async function request<T>(
+  method: HttpMethod,
   path: string,
-  body: unknown,
-  options: RequestOptions = {},
+  options: RequestOptions,
+  body?: unknown,
 ): Promise<T> {
+  const hasBody = body !== undefined;
   const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: buildHeaders(options, true),
-    body: JSON.stringify(body),
+    method,
+    headers: buildHeaders(options, hasBody),
+    ...(hasBody ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!res.ok) throw await parseError(res);
-  // 204 No Content: pattern NestJS @HttpCode(NO_CONTENT) per logout/delete/update.
-  // Caller dovrebbe usare apiPost<void>(...) e non leggere il return value.
+  // 204 No Content: pattern NestJS @HttpCode(NO_CONTENT). Caller dovrebbe usare
+  // <void> e non leggere il return value.
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
-export async function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: buildHeaders(options, false),
-  });
+export function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return request<T>('GET', path, options);
+}
 
-  if (!res.ok) throw await parseError(res);
-  return (await res.json()) as T;
+export function apiPost<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
+  return request<T>('POST', path, options, body);
+}
+
+export function apiPatch<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
+  return request<T>('PATCH', path, options, body);
+}
+
+export function apiDelete<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return request<T>('DELETE', path, options);
 }
