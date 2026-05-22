@@ -109,3 +109,74 @@ export type UpdateArticleInput = Partial<Omit<CreateArticleInput, 'categoryId'>>
  * Create: il parent aggiunge `categoryId`. Update: assegnabile a `UpdateArticleInput`.
  */
 export type ArticleFormPayload = Omit<CreateArticleInput, 'categoryId'>;
+
+// =============================================================================
+// Listini prezzo — S20 (ADR-0022)
+// =============================================================================
+// `PriceList` = listino tenant-level segmentato per canale. `ArticlePrice` =
+// override prezzo puntuale per (articolo × listino). Modello prezzo Opzione 1:
+// `Article.basePrice` è il default/fallback, l'override lo sovrascrive solo
+// dove presente. Resolution `override ?? basePrice` SOLO lato UI display
+// (Opzione 1a, ADR-0022) — il backend non fa pricing resolution (TD-BY).
+//
+// Serializzazione: `Decimal` → stringa JSON; `DateTime`/`Date` → stringa ISO.
+// =============================================================================
+
+/** Canali di vendita backend (`enum Channel`, schema.prisma `@@map("channel")`). */
+export type Channel = 'cassa' | 'menu_online' | 'asporto' | 'delivery';
+export const CHANNELS: readonly Channel[] = ['cassa', 'menu_online', 'asporto', 'delivery'];
+
+export interface PriceList {
+  id: string;
+  tenantId: string;
+  name: string;
+  channels: Channel[];
+  /** `@db.Date` → stringa ISO; `null` se non impostata. */
+  validFromDate: string | null;
+  validToDate: string | null;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/**
+ * Override prezzo per (articolo × listino). Join puro: nessun soft-delete
+ * (il backend fa hard delete). `price` è Prisma Decimal(10,2) → stringa JSON.
+ */
+export interface ArticlePrice {
+  id: string;
+  tenantId: string;
+  articleId: string;
+  priceListId: string;
+  price: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// -----------------------------------------------------------------------------
+// Input types (request body) — allineati a CreatePriceListDto / SetArticlePriceDto.
+// Le date opzionali viaggiano come stringa ISO `YYYY-MM-DD` (DTO `@Type(() => Date)`).
+// -----------------------------------------------------------------------------
+
+export interface CreatePriceListInput {
+  name: string;
+  channels: Channel[];
+  validFromDate?: string;
+  validToDate?: string;
+  priority?: number;
+  isActive?: boolean;
+}
+export type UpdatePriceListInput = Partial<CreatePriceListInput>;
+
+/** POST /articles/:articleId/prices — upsert override su (articolo, listino). */
+export interface SetArticlePriceInput {
+  priceListId: string;
+  price: number;
+}
+
+/** PATCH override — solo `price` modificabile (il listino è fisso, ADR-0019 R1). */
+export interface UpdateArticlePriceInput {
+  price: number;
+}

@@ -105,7 +105,13 @@
       "vat": "IVA",
       "printDepartment": "Reparto di stampa",
       "availability": "Disponibilità",
-      "prepTime": "Tempo di preparazione (min)"
+      "prepTime": "Tempo di preparazione (min)",
+      "priceListName": "Nome listino",
+      "channels": "Canali di vendita",
+      "priority": "Priorità",
+      "isActiveList": "Listino attivo",
+      "validFrom": "Valido dal",
+      "validTo": "Valido fino al"
     },
     "dept": {
       "cucina": "Cucina",
@@ -128,8 +134,42 @@
       "categoryBody": "«{name}» e i suoi articoli non saranno più visibili.",
       "articleTitle": "Eliminare l'articolo?",
       "articleBody": "«{name}» sarà rimosso dalla categoria.",
+      "priceListTitle": "Eliminare il listino?",
+      "priceListBody": "«{name}» sarà rimosso. Gli override prezzo collegati non saranno più applicati.",
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
+    },
+    "listini": {
+      "link": "Listini",
+      "title": "Listini prezzo",
+      "subtitle": "Gestisci i listini e i canali di vendita. Dove un articolo non ha un override, si applica il suo prezzo base.",
+      "backToMenu": "Torna ai menu",
+      "empty": "Nessun listino presente. Creane uno per iniziare.",
+      "new": "Nuovo listino",
+      "priority": "Priorità {value}",
+      "validityAlways": "Sempre valido",
+      "validityFrom": "Valido dal {date}",
+      "validityTo": "Valido fino al {date}",
+      "validityRange": "Valido dal {from} al {to}"
+    },
+    "prices": {
+      "show": "Prezzi",
+      "hide": "Nascondi prezzi",
+      "sectionTitle": "Prezzi per listino",
+      "loading": "Caricamento prezzi…",
+      "noPriceLists": "Nessun listino attivo. Crea un listino per gestire i prezzi per canale.",
+      "baseLabel": "prezzo base",
+      "overrideLabel": "override",
+      "setOverride": "Imposta override",
+      "editOverride": "Modifica override",
+      "removeOverride": "Rimuovi override",
+      "invalidFormat": "Inserisci un importo valido (es. 12.50)."
+    },
+    "channels": {
+      "cassa": "Cassa",
+      "menu_online": "Menu online",
+      "asporto": "Asporto",
+      "delivery": "Delivery"
     }
   }
 }

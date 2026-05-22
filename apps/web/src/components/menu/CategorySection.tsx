@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Tag, Trash2 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,10 @@ import type {
   ArticleFormPayload,
   CreateCategoryInput,
   MenuCategory,
+  PriceList,
 } from '@/lib/menu-types';
 import { ArticleForm } from './ArticleForm';
+import { ArticlePricesSection } from './ArticlePricesSection';
 import { CategoryForm } from './CategoryForm';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -40,9 +42,12 @@ interface CategorySectionProps {
   menuId: string;
   category: MenuCategory;
   articles: Article[];
+  /** Listini attivi — passati a ogni ArticlePricesSection per la resolution. */
+  priceLists: PriceList[];
   canManageCategory: boolean;
   canCreateArticle: boolean;
   canModifyArticle: boolean;
+  canModifyPrice: boolean;
   onReload: () => Promise<void>;
 }
 
@@ -50,15 +55,19 @@ export function CategorySection({
   menuId,
   category,
   articles,
+  priceLists,
   canManageCategory,
   canCreateArticle,
   canModifyArticle,
+  canModifyPrice,
   onReload,
 }: CategorySectionProps): JSX.Element {
   const t = useTranslations('menu');
   const [editingCategory, setEditingCategory] = useState(false);
   const [creatingArticle, setCreatingArticle] = useState(false);
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
+  // Articolo con la sezione "Prezzi per listino" aperta (toggle, uno per volta).
+  const [pricesArticleId, setPricesArticleId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -178,46 +187,66 @@ export function CategorySection({
                 />
               </li>
             ) : (
-              <li
-                key={article.id}
-                className="flex items-start justify-between gap-3 rounded-md border px-3 py-2"
-              >
-                {/* Display foto articolo differito con la pipeline upload (TD-BO):
-                    S19 cattura solo photoUrl come input testuale nel form (branch A3). */}
-                <div>
-                  <p className="font-medium">{article.name}</p>
-                  <p className="text-sm text-muted-foreground">{article.descriptionShort}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">€ {article.basePrice}</span>
-                    {' · '}
-                    {t('meta.vat', { value: article.vatPercent })}
-                    {' · '}
-                    {t(`avail.${article.availability}`)}
-                    {' · '}
-                    {t(`dept.${article.printDepartment}`)}
-                    {article.preparationTimeMinutes != null &&
-                      ` · ${t('meta.prepTime', { value: article.preparationTimeMinutes })}`}
-                  </p>
-                </div>
-                {canModifyArticle && (
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingArticleId(article.id)}
-                      aria-label={t('edit')}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPendingDelete({ type: 'article', article })}
-                      aria-label={t('delete')}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+              <li key={article.id} className="rounded-md border px-3 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Display foto articolo differito con la pipeline upload (TD-BO):
+                      S19 cattura solo photoUrl come input testuale nel form (branch A3). */}
+                  <div>
+                    <p className="font-medium">{article.name}</p>
+                    <p className="text-sm text-muted-foreground">{article.descriptionShort}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">€ {article.basePrice}</span>
+                      {' · '}
+                      {t('meta.vat', { value: article.vatPercent })}
+                      {' · '}
+                      {t(`avail.${article.availability}`)}
+                      {' · '}
+                      {t(`dept.${article.printDepartment}`)}
+                      {article.preparationTimeMinutes != null &&
+                        ` · ${t('meta.prepTime', { value: article.preparationTimeMinutes })}`}
+                    </p>
                   </div>
+                  <div className="flex shrink-0 gap-1">
+                    {/* "Prezzi" non gated: la sezione mostra la resolution in sola
+                        lettura; le mutazioni override restano gated internamente. */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setPricesArticleId((cur) => (cur === article.id ? null : article.id))
+                      }
+                    >
+                      <Tag className="h-4 w-4" />
+                      {pricesArticleId === article.id ? t('prices.hide') : t('prices.show')}
+                    </Button>
+                    {canModifyArticle && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingArticleId(article.id)}
+                          aria-label={t('edit')}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPendingDelete({ type: 'article', article })}
+                          aria-label={t('delete')}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {pricesArticleId === article.id && (
+                  <ArticlePricesSection
+                    article={article}
+                    priceLists={priceLists}
+                    canModifyPrice={canModifyPrice}
+                  />
                 )}
               </li>
             ),

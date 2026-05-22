@@ -79,9 +79,16 @@ export default function MenuListPage(): JSX.Element {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">{t('listTitle')}</h1>
-        <p className="text-sm text-muted-foreground">{t('listSubtitle')}</p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">{t('listTitle')}</h1>
+          <p className="text-sm text-muted-foreground">{t('listSubtitle')}</p>
+        </div>
+        {/* Entry-point listini: nessuno slot in Sidebar (union tipata fissa) → link
+            qui (S20 ADR-0022). Visibile a chiunque acceda al menu (sola lettura ok). */}
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/t/${tenant.slug}/menu/listini`}>{t('listini.link')}</Link>
+        </Button>
       </header>
 
       {loadError && (

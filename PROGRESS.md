@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 22 maggio 2026 (sessione 18 — TD-BS Sub-1 RESOLVED, validation unit coverage)
+**Ultimo aggiornamento:** 22 maggio 2026 (sessione 20 — F1 Listini UI: PriceList CRUD + ArticlePrice override)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
@@ -1622,6 +1622,65 @@ STOP 2B (Commit 2 TD-AW):
 - **Soft-delete RLS-aware: 100% ✅** — funzionante per tutti i modelli con `deletedAt` sotto ruolo non-superuser
 - Sblocca il merge di S19 (F1 Menu UI): post-merge di questo fix, rebase S19 + ri-verifica delete end-to-end
 - Next: rebase `feat/s19-f1-menu-ui` su main aggiornato → ri-verifica → PR S19.
+
+### F1 Listini UI — PriceList CRUD + ArticlePrice override — sessione 20 (2026-05-22)
+
+**Branch**: `feat/s20-listini-ui` · **Tipo**: 1 PR feature UI (4 nuovi file + 9 modificati) · **ADR**: [ADR-0022](docs/architecture/ADR-0022-f1-listini-ui.md)
+
+**Scope:** completa il Menu domain UI con la gestione listini (carving F1 Menu UI iniziato con S19). Nuova route tenant-level `(authenticated)/menu/listini` (CRUD `PriceList`) + sezione "Prezzi per listino" on-demand nel detail menu (override `ArticlePrice` per articolo). Consuma gli endpoint backend S17 (ADR-0019). **Nessuna modifica backend / schema / migration.**
+
+**STOP 0 — verifica empirica schema prezzi (READ-ONLY):** riconciliata la semantica `Article.basePrice` ↔ `ArticlePrice`/`PriceList`. `basePrice` `Decimal(10,2)` required; `ArticlePrice` join puro no-soft-delete `@@unique([articleId,priceListId])`; `PriceList` segmentata per `channels Channel[]` (no enum "tipo listino"); a runtime i due sono disaccoppiati (nessun lega backend).
+
+**Scope completato:**
+
+- **Modello prezzo Opzione 1** (confermato owner): `Article.basePrice` = default/fallback, `ArticlePrice.price` = override puntuale per (articolo × listino). **Resolution `override ?? basePrice` SOLO lato UI display (Opzione 1a)** — backend invariato (→ TD-BY).
+- **Anti-drift**: assenza override = "usa basePrice"; la UI non crea mai override ridondanti. Rimuovere un override → la riga torna a `basePrice`.
+- Route `menu/listini/page.tsx` tenant-level: segment statico `listini` vince sul dinamico fratello `[menuId]`. Entry-point = link "Listini" nell'header lista menu (no slot Sidebar — vedi TD-BU carry-over).
+- `ArticlePricesSection` componente separato, toggled per-articolo da `CategorySection` (NON dentro `ArticleForm`: nested RHF `<form>` + impossibile su articolo non creato). Lazy fetch override del singolo articolo (no N+1 eager).
+- `lib/menu-api.ts` +9 funzioni; `lib/menu-types.ts` +`PriceList`/`ArticlePrice`/`Channel` + input types.
+- Multi-select `channels` = checkbox native (confine "no nuova dipendenza", come `<select>` S19).
+- i18n: namespace `menu` esteso (`listini`/`prices`/`channels`) it + en.
+
+**Task 1 — verifica empirica frontend (Pattern 36):** 3 assunti core confermati; 4 divergenze tutte Accept dall'owner — D1 (errorCode prezzo già presenti da S17 → Task 5 verify-only), D2 (path i18n `i18n/messages/`), D3 (entry-point link, no Sidebar), D4 (`ArticlePricesSection` separato).
+
+**§parseError — scope-adjacent fix (Pattern 25):** il GATE runtime ha scoperto che `GlobalHttpExceptionFilter` avvolge gli errori di validazione DTO in `errorCode: 'E_VALIDATION'` con il codice specifico in `message: string[]`; `parseError` leggeva solo `errorCode` → ogni 400 di validazione cadeva sul messaggio generico **app-wide** (mascherato finora dalla zod client). Fix in `lib/api.ts`: srotola `E_VALIDATION` → `message[0]` (difensivo: solo se taxonomy code). 3 condizioni anti-regressione (Pattern 38) verificate **prima** del fix: shape reale empirica (5 path, sempre array di errorCode), nessun consumer `E_VALIDATION`, micro-gate non-regressione (`E_MENU_NAME_EXISTS` S19 resta specifico).
+
+**Discovery #56** — un pre-check di unicità via `findFirst` (che la `softDeleteExtension` filtra escludendo i soft-deleted) combinato con un `@@unique` DB che **include** i soft-deleted → ricreare un'entità col nome di una soft-deleted dà `P2002` non gestito → HTTP 500. Generalizzabile: ogni modello con `@@unique([tenantId,name…])` + pre-check `findFirst` ha lo stesso buco latente (PriceList, Menu, MenuCategory, Article). → TD-BZ.
+
+**Tech debt:**
+
+- 🆕 **TD-BY** — *pricing resolution backend* (`override ?? basePrice` per canale, server-side). **Confine:** finché non implementato, nessun consumer backend (Cassa/Comande S23+) conosce il prezzo applicato — solo la UI display lo calcola. Severità MEDIA, additivo, ~2-3h. (Pre-allocato STOP 1.)
+- 🆕 **TD-BZ** — *soft-delete vs `@@unique([tenantId,name])`*: ricreare un'entità col nome di una soft-deleted → `P2002` → HTTP 500 generico. Dominio: `PriceList` + `Menu`/`MenuCategory`/`Article` (stesso pattern). **Confine:** finché non risolto, ogni "ricrea con nome cancellato" → 500 generico in UI. Backend, pre-esistente S17, fuori scope S20. Severità MEDIA, ~1-2h.
+
+**Discoveries cumulative bump 55 → 56** (+1 vs sessione 19): Discovery #56 soft-delete pre-check vs unique constraint.
+
+**Test (GATE runtime — Pattern 40, stack reale, API ruolo `gestionale_app` non-superuser):**
+
+- Smoke contratto API (utente reale, JWT): **22/22 PASS** ✅ — CRUD `PriceList`, override set/update/delete, resolution, errorCode validazione, soft-delete.
+- Driver UI Playwright headless chromium (ad-hoc, non committato): **23/23 PASS** ✅ — 7 item GATE (CRUD listino + `ConfirmDialog`, override, resolution display, rimozione override, errorCode i18n, deep-link, light/dark) + micro-gate non-regressione.
+- typecheck workspace + lint (`eslint .` + `next lint`) + `next build`: **clean** ✅ (route `/t/[slug]/menu/listini` generata).
+- Unit/E2E backend: **non impattati** — modifiche solo `apps/web`.
+
+**File:**
+
+| File | Type |
+|---|---|
+| `apps/web/src/components/menu/{PriceListForm,ArticlePricesSection}.tsx` (2) | new |
+| `apps/web/src/app/t/[slug]/(authenticated)/menu/listini/page.tsx` | new |
+| `docs/architecture/ADR-0022-f1-listini-ui.md` | new |
+| `apps/web/src/lib/{menu-types,menu-api}.ts` (2) | mod (+`PriceList`/`ArticlePrice` types + 9 funzioni) |
+| `apps/web/src/lib/api.ts` | mod (§parseError — unwrap `E_VALIDATION`) |
+| `apps/web/src/lib/error-codes.ts` | mod (+mapping `E_VALIDATION`) |
+| `apps/web/src/components/menu/CategorySection.tsx` | mod (+toggle `ArticlePricesSection`) |
+| `apps/web/src/app/t/[slug]/(authenticated)/menu/{page,[menuId]/page}.tsx` (2) | mod (link Listini / fetch `PriceList`) |
+| `apps/web/src/i18n/messages/{it,en}.json` (2) | mod (+`listini`/`prices`/`channels`) |
+| `PROGRESS.md` | mod (entry sessione 20) |
+
+**Foundation status post-merge:**
+
+- **F1 Menu domain UI: 100% ✅** — list + detail CRUD (S19) + listini + override prezzi (S20)
+- Carving residuo F1 Menu: foto upload pipeline (TD-BO), varianti/modificatori, campi enum-array articolo (TD-BT)
+- Next: sessione 21 — candidate F1 (varianti/modificatori, foto upload TD-BO) o pulizia TD backend (TD-BY pricing resolution, TD-BZ soft-delete unique, TD-BS Sub-2).
 
 ## 🚧 In corso / Prossimo task
 

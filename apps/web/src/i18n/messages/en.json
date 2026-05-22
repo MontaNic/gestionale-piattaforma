@@ -105,7 +105,13 @@
       "vat": "VAT",
       "printDepartment": "Print department",
       "availability": "Availability",
-      "prepTime": "Preparation time (min)"
+      "prepTime": "Preparation time (min)",
+      "priceListName": "Price list name",
+      "channels": "Sales channels",
+      "priority": "Priority",
+      "isActiveList": "Price list active",
+      "validFrom": "Valid from",
+      "validTo": "Valid until"
     },
     "dept": {
       "cucina": "Kitchen",
@@ -128,8 +134,42 @@
       "categoryBody": "“{name}” and its items will no longer be visible.",
       "articleTitle": "Delete this item?",
       "articleBody": "“{name}” will be removed from the category.",
+      "priceListTitle": "Delete this price list?",
+      "priceListBody": "“{name}” will be removed. Linked price overrides will no longer be applied.",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
+    },
+    "listini": {
+      "link": "Price lists",
+      "title": "Price lists",
+      "subtitle": "Manage price lists and sales channels. Where an item has no override, its base price applies.",
+      "backToMenu": "Back to menus",
+      "empty": "No price list yet. Create one to get started.",
+      "new": "New price list",
+      "priority": "Priority {value}",
+      "validityAlways": "Always valid",
+      "validityFrom": "Valid from {date}",
+      "validityTo": "Valid until {date}",
+      "validityRange": "Valid from {from} to {to}"
+    },
+    "prices": {
+      "show": "Prices",
+      "hide": "Hide prices",
+      "sectionTitle": "Prices per price list",
+      "loading": "Loading prices…",
+      "noPriceLists": "No active price list. Create a price list to manage per-channel prices.",
+      "baseLabel": "base price",
+      "overrideLabel": "override",
+      "setOverride": "Set override",
+      "editOverride": "Edit override",
+      "removeOverride": "Remove override",
+      "invalidFormat": "Enter a valid amount (e.g. 12.50)."
+    },
+    "channels": {
+      "cassa": "Checkout",
+      "menu_online": "Online menu",
+      "asporto": "Takeaway",
+      "delivery": "Delivery"
     }
   }
 }
