@@ -5,6 +5,7 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { id, type PriceList, withTenantContextAtomicTx } from '@gestionale/db';
 
+import { catchUniqueViolation } from '../common/prisma-errors';
 import { DbService } from '../db/db.service';
 import type { CreatePriceListDto } from './dto/create-price-list.dto';
 import type { UpdatePriceListDto } from './dto/update-price-list.dto';
@@ -47,18 +48,22 @@ export class PriceListsService {
         });
       }
 
-      const priceList = await tx.priceList.create({
-        data: {
-          id: id(),
-          tenantId,
-          name: dto.name,
-          channels: dto.channels,
-          validFromDate: dto.validFromDate,
-          validToDate: dto.validToDate,
-          priority: dto.priority ?? 0,
-          isActive: dto.isActive ?? true,
-        },
-      });
+      const priceList = await catchUniqueViolation(
+        () =>
+          tx.priceList.create({
+            data: {
+              id: id(),
+              tenantId,
+              name: dto.name,
+              channels: dto.channels,
+              validFromDate: dto.validFromDate,
+              validToDate: dto.validToDate,
+              priority: dto.priority ?? 0,
+              isActive: dto.isActive ?? true,
+            },
+          }),
+        'E_PRICE_LIST_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {
@@ -109,17 +114,21 @@ export class PriceListsService {
         }
       }
 
-      const updated = await tx.priceList.update({
-        where: { id: priceListId },
-        data: {
-          name: dto.name,
-          channels: dto.channels,
-          validFromDate: dto.validFromDate,
-          validToDate: dto.validToDate,
-          priority: dto.priority,
-          isActive: dto.isActive,
-        },
-      });
+      const updated = await catchUniqueViolation(
+        () =>
+          tx.priceList.update({
+            where: { id: priceListId },
+            data: {
+              name: dto.name,
+              channels: dto.channels,
+              validFromDate: dto.validFromDate,
+              validToDate: dto.validToDate,
+              priority: dto.priority,
+              isActive: dto.isActive,
+            },
+          }),
+        'E_PRICE_LIST_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {

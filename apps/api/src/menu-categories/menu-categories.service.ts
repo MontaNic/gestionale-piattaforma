@@ -5,6 +5,7 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { id, type MenuCategory, withTenantContextAtomicTx } from '@gestionale/db';
 
+import { catchUniqueViolation } from '../common/prisma-errors';
 import { DbService } from '../db/db.service';
 import type { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import type { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
@@ -71,15 +72,19 @@ export class MenuCategoriesService {
         });
       }
 
-      const cat = await tx.menuCategory.create({
-        data: {
-          id: id(),
-          tenantId,
-          menuId,
-          name: dto.name,
-          sortOrder: dto.sortOrder ?? 0,
-        },
-      });
+      const cat = await catchUniqueViolation(
+        () =>
+          tx.menuCategory.create({
+            data: {
+              id: id(),
+              tenantId,
+              menuId,
+              name: dto.name,
+              sortOrder: dto.sortOrder ?? 0,
+            },
+          }),
+        'E_MENU_CATEGORY_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {
@@ -128,10 +133,14 @@ export class MenuCategoriesService {
         }
       }
 
-      const updated = await tx.menuCategory.update({
-        where: { id: categoryId },
-        data: { name: dto.name, sortOrder: dto.sortOrder },
-      });
+      const updated = await catchUniqueViolation(
+        () =>
+          tx.menuCategory.update({
+            where: { id: categoryId },
+            data: { name: dto.name, sortOrder: dto.sortOrder },
+          }),
+        'E_MENU_CATEGORY_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {

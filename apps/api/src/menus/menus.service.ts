@@ -12,6 +12,7 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { id, type Menu, withTenantContextAtomicTx } from '@gestionale/db';
 
+import { catchUniqueViolation } from '../common/prisma-errors';
 import { DbService } from '../db/db.service';
 import type { CreateMenuDto } from './dto/create-menu.dto';
 import type { UpdateMenuDto } from './dto/update-menu.dto';
@@ -49,16 +50,20 @@ export class MenusService {
         });
       }
 
-      const menu = await tx.menu.create({
-        data: {
-          id: id(),
-          tenantId,
-          name: dto.name,
-          description: dto.description,
-          isActive: dto.isActive ?? true,
-          sortOrder: dto.sortOrder ?? 0,
-        },
-      });
+      const menu = await catchUniqueViolation(
+        () =>
+          tx.menu.create({
+            data: {
+              id: id(),
+              tenantId,
+              name: dto.name,
+              description: dto.description,
+              isActive: dto.isActive ?? true,
+              sortOrder: dto.sortOrder ?? 0,
+            },
+          }),
+        'E_MENU_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {
@@ -101,15 +106,19 @@ export class MenusService {
         }
       }
 
-      const updated = await tx.menu.update({
-        where: { id: menuId },
-        data: {
-          name: dto.name,
-          description: dto.description,
-          isActive: dto.isActive,
-          sortOrder: dto.sortOrder,
-        },
-      });
+      const updated = await catchUniqueViolation(
+        () =>
+          tx.menu.update({
+            where: { id: menuId },
+            data: {
+              name: dto.name,
+              description: dto.description,
+              isActive: dto.isActive,
+              sortOrder: dto.sortOrder,
+            },
+          }),
+        'E_MENU_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {
