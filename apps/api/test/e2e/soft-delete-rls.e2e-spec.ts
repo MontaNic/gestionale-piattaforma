@@ -160,4 +160,172 @@ describe('Soft-delete RLS E2E — app come ruolo non-superuser (ADR-0021)', () =
     expect(del.status).toBe(200);
     expect(del.body.data).toMatchObject({ id: artId, deleted: true });
   });
+
+  // ===========================================================================
+  // TD-BZ — Unicità nome soft-delete-aware (ADR-0023)
+  // ===========================================================================
+  // I partial unique index `WHERE deleted_at IS NULL` (migration td_bz_*) allineano
+  // la regola DB al pre-check applicativo (`findFirst` esclude i soft-deleted):
+  //   - ricreare il nome di un'entità soft-deleted → legale (pre-fix: P2002 → 500)
+  //   - duplicare il nome tra entità ATTIVE → ancora bloccato (409 E_*_NAME_EXISTS)
+  // Verificato sotto ruolo `gestionale_app` non-superuser (RLS reale).
+  // ===========================================================================
+  describe('TD-BZ — riuso nome soft-deleted / blocco duplicati attivi', () => {
+    const srv = (): ReturnType<INestApplication['getHttpServer']> => app.getHttpServer();
+
+    async function createMenu(name: string): Promise<string> {
+      const res = await request(srv()).post('/api/v1/menus').set(authHeader()).send({ name });
+      expect(res.status).toBe(201);
+      return res.body.data.id as string;
+    }
+
+    it('Menu: ricreare il nome di un menu soft-deleted → 201 (riuso legale)', async () => {
+      const id = await createMenu('Menù Estivo');
+      await request(srv()).delete(`/api/v1/menus/${id}`).set(authHeader()).expect(200);
+
+      const recreated = await request(srv())
+        .post('/api/v1/menus')
+        .set(authHeader())
+        .send({ name: 'Menù Estivo' });
+
+      expect(recreated.status).toBe(201);
+      expect(recreated.body.data.id).not.toBe(id);
+    });
+
+    it('Menu: due menu ATTIVI omonimi → 409 E_MENU_NAME_EXISTS', async () => {
+      await createMenu('Menù Invernale');
+      const dup = await request(srv())
+        .post('/api/v1/menus')
+        .set(authHeader())
+        .send({ name: 'Menù Invernale' });
+
+      expect(dup.status).toBe(409);
+      expect(dup.body.errorCode).toBe('E_MENU_NAME_EXISTS');
+    });
+
+    it('PriceList: ricreare il nome di un listino soft-deleted → 201 (riuso legale)', async () => {
+      const create = await request(srv())
+        .post('/api/v1/price-lists')
+        .set(authHeader())
+        .send({ name: 'Listino Delivery', channels: ['delivery'] });
+      expect(create.status).toBe(201);
+      await request(srv())
+        .delete(`/api/v1/price-lists/${create.body.data.id}`)
+        .set(authHeader())
+        .expect(200);
+
+      const recreated = await request(srv())
+        .post('/api/v1/price-lists')
+        .set(authHeader())
+        .send({ name: 'Listino Delivery', channels: ['delivery'] });
+
+      expect(recreated.status).toBe(201);
+      expect(recreated.body.data.id).not.toBe(create.body.data.id);
+    });
+
+    it('PriceList: due listini ATTIVI omonimi → 409 E_PRICE_LIST_NAME_EXISTS', async () => {
+      await request(srv())
+        .post('/api/v1/price-lists')
+        .set(authHeader())
+        .send({ name: 'Listino Sala', channels: ['cassa'] })
+        .expect(201);
+      const dup = await request(srv())
+        .post('/api/v1/price-lists')
+        .set(authHeader())
+        .send({ name: 'Listino Sala', channels: ['cassa'] });
+
+      expect(dup.status).toBe(409);
+      expect(dup.body.errorCode).toBe('E_PRICE_LIST_NAME_EXISTS');
+    });
+
+    it('MenuCategory: ricreare il nome di una categoria soft-deletata → 201', async () => {
+      const menuId = await createMenu('Menù Cat-Test');
+      const cat = await request(srv())
+        .post(`/api/v1/menus/${menuId}/categories`)
+        .set(authHeader())
+        .send({ name: 'Antipasti' });
+      expect(cat.status).toBe(201);
+      await request(srv())
+        .delete(`/api/v1/menus/${menuId}/categories/${cat.body.data.id}`)
+        .set(authHeader())
+        .expect(200);
+
+      const recreated = await request(srv())
+        .post(`/api/v1/menus/${menuId}/categories`)
+        .set(authHeader())
+        .send({ name: 'Antipasti' });
+
+      expect(recreated.status).toBe(201);
+      expect(recreated.body.data.id).not.toBe(cat.body.data.id);
+    });
+
+    it('MenuCategory: due categorie ATTIVE omonime nello stesso menu → 409', async () => {
+      const menuId = await createMenu('Menù Cat-Dup');
+      await request(srv())
+        .post(`/api/v1/menus/${menuId}/categories`)
+        .set(authHeader())
+        .send({ name: 'Primi' })
+        .expect(201);
+      const dup = await request(srv())
+        .post(`/api/v1/menus/${menuId}/categories`)
+        .set(authHeader())
+        .send({ name: 'Primi' });
+
+      expect(dup.status).toBe(409);
+      expect(dup.body.errorCode).toBe('E_MENU_CATEGORY_NAME_EXISTS');
+    });
+
+    it('Article: ricreare il nome di un articolo soft-deletato → 201', async () => {
+      const menuId = await createMenu('Menù Art-Test');
+      const cat = await request(srv())
+        .post(`/api/v1/menus/${menuId}/categories`)
+        .set(authHeader())
+        .send({ name: 'Pizze' })
+        .expect(201);
+      const payload = {
+        categoryId: cat.body.data.id as string,
+        name: 'Margherita',
+        descriptionShort: 'Pomodoro e mozzarella',
+        basePrice: 6.5,
+        vatPercent: 10,
+        printDepartment: 'pizzeria',
+      };
+      const art = await request(srv()).post('/api/v1/articles').set(authHeader()).send(payload);
+      expect(art.status).toBe(201);
+      await request(srv())
+        .delete(`/api/v1/articles/${art.body.data.id}`)
+        .set(authHeader())
+        .expect(200);
+
+      const recreated = await request(srv())
+        .post('/api/v1/articles')
+        .set(authHeader())
+        .send(payload);
+
+      expect(recreated.status).toBe(201);
+      expect(recreated.body.data.id).not.toBe(art.body.data.id);
+    });
+
+    it('Article: due articoli ATTIVI omonimi nella stessa categoria → 409', async () => {
+      const menuId = await createMenu('Menù Art-Dup');
+      const cat = await request(srv())
+        .post(`/api/v1/menus/${menuId}/categories`)
+        .set(authHeader())
+        .send({ name: 'Dolci' })
+        .expect(201);
+      const payload = {
+        categoryId: cat.body.data.id as string,
+        name: 'Tiramisù',
+        descriptionShort: 'Classico',
+        basePrice: 5,
+        vatPercent: 10,
+        printDepartment: 'cucina',
+      };
+      await request(srv()).post('/api/v1/articles').set(authHeader()).send(payload).expect(201);
+      const dup = await request(srv()).post('/api/v1/articles').set(authHeader()).send(payload);
+
+      expect(dup.status).toBe(409);
+      expect(dup.body.errorCode).toBe('E_ARTICLE_NAME_EXISTS');
+    });
+  });
 });

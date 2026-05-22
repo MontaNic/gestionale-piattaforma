@@ -193,7 +193,9 @@ model Role {
   permissions RolePermission[]
   userRoles   UserRole[]
 
-  @@unique([tenantId, name])
+  // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
+  // `(tenant_id, name) WHERE deleted_at IS NULL` (vedi migration td_bz_partial_
+  // unique_role). Prisma 6 non esprime i partial index nel DSL → no @@unique.
   @@index([tenantId])
   @@map("roles")
 }
@@ -391,7 +393,9 @@ model Menu {
   tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   categories MenuCategory[]
 
-  @@unique([tenantId, name])
+  // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
+  // `(tenant_id, name) WHERE deleted_at IS NULL` (migration td_bz_partial_unique_
+  // soft_delete) — Prisma 6 non esprime i partial index nel DSL → no @@unique.
   @@index([tenantId])
   @@map("menus")
 }
@@ -411,7 +415,8 @@ model MenuCategory {
   menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
   articles Article[]
 
-  @@unique([tenantId, menuId, name])
+  // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
+  // `(tenant_id, menu_id, name) WHERE deleted_at IS NULL` (vedi migration).
   @@index([tenantId])
   @@index([menuId])
   @@map("menu_categories")
@@ -448,9 +453,11 @@ model Article {
   pricingRule PricingRule?   @relation(fields: [pricingRuleId], references: [id], onDelete: SetNull)
   prices      ArticlePrice[]
 
-  // Unique compound (Sub-DP residua S17 STOP 1.5 opzione A): consente upsert
-  // idempotente nel seed + vincolo business (no articoli omonimi stessa categoria).
-  @@unique([tenantId, categoryId, name])
+  // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
+  // `(tenant_id, category_id, name) WHERE deleted_at IS NULL` (vedi migration).
+  // Sostituisce il @@unique compound S17 (STOP 1.5 opzione A): stesso vincolo
+  // business — no articoli omonimi nella stessa categoria, upsert seed idempotente
+  // — ma consente il riuso del nome di un articolo soft-deleted.
   @@index([tenantId])
   @@index([categoryId])
   @@map("articles")
@@ -473,7 +480,8 @@ model PriceList {
   tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   prices ArticlePrice[]
 
-  @@unique([tenantId, name])
+  // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
+  // `(tenant_id, name) WHERE deleted_at IS NULL` (vedi migration).
   @@index([tenantId])
   @@map("price_lists")
 }

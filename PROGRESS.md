@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 22 maggio 2026 (sessione 20 — F1 Listini UI: PriceList CRUD + ArticlePrice override)
+**Ultimo aggiornamento:** 22 maggio 2026 (sessione 21 — Fix TD-BZ: unicità nome soft-delete-aware)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
@@ -1650,7 +1650,7 @@ STOP 2B (Commit 2 TD-AW):
 **Tech debt:**
 
 - 🆕 **TD-BY** — *pricing resolution backend* (`override ?? basePrice` per canale, server-side). **Confine:** finché non implementato, nessun consumer backend (Cassa/Comande S23+) conosce il prezzo applicato — solo la UI display lo calcola. Severità MEDIA, additivo, ~2-3h. (Pre-allocato STOP 1.)
-- 🆕 **TD-BZ** — *soft-delete vs `@@unique([tenantId,name])`*: ricreare un'entità col nome di una soft-deleted → `P2002` → HTTP 500 generico. Dominio: `PriceList` + `Menu`/`MenuCategory`/`Article` (stesso pattern). **Confine:** finché non risolto, ogni "ricrea con nome cancellato" → 500 generico in UI. Backend, pre-esistente S17, fuori scope S20. Severità MEDIA, ~1-2h.
+- 🆕 **TD-BZ** — *soft-delete vs `@@unique([tenantId,name])`*: ricreare un'entità col nome di una soft-deleted → `P2002` → HTTP 500 generico. Dominio: `PriceList` + `Menu`/`MenuCategory`/`Article` (stesso pattern). **Confine:** finché non risolto, ogni "ricrea con nome cancellato" → 500 generico in UI. Backend, pre-esistente S17, fuori scope S20. Severità MEDIA, ~1-2h. → **RESOLVED S21** (ADR-0023).
 
 **Discoveries cumulative bump 55 → 56** (+1 vs sessione 19): Discovery #56 soft-delete pre-check vs unique constraint.
 
@@ -1681,6 +1681,61 @@ STOP 2B (Commit 2 TD-AW):
 - **F1 Menu domain UI: 100% ✅** — list + detail CRUD (S19) + listini + override prezzi (S20)
 - Carving residuo F1 Menu: foto upload pipeline (TD-BO), varianti/modificatori, campi enum-array articolo (TD-BT)
 - Next: sessione 21 — candidate F1 (varianti/modificatori, foto upload TD-BO) o pulizia TD backend (TD-BY pricing resolution, TD-BZ soft-delete unique, TD-BS Sub-2).
+
+### Fix TD-BZ — unicità nome soft-delete-aware — sessione 21 (2026-05-22)
+
+**Branch**: `fix/td-bz-partial-unique-soft-delete` · **Tipo**: 1 PR bugfix backend (DB-layer) · **ADR**: [ADR-0023](docs/architecture/ADR-0023-td-bz-partial-unique-soft-delete.md)
+
+**Scope:** chiude **TD-BZ** (scoperto dal GATE runtime S20, ADR-0022 §Finding). Gli unique index **full** `@@unique([tenantId, name…])` sui 5 modelli soft-delete-aware (Menu/MenuCategory/Article/PriceList + Role) includevano le righe soft-deleted, mentre il pre-check applicativo (`findFirst`, filtrato dalla `softDeleteExtension`) le esclude → ricreare un'entità col nome di una soft-deleted → `P2002` non gestito → HTTP 500. Solo backend (`packages/db` + `apps/api/test`), nessun cambio API.
+
+**STOP 0 — verifica empirica (READ-ONLY):** i 4 modelli hanno tutti `deletedAt` + `@@unique` con `name`; pre-check `findFirst` **duplicato** in ogni service (8 punti, nessun helper, nessun catch `P2002`); Prisma 6.19.3 non supporta partial index nel DSL; **precedente `UserRole`** già usa partial unique index raw (`user_roles_*_unique`, `WHERE sede_id IS [NOT] NULL`) senza `@@unique` nello schema.
+
+**Decisione (Opzione 1, owner):** sostituire gli unique full con **partial unique index `WHERE deleted_at IS NULL`** — la regola DB si allinea al pre-check soft-delete-aware. Effetto: riuso del nome di una soft-deleted **legale**; duplicato tra entità **attive** ancora bloccato. Replica il pattern `UserRole`.
+
+**Scope completato:**
+
+- Schema: rimossi i 5 `@@unique` (+ commento §convention sui modelli).
+- 2 migration: `td_bz_partial_unique_soft_delete` (4 modelli Menu) + `td_bz_partial_unique_role` (Role) — `DROP INDEX` full + `CREATE UNIQUE INDEX … WHERE deleted_at IS NULL`.
+- **§seed** — conseguenza necessaria: rimuovere `@@unique` rimuove le `WhereUniqueInput` compound generate da Prisma → i 5 `upsert` idempotenti di `prisma/seed.ts` non compilavano più. **Scoperto dal GATE Pattern 38** (typecheck → STOP intermedio con evidenza). Fix: `upsert` → find-then-create/update sulla chiave naturale (idempotenza verificata: 2 run → ID stabili). `ArticlePrice` non impattato.
+- 8 nuovi test E2E non-superuser in `soft-delete-rls.e2e-spec.ts` (4 modelli Menu × {riuso soft-deleted → 201, duplicato attivo → 409 `E_*_NAME_EXISTS`}). Role: nessun test — no endpoint (vedi §Role).
+
+**Convention (ADR-0023 §convention):** unicità di un campo naturale su un modello con `deletedAt` = partial unique index `WHERE deleted_at IS NULL` in migration raw, **non** `@@unique` nello schema (Prisma 6 non supporta i partial index dichiarativi).
+
+**§Role + 3ª superficie (S21-bis — scoperto al check pre-merge):** `Role` (RBAC) ha anch'esso `deletedAt` + `@@unique([tenantId,name])` → stesso bug TD-BZ, esteso **nello stesso atomo** (migration incrementale `td_bz_partial_unique_role`). Role non ha endpoint → fix strutturale (schema+migration+seed), nessun test E2E nuovo. L'estensione ha scoperto la **3ª superficie** impattata da un `@@unique` rimosso: l'helper E2E `menu-test-fixtures.ts` inseriva un ruolo via raw SQL `ON CONFLICT (tenant_id, name)` → rotto dal partial index (**43 fallimenti E2E a cascata**, setup di 6 spec). Fix: `ON CONFLICT … WHERE deleted_at IS NULL`. ADR-0023 §convention documenta le **3 superfici** (WhereUniqueInput compound, upsert idempotenti, ON CONFLICT raw — le prime 2 a compile-time, la 3ª a runtime).
+
+**TD-BY → defer a S23** (deciso in S21): la pricing resolution è un motore multi-match non triviale (channel-containment + finestra date + tie-break `priority`) e ha **zero consumer** → i requisiti li definirà il primo consumer (Cassa S23+). Razionale empirico in STOP 0.
+
+**Tech debt:**
+
+- 🆕 **TD-CA** — *catch `P2002` → `E_*_NAME_EXISTS` per race TOCTOU*: il pre-check `findFirst` + `create` non è atomico; due create concorrenti dello stesso nome attivo → uno restituisce 500 invece di 4xx pulito. **Confine:** finché non gestito, la race su nomi attivi concorrenti dà 500. Pre-esistente, ortogonale a TD-BZ, raro (dev single-user). Severità BASSA, ~30min.
+
+**Discoveries cumulative: 56 invariato** — il fix non produce nuova Discovery (#56 ha già catturato il bug in S20). Solo una convention note in ADR-0023.
+
+**Test (GATE Pattern 38 — baseline → fix → full-suite):**
+
+- Baseline pre-fix: E2E **48 pass / 4 skip**.
+- Post-fix: E2E **56 pass / 4 skip** ✅ (48 baseline invariati + 8 nuovi TD-BZ) · Unit **91/91** ✅ · typecheck workspace **clean** ✅.
+- **5** partial index verificati **fisicamente in DB** (`pg_indexes`, `WHERE deleted_at IS NULL`) ✅ · `migrate status` clean (9 migration) · seed idempotente.
+- Comportamento verificato sotto ruolo `gestionale_app` **non-superuser** (RLS reale).
+
+**File:**
+
+| File | Type |
+|---|---|
+| `packages/db/prisma/migrations/20260522111054_td_bz_partial_unique_soft_delete/` | new (4 DROP + 4 partial unique index, dominio Menu) |
+| `packages/db/prisma/migrations/20260522114603_td_bz_partial_unique_role/` | new (DROP + partial unique index, Role) |
+| `docs/architecture/ADR-0023-td-bz-partial-unique-soft-delete.md` | new |
+| `packages/db/prisma/schema.prisma` | mod (rimossi 5 `@@unique` + commento §convention) |
+| `packages/db/prisma/seed.ts` | mod (5 `upsert` → find-then-create/update) |
+| `apps/api/test/e2e/soft-delete-rls.e2e-spec.ts` | mod (+8 test regressione TD-BZ) |
+| `apps/api/test/e2e/helpers/menu-test-fixtures.ts` | mod (`ON CONFLICT` allineato al partial index) |
+| `PROGRESS.md` | mod (entry sessione 21) |
+
+**Foundation status post-merge:**
+
+- **TD-BZ: RESOLVED ✅** — unicità nome soft-delete-aware su tutti e **5** i modelli soft-delete-aware (4 dominio Menu + Role).
+- TD aperti: TD-BY (defer S23), TD-CA (nuovo, BASSA), TD-BV/TD-BW (S19), TD-BS Sub-2.
+- Next: sessione 22 — candidate F1 (varianti/modificatori, foto upload TD-BO) o TD backend residui.
 
 ## 🚧 In corso / Prossimo task
 

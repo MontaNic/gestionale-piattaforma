@@ -73,12 +73,16 @@ export async function seedMenuPermissions(
       permissionIdByCode.set(code, id);
     }
 
-    // 2. Role "Menu Admin" tenant-scoped (UNIQUE(tenant_id, name))
+    // 2. Role "Menu Admin" tenant-scoped — partial unique index soft-delete-aware
+    // (tenant_id, name) WHERE deleted_at IS NULL (TD-BZ, ADR-0023). L'`ON CONFLICT`
+    // DEVE includere lo stesso predicato `WHERE`, altrimenti Postgres non trova un
+    // constraint corrispondente (errore a runtime).
     const roleId = uuidv7();
     const roleRes = await client.query<{ id: string }>(
       `INSERT INTO roles (id, tenant_id, name, description, is_system, created_at, updated_at)
        VALUES ($1, $2, $3, 'E2E menu admin role', true, NOW(), NOW())
-       ON CONFLICT (tenant_id, name) DO UPDATE SET description = EXCLUDED.description
+       ON CONFLICT (tenant_id, name) WHERE deleted_at IS NULL
+         DO UPDATE SET description = EXCLUDED.description
        RETURNING id;`,
       [roleId, opts.tenantId, roleName],
     );

@@ -297,17 +297,17 @@ async function seedDevTenant(params: SeedDevTenantParams): Promise<void> {
   console.log(`  User '${userInfo.email}': ${user.id}`);
 
   // 4. Role Super Admin tenant-scoped (clone dal template)
-  const superAdminRole = await prisma.role.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: 'Super Admin' } },
-    create: {
-      id: id(),
-      tenantId: tenant.id,
-      name: 'Super Admin',
-      description: params.superAdminTplDescription,
-      isSystem: true,
-    },
-    update: { description: params.superAdminTplDescription, isSystem: true },
+  // TD-BZ (ADR-0023): rimosso il @@unique compound da Role → find-then-create/
+  // update sulla chiave naturale (tenantId+name), come per i 4 modelli Menu.
+  const roleData = { description: params.superAdminTplDescription, isSystem: true };
+  const existingRole = await prisma.role.findFirst({
+    where: { tenantId: tenant.id, name: 'Super Admin' },
   });
+  const superAdminRole = existingRole
+    ? await prisma.role.update({ where: { id: existingRole.id }, data: roleData })
+    : await prisma.role.create({
+        data: { id: id(), tenantId: tenant.id, name: 'Super Admin', ...roleData },
+      });
   console.log(`  Role 'Super Admin' (tenant '${tenantInfo.slug}'): ${superAdminRole.id}`);
 
   // 5. Copia mappings template -> role_permissions
@@ -436,21 +436,20 @@ const DEMO_ARTICLES: ArticleSeed[] = [
 
 async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> {
   // ── 7.1 Menu "Pranzo"
-  const menu = await prisma.menu.upsert({
-    where: { tenantId_name: { tenantId, name: 'Pranzo' } },
-    create: {
-      id: id(),
-      tenantId,
-      name: 'Pranzo',
-      description: 'Menu pranzo dimostrativo (sessione 17)',
-      isActive: true,
-      sortOrder: 0,
-    },
-    update: {
-      description: 'Menu pranzo dimostrativo (sessione 17)',
-      isActive: true,
-    },
-  });
+  // TD-BZ (ADR-0023): rimosso il @@unique compound → Prisma non genera più la
+  // WhereUniqueInput `tenantId_name` necessaria a `upsert`. Idempotenza via
+  // find-then-create/update sulla chiave naturale (tenantId+name) — stesso
+  // pattern dei pre-check dei service; il client esteso esclude i soft-deleted.
+  const menuData = {
+    description: 'Menu pranzo dimostrativo (sessione 17)',
+    isActive: true,
+  };
+  const existingMenu = await prisma.menu.findFirst({ where: { tenantId, name: 'Pranzo' } });
+  const menu = existingMenu
+    ? await prisma.menu.update({ where: { id: existingMenu.id }, data: menuData })
+    : await prisma.menu.create({
+        data: { id: id(), tenantId, name: 'Pranzo', sortOrder: 0, ...menuData },
+      });
   console.log(`  Menu 'Pranzo' (${tenantSlug}): ${menu.id}`);
 
   // ── 7.2 Categorie (Antipasti, Primi, Pizze)
@@ -462,17 +461,18 @@ async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> 
 
   const categoryByName = new Map<string, { id: string }>();
   for (const c of categoryDefs) {
-    const cat = await prisma.menuCategory.upsert({
-      where: { tenantId_menuId_name: { tenantId, menuId: menu.id, name: c.name } },
-      create: {
-        id: id(),
-        tenantId,
-        menuId: menu.id,
-        name: c.name,
-        sortOrder: c.sortOrder,
-      },
-      update: { sortOrder: c.sortOrder },
+    // TD-BZ (ADR-0023): find-then-create/update — vedi nota § 7.1.
+    const existingCat = await prisma.menuCategory.findFirst({
+      where: { tenantId, menuId: menu.id, name: c.name },
     });
+    const cat = existingCat
+      ? await prisma.menuCategory.update({
+          where: { id: existingCat.id },
+          data: { sortOrder: c.sortOrder },
+        })
+      : await prisma.menuCategory.create({
+          data: { id: id(), tenantId, menuId: menu.id, name: c.name, sortOrder: c.sortOrder },
+        });
     categoryByName.set(c.name, { id: cat.id });
   }
   console.log(`  Categorie (${tenantSlug}): ${categoryByName.size}`);
@@ -490,72 +490,58 @@ async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> 
     const category = categoryByName.get(a.categoryName);
     if (!category) throw new Error(`Category missing: ${a.categoryName}`);
 
-    const article = await prisma.article.upsert({
-      where: {
-        tenantId_categoryId_name: {
-          tenantId,
-          categoryId: category.id,
-          name: a.name,
-        },
-      },
-      create: {
-        id: id(),
-        tenantId,
-        categoryId: category.id,
-        name: a.name,
-        descriptionShort: a.descriptionShort,
-        basePrice: a.basePrice,
-        vatPercent: a.vatPercent,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        allergens: a.allergens as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        dietaryTags: a.dietaryTags as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        printDepartment: a.printDepartment as any,
-        preparationTimeMinutes: a.preparationTimeMinutes,
-        availability: 'in_carta',
-        sortOrder: a.sortOrder,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        channelVisibility: channelsAll as any,
-      },
-      update: {
-        descriptionShort: a.descriptionShort,
-        basePrice: a.basePrice,
-        vatPercent: a.vatPercent,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        allergens: a.allergens as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        dietaryTags: a.dietaryTags as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        printDepartment: a.printDepartment as any,
-        preparationTimeMinutes: a.preparationTimeMinutes,
-        sortOrder: a.sortOrder,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        channelVisibility: channelsAll as any,
-      },
+    // TD-BZ (ADR-0023): find-then-create/update — vedi nota § 7.1. I campi
+    // condivisi create/update vivono in `articleData`; `id`/relazioni/name/
+    // availability sono solo del create.
+    const articleData = {
+      descriptionShort: a.descriptionShort,
+      basePrice: a.basePrice,
+      vatPercent: a.vatPercent,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      allergens: a.allergens as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      dietaryTags: a.dietaryTags as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      printDepartment: a.printDepartment as any,
+      preparationTimeMinutes: a.preparationTimeMinutes,
+      sortOrder: a.sortOrder,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      channelVisibility: channelsAll as any,
+    };
+    const existingArticle = await prisma.article.findFirst({
+      where: { tenantId, categoryId: category.id, name: a.name },
     });
+    const article = existingArticle
+      ? await prisma.article.update({ where: { id: existingArticle.id }, data: articleData })
+      : await prisma.article.create({
+          data: {
+            id: id(),
+            tenantId,
+            categoryId: category.id,
+            name: a.name,
+            availability: 'in_carta',
+            ...articleData,
+          },
+        });
     articleByName.set(a.name, { id: article.id, basePrice: a.basePrice });
   }
   console.log(`  Articoli (${tenantSlug}): ${articleByName.size}`);
 
   // ── 7.4 PriceList "Base"
-  const priceList = await prisma.priceList.upsert({
-    where: { tenantId_name: { tenantId, name: 'Base' } },
-    create: {
-      id: id(),
-      tenantId,
-      name: 'Base',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      channels: channelsAll as any,
-      priority: 0,
-      isActive: true,
-    },
-    update: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      channels: channelsAll as any,
-      isActive: true,
-    },
+  // TD-BZ (ADR-0023): find-then-create/update — vedi nota § 7.1.
+  const priceListData = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    channels: channelsAll as any,
+    isActive: true,
+  };
+  const existingPriceList = await prisma.priceList.findFirst({
+    where: { tenantId, name: 'Base' },
   });
+  const priceList = existingPriceList
+    ? await prisma.priceList.update({ where: { id: existingPriceList.id }, data: priceListData })
+    : await prisma.priceList.create({
+        data: { id: id(), tenantId, name: 'Base', priority: 0, ...priceListData },
+      });
   console.log(`  PriceList 'Base' (${tenantSlug}): ${priceList.id}`);
 
   // ── 7.5 ArticlePrice (5) — price == basePrice
