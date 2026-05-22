@@ -9,6 +9,7 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { type Article, id, Prisma, withTenantContextAtomicTx } from '@gestionale/db';
 
+import { catchUniqueViolation } from '../common/prisma-errors';
 import { DbService } from '../db/db.service';
 import type { CreateArticleDto } from './dto/create-article.dto';
 import type { UpdateArticleDto } from './dto/update-article.dto';
@@ -68,26 +69,30 @@ export class ArticlesService {
         });
       }
 
-      const article = await tx.article.create({
-        data: {
-          id: id(),
-          tenantId,
-          categoryId: dto.categoryId,
-          name: dto.name,
-          descriptionShort: dto.descriptionShort,
-          descriptionLong: dto.descriptionLong,
-          photoUrl: dto.photoUrl,
-          basePrice: new Prisma.Decimal(dto.basePrice),
-          vatPercent: dto.vatPercent,
-          allergens: dto.allergens ?? [],
-          dietaryTags: dto.dietaryTags ?? [],
-          printDepartment: dto.printDepartment,
-          preparationTimeMinutes: dto.preparationTimeMinutes,
-          availability: dto.availability,
-          sortOrder: dto.sortOrder ?? 0,
-          channelVisibility: dto.channelVisibility ?? [],
-        },
-      });
+      const article = await catchUniqueViolation(
+        () =>
+          tx.article.create({
+            data: {
+              id: id(),
+              tenantId,
+              categoryId: dto.categoryId,
+              name: dto.name,
+              descriptionShort: dto.descriptionShort,
+              descriptionLong: dto.descriptionLong,
+              photoUrl: dto.photoUrl,
+              basePrice: new Prisma.Decimal(dto.basePrice),
+              vatPercent: dto.vatPercent,
+              allergens: dto.allergens ?? [],
+              dietaryTags: dto.dietaryTags ?? [],
+              printDepartment: dto.printDepartment,
+              preparationTimeMinutes: dto.preparationTimeMinutes,
+              availability: dto.availability,
+              sortOrder: dto.sortOrder ?? 0,
+              channelVisibility: dto.channelVisibility ?? [],
+            },
+          }),
+        'E_ARTICLE_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {
@@ -161,25 +166,30 @@ export class ArticlesService {
         }
       }
 
-      const updated = await tx.article.update({
-        where: { id: articleId },
-        data: {
-          categoryId: dto.categoryId,
-          name: dto.name,
-          descriptionShort: dto.descriptionShort,
-          descriptionLong: dto.descriptionLong,
-          photoUrl: dto.photoUrl,
-          basePrice: dto.basePrice !== undefined ? new Prisma.Decimal(dto.basePrice) : undefined,
-          vatPercent: dto.vatPercent,
-          allergens: dto.allergens,
-          dietaryTags: dto.dietaryTags,
-          printDepartment: dto.printDepartment,
-          preparationTimeMinutes: dto.preparationTimeMinutes,
-          availability: dto.availability,
-          sortOrder: dto.sortOrder,
-          channelVisibility: dto.channelVisibility,
-        },
-      });
+      const updated = await catchUniqueViolation(
+        () =>
+          tx.article.update({
+            where: { id: articleId },
+            data: {
+              categoryId: dto.categoryId,
+              name: dto.name,
+              descriptionShort: dto.descriptionShort,
+              descriptionLong: dto.descriptionLong,
+              photoUrl: dto.photoUrl,
+              basePrice:
+                dto.basePrice !== undefined ? new Prisma.Decimal(dto.basePrice) : undefined,
+              vatPercent: dto.vatPercent,
+              allergens: dto.allergens,
+              dietaryTags: dto.dietaryTags,
+              printDepartment: dto.printDepartment,
+              preparationTimeMinutes: dto.preparationTimeMinutes,
+              availability: dto.availability,
+              sortOrder: dto.sortOrder,
+              channelVisibility: dto.channelVisibility,
+            },
+          }),
+        'E_ARTICLE_NAME_EXISTS',
+      );
 
       await tx.auditLog.create({
         data: {

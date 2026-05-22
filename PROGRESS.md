@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 22 maggio 2026 (sessione 21 — Fix TD-BZ: unicità nome soft-delete-aware)
+**Ultimo aggiornamento:** 22 maggio 2026 (sessione 21 — Fix TD-BZ + TD-CA: unicità nome soft-delete-aware)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
@@ -1707,7 +1707,7 @@ STOP 2B (Commit 2 TD-AW):
 
 **Tech debt:**
 
-- 🆕 **TD-CA** — *catch `P2002` → `E_*_NAME_EXISTS` per race TOCTOU*: il pre-check `findFirst` + `create` non è atomico; due create concorrenti dello stesso nome attivo → uno restituisce 500 invece di 4xx pulito. **Confine:** finché non gestito, la race su nomi attivi concorrenti dà 500. Pre-esistente, ortogonale a TD-BZ, raro (dev single-user). Severità BASSA, ~30min.
+- 🆕 **TD-CA** — *catch `P2002` → `E_*_NAME_EXISTS` per race TOCTOU*: il pre-check `findFirst` + `create` non è atomico; due create concorrenti dello stesso nome attivo → uno restituisce 500 invece di 4xx pulito. **Confine:** finché non gestito, la race su nomi attivi concorrenti dà 500. Pre-esistente, ortogonale a TD-BZ, raro (dev single-user). Severità BASSA, ~30min. → **RESOLVED S21 (coda)** (ADR-0024, helper `catchUniqueViolation`).
 
 **Discoveries cumulative: 56 invariato** — il fix non produce nuova Discovery (#56 ha già catturato il bug in S20). Solo una convention note in ADR-0023.
 
@@ -1734,8 +1734,26 @@ STOP 2B (Commit 2 TD-AW):
 **Foundation status post-merge:**
 
 - **TD-BZ: RESOLVED ✅** — unicità nome soft-delete-aware su tutti e **5** i modelli soft-delete-aware (4 dominio Menu + Role).
-- TD aperti: TD-BY (defer S23), TD-CA (nuovo, BASSA), TD-BV/TD-BW (S19), TD-BS Sub-2.
+- TD aperti: TD-BY (defer S23), TD-CA (nuovo, BASSA — risolto subito dopo, vedi sotto), TD-BV/TD-BW (S19), TD-BS Sub-2.
 - Next: sessione 22 — candidate F1 (varianti/modificatori, foto upload TD-BO) o TD backend residui.
+
+### Fix TD-CA — catch P2002 (race TOCTOU unicità nome) — sessione 21 coda (2026-05-22)
+
+**Branch**: `fix/td-ca-catch-unique-violation` · **Tipo**: 1 PR bugfix backend (piccola) · **ADR**: [ADR-0024](docs/architecture/ADR-0024-td-ca-catch-unique-violation.md)
+
+**Scope:** chiude **TD-CA** (catturato in ADR-0023). Il pre-check `findFirst` + `create`/`update` non è atomico → race TOCTOU → `P2002` non gestito (non è un `HttpException` → sfugge al `GlobalHttpExceptionFilter`) → HTTP 500 invece di 409. Solo `apps/api`, nessun cambio schema/migration/frontend, nessun nuovo errorCode.
+
+**Fix:** helper `catchUniqueViolation(fn, errorCode)` (`apps/api/src/common/prisma-errors.ts`) che wrappa i `create`/`update` e converte `P2002` → `ConflictException({errorCode})`. Applicato **per-call-site** agli **8** punti name-CRUD (4 service × create/update) coi rispettivi `E_*_NAME_EXISTS` già esistenti — NON nel filter (mis-map sui 7 constraint NON-name + `@Catch(HttpException)` non cattura i Prisma error). Garanzia: ogni modello name-unique ha 1 solo unique index → `P2002` da quel call-site è inequivocabile. Il pre-check `findFirst` resta invariato (gestisce il 99% dei casi); l'helper è la rete per la sola race.
+
+**Test:** 4 unit test dell'helper (P2002 → 409+errorCode · errore generico → ri-lanciato · P2025 → ri-lanciato non convertito · happy path). **No-over-claim:** la race TOCTOU non è riproducibile in E2E in modo deterministico → coperta dall'unit test dell'helper, non da un test runtime della race reale.
+
+**GATE:** unit **95/95** (91 baseline + 4 helper) ✅ · E2E **56/4 invariato** ✅ (pre-check non cambia → nessun nuovo comportamento E2E) · typecheck clean ✅.
+
+**TD-CA → RESOLVED.** Nessun nuovo TD. **Discoveries: 56 invariato** (è un fix, non una scoperta).
+
+**File:** `apps/api/src/common/prisma-errors.ts` + `.spec.ts` (new) · 4 service `apps/api/src/{menus,menu-categories,articles,price-lists}` (8 call-site wrappati) · ADR-0024 (new) · PROGRESS.
+
+**Foundation post-merge:** TD-CA RESOLVED. TD aperti residui: TD-BY (defer S23), TD-BV/TD-BW (S19), TD-BS Sub-2. Next: sessione 22.
 
 ## 🚧 In corso / Prossimo task
 
