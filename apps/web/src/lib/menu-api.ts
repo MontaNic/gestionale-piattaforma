@@ -15,14 +15,20 @@ import { apiDelete, apiGet, apiPatch, apiPost } from './api';
 import { getAccessToken } from './auth';
 import type {
   Article,
+  ArticlePrice,
   CreateArticleInput,
   CreateCategoryInput,
   CreateMenuInput,
+  CreatePriceListInput,
   Menu,
   MenuCategory,
+  PriceList,
+  SetArticlePriceInput,
   UpdateArticleInput,
+  UpdateArticlePriceInput,
   UpdateCategoryInput,
   UpdateMenuInput,
+  UpdatePriceListInput,
 } from './menu-types';
 
 interface Wrapped<T> {
@@ -121,4 +127,74 @@ export async function updateArticle(
 
 export async function deleteArticle(articleId: string): Promise<void> {
   await apiDelete<Wrapped<unknown>>(`/articles/${articleId}`, authOptions());
+}
+
+// ── PriceList (tenant-level /price-lists, S20 ADR-0022) ──────────────────────
+
+export async function listPriceLists(): Promise<PriceList[]> {
+  const res = await apiGet<Wrapped<PriceList[]>>('/price-lists', authOptions());
+  return res.data;
+}
+
+export async function getPriceList(priceListId: string): Promise<PriceList> {
+  const res = await apiGet<Wrapped<PriceList>>(`/price-lists/${priceListId}`, authOptions());
+  return res.data;
+}
+
+export async function createPriceList(input: CreatePriceListInput): Promise<PriceList> {
+  const res = await apiPost<Wrapped<PriceList>>('/price-lists', input, authOptions());
+  return res.data;
+}
+
+export async function updatePriceList(
+  priceListId: string,
+  input: UpdatePriceListInput,
+): Promise<PriceList> {
+  const res = await apiPatch<Wrapped<PriceList>>(
+    `/price-lists/${priceListId}`,
+    input,
+    authOptions(),
+  );
+  return res.data;
+}
+
+export async function deletePriceList(priceListId: string): Promise<void> {
+  await apiDelete<Wrapped<unknown>>(`/price-lists/${priceListId}`, authOptions());
+}
+
+// ── ArticlePrice (override per listino, nested /articles/:articleId/prices) ───
+
+export async function listArticlePrices(articleId: string): Promise<ArticlePrice[]> {
+  const res = await apiGet<Wrapped<ArticlePrice[]>>(`/articles/${articleId}/prices`, authOptions());
+  return res.data;
+}
+
+/** POST = upsert su (articleId, priceListId): re-call sulla stessa coppia aggiorna. */
+export async function setArticlePrice(
+  articleId: string,
+  input: SetArticlePriceInput,
+): Promise<ArticlePrice> {
+  const res = await apiPost<Wrapped<ArticlePrice>>(
+    `/articles/${articleId}/prices`,
+    input,
+    authOptions(),
+  );
+  return res.data;
+}
+
+export async function updateArticlePrice(
+  articleId: string,
+  priceId: string,
+  input: UpdateArticlePriceInput,
+): Promise<ArticlePrice> {
+  const res = await apiPatch<Wrapped<ArticlePrice>>(
+    `/articles/${articleId}/prices/${priceId}`,
+    input,
+    authOptions(),
+  );
+  return res.data;
+}
+
+export async function deleteArticlePrice(articleId: string, priceId: string): Promise<void> {
+  await apiDelete<Wrapped<unknown>>(`/articles/${articleId}/prices/${priceId}`, authOptions());
 }

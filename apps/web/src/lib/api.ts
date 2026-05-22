@@ -41,24 +41,40 @@ export interface RequestOptions {
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
+/** Pattern errorCode taxonomy — allineato a `GlobalHttpExceptionFilter` backend. */
+const TAXONOMY_CODE = /^E_[A-Z][A-Z0-9_]*$/;
+
 async function parseError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as {
     errorCode?: string;
     code?: string;
-    message?: string;
+    message?: string | string[];
   };
   // TD-BE resolution: backend taxonomy inconsistente (TD-AY in flux):
   //   - /auth/login (TD-AJ PR 2) emette `errorCode` (preferred)
   //   - /auth/login 429 lockout (TD-H ADR-0013) emette `code: E_AUTH_ACCOUNT_LOCKED`
   //   - ThrottlerException default NestJS emette 429 senza errorCode/code
   // Fallback chain: errorCode → code → sintetico statusCode-based per 429.
-  const explicit = body.errorCode ?? body.code;
+  let explicit = body.errorCode ?? body.code;
+
+  // S20 scope-adjacent fix (ADR-0022 §parseError): GlobalHttpExceptionFilter
+  // avvolge gli errori di validazione DTO in `errorCode: 'E_VALIDATION'` con il
+  // codice specifico in `message: string[]` (un errorCode per campo fallito).
+  // Senza unwrap ogni 400 di validazione cadrebbe sul messaggio generico.
+  // Difensivo: promuovo `message[0]` solo se è un taxonomy code reale — se fosse
+  // una stringa human-readable resta `E_VALIDATION` (→ messaggio i18n dedicato).
+  if (explicit === 'E_VALIDATION' && Array.isArray(body.message)) {
+    const first = body.message[0];
+    if (typeof first === 'string' && TAXONOMY_CODE.test(first)) {
+      explicit = first;
+    }
+  }
+
   const synthetic = res.status === 429 ? 'E_RATE_LIMITED' : 'E_UNKNOWN';
-  return new ApiError(
-    res.status,
-    explicit ?? synthetic,
-    body.message ?? `Request failed with status ${res.status}`,
-  );
+  const messageText = Array.isArray(body.message)
+    ? body.message.join(', ')
+    : (body.message ?? `Request failed with status ${res.status}`);
+  return new ApiError(res.status, explicit ?? synthetic, messageText);
 }
 
 function buildHeaders(opts: RequestOptions, withJsonContent: boolean): Record<string, string> {

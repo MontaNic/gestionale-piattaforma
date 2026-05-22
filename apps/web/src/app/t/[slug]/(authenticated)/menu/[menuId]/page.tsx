@@ -20,6 +20,7 @@ import {
   getMenu,
   listArticlesByCategory,
   listCategories,
+  listPriceLists,
   updateMenu,
 } from '@/lib/menu-api';
 import type {
@@ -28,6 +29,7 @@ import type {
   CreateMenuInput,
   Menu,
   MenuCategory,
+  PriceList,
 } from '@/lib/menu-types';
 import { cn } from '@/lib/utils';
 
@@ -50,10 +52,12 @@ export default function MenuDetailPage(): JSX.Element {
   const canManageCategory = permissions.includes('menu.categoria.gestisci');
   const canCreateArticle = permissions.includes('menu.piatto.crea');
   const canModifyArticle = permissions.includes('menu.piatto.modifica');
+  const canModifyPrice = permissions.includes('menu.prezzo.modifica');
 
   const [menu, setMenu] = useState<Menu | null>(null);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [articlesByCat, setArticlesByCat] = useState<Record<string, Article[]>>({});
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -72,9 +76,13 @@ export default function MenuDetailPage(): JSX.Element {
           async (cat) => [cat.id, await listArticlesByCategory(cat.id)] as const,
         ),
       );
+      // Listini caricati una volta a livello menu-detail: solo gli attivi sono
+      // rilevanti per la resolution display delle sezioni prezzi (ADR-0022 §1a).
+      const fetchedPriceLists = await listPriceLists();
       setMenu(fetchedMenu);
       setCategories(fetchedCategories);
       setArticlesByCat(Object.fromEntries(entries));
+      setPriceLists(fetchedPriceLists.filter((pl) => pl.isActive));
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setNotFound(true);
@@ -187,9 +195,11 @@ export default function MenuDetailPage(): JSX.Element {
                 menuId={menuId}
                 category={category}
                 articles={articlesByCat[category.id] ?? []}
+                priceLists={priceLists}
                 canManageCategory={canManageCategory}
                 canCreateArticle={canCreateArticle}
                 canModifyArticle={canModifyArticle}
+                canModifyPrice={canModifyPrice}
                 onReload={load}
               />
             ))}

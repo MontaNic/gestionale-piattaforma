@@ -93,6 +93,9 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_PRICE_LIST_PRIORITY_INVALID: 'Priorità listino non valida.',
   E_PRICE_LIST_IS_ACTIVE_INVALID: 'Stato attivazione listino non valido.',
 
+  // Fallback difensivo: `parseError` srotola `E_VALIDATION` → codice specifico
+  // quando `message[0]` è un taxonomy code; se non lo è, resta questo messaggio.
+  E_VALIDATION: 'I dati inseriti non sono validi. Controlla i campi e riprova.',
   E_UNKNOWN: FALLBACK_MESSAGE,
 };
 
