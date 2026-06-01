@@ -2,6 +2,8 @@
 
 > **Documento di riferimento del progetto.** Tutti gli agenti AI (Claude Code, Cursor, ecc.) e gli sviluppatori umani devono leggere questo file PRIMA di scrivere o modificare qualsiasi parte del codice. È la "fonte unica di verità" per scope, architettura, fasi, decisioni tecniche e criteri di accettazione.
 
+> **⚠️ Scope ridefinito da ADR-0025 (2026-06-01):** da gestionale ristorazione a **piattaforma a verticali con core condiviso**. La ristorazione è ora lo starter/boilerplate; primo verticale reale = commercialisti. Leggere l'ADR prima di questo brief.
+
 ---
 
 ## 0. Come usare questo documento
@@ -23,7 +25,7 @@
 
 ## A1. Cosa stiamo costruendo
 
-Una **piattaforma SaaS modulare multi-tenant, AI-native ed estensibile** per la gestione completa di esercizi della **ristorazione** (modulo unico in F1-F3).
+Una **piattaforma SaaS modulare multi-tenant, AI-native ed estensibile**, organizzata in **verticali su un core tecnico condiviso** (ADR-0025). Il dominio **ristorazione** è il primo banco di prova ed è ora lo **starter/boilerplate** da cui si estrae il core; il **primo verticale reale** sviluppato sulla base condivisa sarà quello per **studi commercialisti / consulenti del lavoro**.
 
 Funzionalità chiave: mappa tavoli, comande, KDS, cassa, asporto, delivery proprio, sito vetrina, prenotazioni online, fidelity, marketing, magazzino, food cost, gestione personale, dashboard direzione con AI Assistant integrato.
 
@@ -120,6 +122,8 @@ La piattaforma è progettata fin dall'inizio come **ecosistema estensibile** (AP
 Tooling: **pnpm workspaces** + **Turborepo**.
 
 ## A5. Fasi di rilascio (overview)
+
+> **Nota (ADR-0025):** la roadmap funzionale qui sotto (mappa tavoli, KDS, cassa, magazzino…) descrive il **dominio ristorazione**, ora **congelato allo stato di scaffold**: serve come riferimento del boilerplate, non come lavoro attivo. Le fasi realmente attive ora sono: (1) **estrazione del core tecnico** nei `packages/` condivisi, (2) avvio del **verticale commercialisti**. La roadmap ristorazione resta come materiale di riferimento.
 
 ### FASE 1 (MVP — lancio)
 

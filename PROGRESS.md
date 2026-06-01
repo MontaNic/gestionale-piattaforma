@@ -4,8 +4,27 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 22 maggio 2026 (sessione 21 — Fix TD-BZ + TD-CA: unicità nome soft-delete-aware)
+**Ultimo aggiornamento:** 1 giugno 2026 (svolta scope — ADR-0025)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
+
+## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
+Decisione registrata in ADR-0025. In sintesi:
+- La ristorazione NON è più il prodotto: diventa starter/boilerplate interno.
+- Si estrae ORA il core TECNICO condiviso nei packages/ (auth+MFA, multi-tenant+RLS,
+  RBAC+guard cross-tenant, audit, i18n, ui, shared, infra Docker/Caddy, CI). È ciò
+  che è già costruito e testato (foundation sessioni 1-21).
+- NON si estrae ora il core di DOMINIO (anagrafica/fatturazione/ecc.): astrazione
+  prematura (vietata da BRIEF §F1). Si estrarrà col secondo verticale reale.
+- Ogni verticale = app separata in apps/<verticale> che consuma i packages condivisi.
+- Primo verticale reale: COMMERCIALISTI, in TS sulla base condivisa, riusando il
+  modello dati del vecchio portale PHP StudioDesk (il PHP resta in beta finché non
+  sostituito).
+- Politica "build as if real": architettura/sicurezza da prodotto da subito;
+  validazioni legali esterne (BRIEF §E) rimandate al go-live; nessuna scorciatoia
+  architetturale col pretesto "è un test".
+- I moduli di dominio ristorazione NON verranno sviluppati: restano scaffold.
+
+Prossimo task: analisi di Code per inventario del core da estrarre (file → package).
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 
