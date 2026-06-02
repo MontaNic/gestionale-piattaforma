@@ -2,11 +2,12 @@
 
 [![CI](https://github.com/MontaNic/gestionale-piattaforma/actions/workflows/ci.yml/badge.svg)](https://github.com/MontaNic/gestionale-piattaforma/actions/workflows/ci.yml)
 
-Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la gestione di esercizi della ristorazione.
+Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile, organizzata in verticali su un core tecnico condiviso (vedi ADR-0025). La ristorazione è lo starter/boilerplate; primo verticale reale: studi commercialisti / consulenti del lavoro.
 
 > 📖 La fonte di verità del progetto è [PROJECT_BRIEF.md](./PROJECT_BRIEF.md).
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
+> ⚠️ Scope ridefinito da [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md): da gestionale ristorazione a piattaforma a verticali con core condiviso.
 
 > ✅ **Primo login browser funzionante + Auth E2E hardening 100% completo (B1 + B2a + B2b).**
 > Macro-task **D3a + D3b + D4 + E1 + E2 + B1 + B2a + B2b** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports, **frontend con `/login` + `/dashboard`** (primo login browser end-to-end), **rate limiting Redis (4 throttler) + account lockout sliding window + email notification Mailpit + per-tenant rate-limit `/auth/login-pin` + ThrottlerGuard fail-open verified Redis DOWN end-to-end** (TD-AD RESOLVED). **E2E test framework attivo** (`@testcontainers/postgresql` + `@testcontainers/redis` + supertest, Vitest projects array unit/e2e split). Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, **CORS abilitato**, frontend `:3001`. **29/29 test verdi** (25 unit + 4 e2e). Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2) + [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (B1 rate limit + lockout) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md) (B2a email + login-pin per-tenant) + [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md) (B2b E2E + TD-AD fix).
@@ -411,6 +412,8 @@ pnpm --filter @gestionale/web typecheck
 
 A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). **E2** ha sostituito la home con redirect client-side + introdotto `/login` + `/dashboard`. **F1-shell (sessione 14)** ha aggiunto shell UI completa: Sidebar 8 nav (Dashboard/Menu/Mappa/Comande/Cassa/KDS/Report/Settings) + Topbar (avatar dropdown con theme toggle light/dark/system + locale switcher it/en + logout) + AuthContext+AuthGate refactor estrazione da dashboard inline. i18n via `next-intl@4.12.0` cookie-based (`NEXT_LOCALE`, `localePrefix: 'never'`, no segment URL). 7 placeholder route "Coming soon" pronti per implementation feature business. Vedi [ADR-0018](./docs/architecture/ADR-0018-f1-shell-ui-foundation.md).
 
+> **Nota scope (ADR-0025):** la shell e i 7 placeholder qui sopra appartengono al dominio ristorazione, ora **congelato come boilerplate**. La parte riusabile (AuthContext/AuthGate, theme, i18n switcher, layout shell) è candidata all'estrazione nel core condiviso; i nomi-nav specifici (Mappa/Comande/Cassa/KDS) restano nel verticale ristorazione.
+
 Stack version pinning + razionale (Tailwind 3.4 vs 4, React 18.3 vs 19, manual scaffold vs `create-next-app`): [ADR-0011 sezione Decisions](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md#decisions).
 
 #### Login flow (E2 + TD-2 multi-tenant routing)
@@ -564,4 +567,4 @@ pnpm build         # turbo run build (per produzione futura)
 
 ## Stato del progetto
 
-Vedi [PROGRESS.md](./PROGRESS.md). Roadmap di alto livello in [PROJECT_BRIEF.md](./PROJECT_BRIEF.md) sezione A5.
+Vedi [PROGRESS.md](./PROGRESS.md). Roadmap di alto livello in [PROJECT_BRIEF.md](./PROJECT_BRIEF.md) sezione A5. Lo scope corrente (estrazione core tecnico condiviso + avvio verticale commercialisti) è definito in [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md).
