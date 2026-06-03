@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 1 giugno 2026 (svolta scope — ADR-0025)
+**Ultimo aggiornamento:** 3 giugno 2026 (estrazione core passo 1 — `packages/eslint-config`, ADR-0027 §D5)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -25,6 +25,36 @@ Decisione registrata in ADR-0025. In sintesi:
 - I moduli di dominio ristorazione NON verranno sviluppati: restano scaffold.
 
 Prossimo task: analisi di Code per inventario del core da estrarre (file → package).
+
+## [2026-06-03] Estrazione core — passo 1: `packages/eslint-config` (ADR-0027 §D5)
+
+Primo passo dell'estrazione del core condiviso secondo l'ordine D5 (dal più sicuro al più rischioso): tooling puro, zero runtime, nessun impatto su auth/RLS/dominio.
+
+**Stato reale prima dell'estrazione (rilevante per il design):** il linting era **centralizzato a root** — `pnpm lint` = `eslint .`, unico flat config `eslint.config.js` a root come sorgente di verità per tutto il monorepo. `apps/web/.eslintrc.json` (`{extends: next/core-web-vitals}`) serve solo a `next lint` (script di workspace, NON invocato da `pnpm lint`) → lasciato invariato, fuori scope. `apps/api`/`packages/db` non hanno flat config propri: ereditano dal root via upward-search.
+
+**Cosa fatto:**
+- [x] Nuovo workspace `packages/eslint-config` (`@gestionale/eslint-config`, `type: module`, `exports["."] → ./index.js`). Deps `@eslint/js` + `typescript-eslint` (spostate da root devDeps), peerDep `eslint`.
+- [x] `packages/eslint-config/index.js` esporta `base` (default — config condivisa agnostica: ignores, `js.configs.recommended`, `tseslint.configs.recommended`, regole base `no-unused-vars`/`consistent-type-imports`, override `.cjs`) + `nestjs` (preset framework: parserOptions decorator + 3 override, **senza `files`**).
+- [x] Root `eslint.config.js` ridotto a thin composer: `import base, { nestjs }` → `[...base, { files: ['apps/api/**/*.ts'], ...nestjs }]`. ESLint risolve i glob relativi al root → comportamento identico.
+- [x] Root `package.json`: aggiunta `@gestionale/eslint-config: workspace:*`; rimosse `@eslint/js` e `typescript-eslint` (ora nel package). `eslint` runner resta a root.
+- [x] `pnpm install` per linkare il workspace.
+
+**Coupling strutturale segnalato e risolto (non bloccante):** il root config referenziava un path app-specifico (`files: ['apps/api/**/*.ts']`). Per non incollare il layout del repo dentro un package destinato al riuso dai verticali futuri, il package esporta il **preset NestJS agnostico** e il **glob** resta nel root config (che conosce il layout). Nessuna modifica di versione né dipendenze nuove non banali.
+
+**Gate ADR-0027 rispettato — comportamento di linting INVARIATO, baseline test verde costante (prima → dopo):**
+
+| Gate | Prima | Dopo |
+|---|---|---|
+| `pnpm lint` (`eslint .`) | exit 0, 0 warn/err | exit 0, 0 warn/err |
+| `pnpm format:check` | clean | clean |
+| `pnpm typecheck` | 4/4 task | 4/4 task |
+| `pnpm test` | 95 test / 12 file | 95 test / 12 file |
+
+Verifica aggiuntiva via `eslint --print-config`: file `apps/api` → override NestJS `off` + `emitDecoratorMetadata: true`; file base → `consistent-type-imports: error` + `no-unused-vars` con ignore pattern. Config risolto identico pre/post.
+
+**Non toccato:** `turbo.json` (`pnpm lint` non passa da Turbo), `.lintstagedrc.json` (`eslint --fix` risolve il root config), `pnpm-workspace.yaml` (`packages/*` già incluso), `apps/web/.eslintrc.json`, e ogni altro package del piano (ui/shared/auth/db…). Un passo per PR.
+
+Prossimo passo estrazione (D5 passo 2): `packages/ui` (shadcn + `cn`) + smoke test render.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 
