@@ -1,40 +1,8 @@
-import { cookies } from 'next/headers';
-
-import { isValidLocale } from '@/i18n/config';
-
 // =============================================================================
-// /api/set-locale — POST handler per cookie NEXT_LOCALE (ADR-0018 Sub-DP-A)
+// /api/set-locale — POST cookie NEXT_LOCALE (ADR-0018 Sub-DP-A)
 // =============================================================================
-// Body: { locale: 'it' | 'en' }
-// Validation: locale in lista whitelist (i18n/config.ts isValidLocale).
-// Cookie: NEXT_LOCALE, path '/', maxAge 1 anno. Non httpOnly perche' UX
-// cross-tab visibility (storage event listener AuthContext non legge cookie,
-// ma future feature locale switcher cross-tab puo' leggere document.cookie).
-//
-// TD-BC: NO rate limit (low-risk F1 authenticated, re-evaluation F2 public).
-// Middleware matcher esclude `/api/` → questo path e' pass-through, NO slug
-// validation interferisce.
+// L'handler vive nel meccanismo condiviso `@gestionale/i18n` (ADR-0027 §D5
+// passo 4): qui lo si monta come route handler App Router.
 // =============================================================================
 
-export async function POST(req: Request): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ ok: false, error: 'INVALID_BODY' }, { status: 400 });
-  }
-
-  const locale = (body as { locale?: unknown })?.locale;
-  if (typeof locale !== 'string' || !isValidLocale(locale)) {
-    return Response.json({ ok: false, error: 'INVALID_LOCALE' }, { status: 400 });
-  }
-
-  const store = await cookies();
-  store.set('NEXT_LOCALE', locale, {
-    path: '/',
-    maxAge: 60 * 60 * 24 * 365,
-    sameSite: 'lax',
-  });
-
-  return Response.json({ ok: true, locale });
-}
+export { handleSetLocale as POST } from '@gestionale/i18n/route';

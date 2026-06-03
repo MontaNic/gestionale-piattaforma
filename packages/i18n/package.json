@@ -1,0 +1,49 @@
+{
+  "name": "@gestionale/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Meccanismo i18n del core (ADR-0027 §D5 passo 4): config locale, risoluzione cookie NEXT_LOCALE + fallback, factory next-intl, set-locale handler, locale guard middleware, helper di switch client. Agnostico ai messaggi (l'app fornisce i propri). Consumato da Next via transpilePackages.",
+  "type": "module",
+  "exports": {
+    "./config": {
+      "types": "./src/config.ts",
+      "default": "./src/config.ts"
+    },
+    "./request": {
+      "types": "./src/request.ts",
+      "default": "./src/request.ts"
+    },
+    "./route": {
+      "types": "./src/set-locale.ts",
+      "default": "./src/set-locale.ts"
+    },
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "default": "./src/middleware.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    }
+  },
+  "main": "./src/config.ts",
+  "types": "./src/config.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0",
+    "next-intl": "^4.0.0"
+  },
+  "devDependencies": {
+    "next": "^15.0.0",
+    "next-intl": "4.12.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

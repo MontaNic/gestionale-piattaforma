@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 3 giugno 2026 (estrazione core passo 3 — `packages/shared`, ADR-0027 §D5)
+**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 4 — `packages/i18n`, ADR-0027 §D5)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -118,6 +118,38 @@ Terzo passo: codice condiviso non-UI/non-auth, in particolare la tassonomia erro
 **Dipendenze nuove:** nessuna runtime; solo devDeps di tooling già nel repo (tsup, vitest, typescript) nel nuovo package.
 
 Prossimo passo estrazione (D5 passo 4): `packages/i18n` (solo meccanismo; messaggi per-app con namespacing; +test switch/fallback). Qui confluiranno i messaggi IT del catalogo error-codes.
+
+## [2026-06-04] Estrazione core — passo 4: `packages/i18n` (ADR-0027 §D5)
+
+Quarto passo: il **meccanismo** di internazionalizzazione (NON i messaggi). Rischio basso. Chiude il gap "switch locale e fallback non testati a unità".
+
+**Confine applicato (meccanismo → package, contenuto → resta in app):**
+- **→ `@gestionale/i18n`:** config locale (`locales`/`defaultLocale`/`isValidLocale` + costanti cookie), risoluzione cookie `NEXT_LOCALE` + fallback, factory next-intl `getRequestConfig` (parametrizzata sul loader di messaggi), handler `/api/set-locale`, locale guard del middleware (edge), helper di switch client. Il meccanismo NON era intrecciato con le chiavi di dominio (nessuna sorpresa).
+- **→ resta in `apps/web` (contenuto del verticale):** i file `src/i18n/messages/{it,en}.json` (`shell.*`, `dashboard.*`, `menu.*`, `placeholder.*` **+ i messaggi IT degli error-code** del passo 3). Confermata con l'owner la **decisione di deferire** un namespacing core-vs-verticale: l'app fornisce l'intero oggetto messaggi via `loadMessages`, il package resta agnostico; lo schema si introdurrà col secondo verticale o quando esisterà un messaggio davvero core. Confermato anche che `config.ts` (lista locale `it`/`en`) **possiede** le locale a livello piattaforma (boundary del prompt).
+
+**Cosa fatto:**
+- [x] Nuovo workspace `@gestionale/i18n` **source export + `transpilePackages`** (mirror di `@gestionale/ui` — solo-Next, **nessun `dist/`/tsup**). Subpath export per separare i runtime context: `./config` (puro), `./request` (RSC, next/headers), `./route` (route handler), `./middleware` (edge, next/server), `./client` (`'use client'`). `git mv` di `config.ts`/`request.ts`/`set-locale.ts` (storia preservata). Cuore puro `resolve.ts` (`resolveLocale` + `buildI18nRequestConfig`) senza dipendenze runtime da Next → unit-testabile in node.
+- [x] Wiring `apps/web`: thin `src/i18n/request.ts` (entrypoint plugin che inietta i messaggi del verticale), `route.ts` re-export `handleSetLocale as POST`, `middleware.ts` importa `applyLocaleGuard` (rimosse le const locali `VALID_LOCALES`/`DEFAULT_LOCALE`), `Topbar.tsx` usa `setLocale` + `locales` dal package. `+ @gestionale/i18n` a `apps/web`; `next-intl` resta dep dell'app (peerDep del package); `next.config.mjs` `transpilePackages` aggiornato.
+- [x] Test meccanismo: `packages/i18n/src/i18n.test.ts` (8 test: `isValidLocale`, `resolveLocale` switch it↔en + fallback su undefined/invalid/empty/case-mismatch, `buildI18nRequestConfig` carica i messaggi della locale risolta con loader iniettato). Nuovo vitest project registrato in `vitest.config.mts`.
+
+**Gate ADR-0027 — comportamento INVARIATO (prima → dopo):**
+
+| Gate | Prima | Dopo |
+|---|---|---|
+| `pnpm lint` | exit 0 | exit 0 |
+| `pnpm typecheck` | 7/7 | **8/8** (+`@gestionale/i18n`) |
+| `pnpm test` | 109 / 14 file | **117 / 15 file** (95 api + 9 ui + 5 shared + **8 i18n**) |
+| `pnpm format:check` | clean | clean |
+| `next build` (apps/web) | ok | ok (da `.next` pulito; `/api/set-locale` + middleware compilano con i subpath export) |
+| Playwright chromium | 14/14 | **14/14 PASS** (incl. `login FAIL wrong password` → errore localizzato end-to-end) |
+
+**Verifica runtime mirata del meccanismo:** `POST /api/set-locale` → `200`+cookie (valido) / `400 INVALID_LOCALE` / `400 INVALID_BODY`; nav della shell server-rendered switcha col cookie (`it` → "Mappa tavoli/Comande/Impostazioni"; `en` → "Table map/Orders/Settings"), confermando che la factory del package risolve il cookie e carica i messaggi dell'app.
+
+**Dipendenze nuove:** nessuna runtime nuova; solo devDeps di tooling già nel repo (`next`, `next-intl`, `typescript`, `vitest`) dichiarate nel nuovo package per typecheck/test. `next-intl`/`next` come peerDeps.
+
+> **Nota build-order CI (lezione del passo 3):** i package **dual-package (tsup)** consumati da `apps/api` vanno aggiunti allo step "Build workspace packages" del job `e2e-playwright` in `ci.yml`, perché quel job avvia l'api con `pnpm dev` diretto (fuori da Turbo, quindi `^build` non scatta). Vale già per `db` e `shared`; varrà per `packages/auth` (passo 7). NB: **`packages/i18n` NON è interessato** perché è consumato solo da Next (`transpilePackages`, nessun `dist/`).
+
+Prossimo passo estrazione (D5 passo 5): `packages/auth-web` (FE: AuthContext/AuthGate/middleware/lib auth, coperto da Playwright).
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 

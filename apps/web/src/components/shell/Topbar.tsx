@@ -17,8 +17,9 @@ import {
   DropdownMenuTrigger,
 } from '@gestionale/ui';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@gestionale/ui';
+import { locales, type Locale } from '@gestionale/i18n/config';
+import { setLocale } from '@gestionale/i18n/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { locales, type Locale } from '@/i18n/config';
 
 import { Sidebar } from './Sidebar';
 
@@ -58,12 +59,7 @@ export function Topbar(): JSX.Element {
   const handleSetLocale = (locale: Locale): void => {
     if (locale === currentLocale) return;
     startTransition(async () => {
-      const res = await fetch('/api/set-locale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locale }),
-      });
-      if (res.ok) {
+      if (await setLocale(locale)) {
         router.refresh();
       }
     });
