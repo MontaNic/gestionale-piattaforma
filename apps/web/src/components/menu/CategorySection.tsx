@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Pencil, Plus, Tag, Trash2 } from 'lucide-react';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
 import { messageForError } from '@/lib/error-codes';
 import {
   createArticle,

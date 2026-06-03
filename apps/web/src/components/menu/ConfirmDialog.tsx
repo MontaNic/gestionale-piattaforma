@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@gestionale/ui';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@gestionale/ui';
 
 // =============================================================================
 // ConfirmDialog.tsx — Dialog di conferma soft-delete (S19 ADR-0020)

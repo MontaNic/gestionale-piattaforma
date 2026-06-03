@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 3 giugno 2026 (estrazione core passo 1 — `packages/eslint-config`, ADR-0027 §D5)
+**Ultimo aggiornamento:** 3 giugno 2026 (estrazione core passo 2 — `packages/ui`, ADR-0027 §D5)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -55,6 +55,37 @@ Verifica aggiuntiva via `eslint --print-config`: file `apps/api` → override Ne
 **Non toccato:** `turbo.json` (`pnpm lint` non passa da Turbo), `.lintstagedrc.json` (`eslint --fix` risolve il root config), `pnpm-workspace.yaml` (`packages/*` già incluso), `apps/web/.eslintrc.json`, e ogni altro package del piano (ui/shared/auth/db…). Un passo per PR.
 
 Prossimo passo estrazione (D5 passo 2): `packages/ui` (shadcn + `cn`) + smoke test render.
+
+## [2026-06-03] Estrazione core — passo 2: `packages/ui` (ADR-0027 §D5)
+
+Secondo passo: design system condiviso. Rischio basso (nessun impatto auth/RLS/dominio). Chiude il gap "il design system non ha test propri" rilevato in pre-estrazione.
+
+**Confine verificato (nessuna sorpresa):** gli 11 componenti shadcn + `cn` sono completamente agnostici — dipendono solo da radix/cva/lucide/clsx/tailwind-merge/react-hook-form, **nessun import di dominio né stringa i18n hardcoded**. Tutti core-eligible. Nessun componente domain-aware (Menu/Comanda…) è stato spostato: quelli restano in `apps/web/src/components/menu`.
+
+**Cosa fatto:**
+- [x] Nuovo workspace `packages/ui` (`@gestionale/ui`, `type: module`). Esporta i **sorgenti** `.tsx` via barrel `src/index.ts` (`exports["."].types/default → ./src/index.ts`); consumati da Next via `transpilePackages` (preserva `"use client"`). Deps proprie: 5 `@radix-ui/*` + cva + clsx + tailwind-merge + lucide-react + react-hook-form; peerDeps react/react-dom.
+- [x] Spostati con `git mv` (storia preservata) gli 11 componenti (`alert, avatar, button, card, dialog, dropdown-menu, form, input, label, sheet, textarea`) + `cn` da `apps/web/src/components/ui/` e `apps/web/src/lib/utils.ts` → `packages/ui/src/`. Import interni riscritti a relativi (`@/lib/utils`→`./utils`, `@/components/ui/label`→`./label`).
+- [x] **Decisione meccanismo (confermata con owner):** consumo Next via `transpilePackages: ['@gestionale/ui']` (source export, pattern shadcn-in-monorepo), non prebuild tsup. Aggiunto a `apps/web/next.config.mjs`.
+- [x] Wiring consumer: 48 import `@/components/ui/*` su 15 file + 4 import `cn` riscritti a `@gestionale/ui`. Rimossi i path locali. `apps/web/package.json`: `+ @gestionale/ui: workspace:*`; rimosse le 5 `@radix-ui/*` + `class-variance-authority` (0 usi non-ui); restano lucide/react-hook-form/clsx/tailwind-merge (usate direttamente).
+- [x] **Fix resa (critico):** aggiunto `'../../packages/ui/src/**/*.{ts,tsx}'` al `content` di `apps/web/tailwind.config.ts` — senza, Tailwind purgherebbe le classi usate nei componenti estratti cambiando la resa.
+- [x] **Gap test chiuso (decisione confermata con owner):** stack Vitest + `@testing-library/react` + `@testing-library/jest-dom` + `jsdom` (+ `@vitejs/plugin-react`) come **nuove devDeps del package**. `packages/ui/src/ui.smoke.test.tsx`: 9 test (cn, Button incl. variant/asChild, Input, Label, Card, Alert role+variant, Dialog Radix che richiede DOM). Aggiunto `packages/ui/vitest.config.ts` (jsdom) + setup; registrato in `vitest.config.mts` root.
+
+**Gate ADR-0027 — resa e comportamento INVARIATI (prima → dopo):**
+
+| Gate | Prima | Dopo |
+|---|---|---|
+| `pnpm lint` | exit 0 | exit 0 |
+| `pnpm typecheck` | 4/4 task | **5/5** (+`@gestionale/ui`) |
+| `pnpm test` | 95 / 12 file | **104 / 13 file** (95 api + **9 ui** nuovi) |
+| `pnpm format:check` | clean | clean |
+| `next build` (apps/web) | ok | ok (tutte le route compilano, `transpilePackages` + `"use client"` ok) |
+| Playwright chromium | 9/9 atteso | **14/14 PASS** (2 setup + 12 spec: auth/shell/routing/tenant-isolation) su stack live (API :3000 + web dev :3001) |
+
+**Nuove dipendenze introdotte (solo test, in `packages/ui` devDeps):** `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `@vitejs/plugin-react`, `vitest`, `@types/react(-dom)` — confermate con owner prima dell'esecuzione.
+
+**Nota ambiente:** `next start` (build di produzione) crasha qui con `EvalError: Code generation from strings disallowed` nel middleware edge-runtime (next-intl) — quirk ambientale pre-esistente, indipendente da questa PR (il middleware non è toccato). Verifica runtime fatta quindi su `next dev`, supportato.
+
+Prossimo passo estrazione (D5 passo 3): `packages/shared` (error-codes unificati FE/BE con test di parità, tipi/utility comuni).
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 

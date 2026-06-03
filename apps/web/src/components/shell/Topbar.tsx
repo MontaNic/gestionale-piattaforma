@@ -6,8 +6,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { Globe, LogOut, Menu, Monitor, Moon, Sun } from 'lucide-react';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,8 +15,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+} from '@gestionale/ui';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@gestionale/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { locales, type Locale } from '@/i18n/config';
 
