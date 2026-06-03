@@ -9,9 +9,9 @@ import { ChevronLeft, Pencil, Plus } from 'lucide-react';
 import { CategoryForm } from '@/components/menu/CategoryForm';
 import { CategorySection } from '@/components/menu/CategorySection';
 import { MenuForm } from '@/components/menu/MenuForm';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
+import { Card, CardContent } from '@gestionale/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { ApiError } from '@/lib/api';
 import { messageForError } from '@/lib/error-codes';
@@ -31,7 +31,7 @@ import type {
   MenuCategory,
   PriceList,
 } from '@/lib/menu-types';
-import { cn } from '@/lib/utils';
+import { cn } from '@gestionale/ui';
 
 // =============================================================================
 // menu/[menuId]/page.tsx — Detail Menu (S19 FASE 5)

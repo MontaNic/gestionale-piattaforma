@@ -7,14 +7,14 @@ import { Plus, Trash2 } from 'lucide-react';
 
 import { ConfirmDialog } from '@/components/menu/ConfirmDialog';
 import { MenuForm } from '@/components/menu/MenuForm';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gestionale/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { messageForError } from '@/lib/error-codes';
 import { createMenu, deleteMenu, listMenus } from '@/lib/menu-api';
 import type { CreateMenuInput, Menu } from '@/lib/menu-types';
-import { cn } from '@/lib/utils';
+import { cn } from '@gestionale/ui';
 
 // =============================================================================
 // menu/page.tsx — Lista Menu (S19 FASE 4, sostituisce il placeholder)

@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@gestionale/ui';
 
 // =============================================================================
 // Sidebar.tsx — Primary nav shell (ADR-0018 DP-2)

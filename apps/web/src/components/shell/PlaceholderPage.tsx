@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gestionale/ui';
 
 // =============================================================================
 // PlaceholderPage.tsx — Shared "Coming soon" page (ADR-0018 STOP 6)

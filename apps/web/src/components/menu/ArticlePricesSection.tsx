@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check, Pencil, Plus, X } from 'lucide-react';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
+import { Input } from '@gestionale/ui';
 import { messageForError } from '@/lib/error-codes';
 import {
   deleteArticlePrice,

@@ -7,6 +7,10 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // Design system condiviso (@gestionale/ui, ADR-0027 §D5 passo 2): le classi
+    // usate dentro i componenti estratti vanno scansionate qui, altrimenti
+    // Tailwind le purga e la resa cambia.
+    '../../packages/ui/src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     container: {

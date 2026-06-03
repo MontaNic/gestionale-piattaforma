@@ -7,14 +7,14 @@ import { ChevronLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { ConfirmDialog } from '@/components/menu/ConfirmDialog';
 import { PriceListForm } from '@/components/menu/PriceListForm';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@gestionale/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { messageForError } from '@/lib/error-codes';
 import { createPriceList, deletePriceList, listPriceLists, updatePriceList } from '@/lib/menu-api';
 import type { CreatePriceListInput, PriceList } from '@/lib/menu-types';
-import { cn } from '@/lib/utils';
+import { cn } from '@gestionale/ui';
 
 // =============================================================================
 // menu/listini/page.tsx — Lista + CRUD Listini prezzo (S20 ADR-0022)

@@ -6,17 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@gestionale/ui';
+import { Button } from '@gestionale/ui';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@gestionale/ui';
+import { Input } from '@gestionale/ui';
 import { messageForError } from '@/lib/error-codes';
 import {
   CHANNELS,
