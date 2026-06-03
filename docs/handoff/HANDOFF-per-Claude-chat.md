@@ -1,0 +1,56 @@
+# HANDOFF — per riprendere con Claude (chat strategico)
+
+> **A cosa serve:** da incollare all'inizio di una nuova chat con Claude, per ripartire senza perdere nulla. Claude non porta con sé la cronologia parola-per-parola tra le chat: la memoria affidabile sono i file del repo. Questo documento è il "punto di ripartenza" — tienilo aggiornato a fine di ogni macro-sessione e reincollalo (o incolla il PROGRESS aggiornato) all'inizio della successiva.
+>
+> **Regola d'oro:** la chat è volatile, i file no. Se questo handoff e il PROGRESS sono aggiornati, nulla è perso anche se la chat sparisce.
+
+---
+
+## Come usarlo
+
+1. A inizio nuova chat, incolla a Claude: questo documento compilato **+** il contenuto aggiornato di `PROGRESS.md`.
+2. Se la decisione corrente è coperta da un ADR, incolla anche quell'ADR.
+3. Chiedi a Claude di confermare in 3-5 righe dove siamo e qual è il prossimo passo, prima di procedere.
+
+---
+
+## Blocco da compilare a fine macro-sessione
+
+```
+RIPRESA PROGETTO — Piattaforma SaaS multi-tenant a verticali (core condiviso)
+
+## Dove vivono le fonti di verità (leggere questi nel repo)
+- ADR: docs/architecture/ (ADR-0025 scope, ADR-0026 data layer, ADR-0027 composizione core, + eventuali nuovi)
+- Stato: PROGRESS.md (fonte principale dello stato corrente)
+- Scope: PROJECT_BRIEF.md
+- Metodo sessioni AI: STARTER_PROMPT.md
+
+## Metodo di lavoro (triangolo)
+- Tu (Claude chat) = strategia + verifica delle conclusioni di Code (non fidarti, verifica)
+- Claude Code = esecuzione (VS Code Remote-SSH)
+- Io (Nicolò) = arbitro / decisioni finali
+- Ciclo: Decidere → Preparare → Attuare → Verificare → Registrare (commit+tag, PROGRESS aggiornato)
+- Gate non negoziabile: test verdi costanti; CI verde su PR pulita prima del merge
+- Preferenza: feedback diretto e onesto, niente elogi
+- Approccio scelto: "assicurazione" — meglio lento e verificato che veloce e fragile
+
+## A che punto siamo (COMPILARE)
+- Fase corrente: estrazione del core condiviso (ADR-0027 §D5)
+- Passi completati e mergiati: [es. 1 eslint-config, 2 ui, 3 shared, 4 i18n]
+- Passo in corso: [es. 5a packages/api-client, poi 5b auth-web]
+- Decisioni aperte / in attesa: [....]
+- Note/rischi attivi: [es. buco test RLS da non-superuser (ADR-0026 §D5) da affrontare al passo db; build-order CI per dual-package consumati da apps/api]
+
+## Cosa sta facendo Code adesso
+- [es. estrazione packages/api-client, PR non ancora aperta]
+
+## Prossimo passo previsto
+- [....]
+```
+
+---
+
+## Promemoria su cosa NON fare
+
+- NON incollare l'intera chat precedente per "trasferire la sessione": è dispersivo. Lo stato strutturato (PROGRESS + questo handoff) è più affidabile della cronologia grezza.
+- NON affidare lo stato alla sola memoria (né di Claude né tua): scrivilo nei file.
