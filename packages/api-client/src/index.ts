@@ -1,6 +1,10 @@
 // =============================================================================
-// api.ts — HTTP client per apps/web (TD-2 ADR-0012 resolution)
+// @gestionale/api-client — HTTP client FE condiviso (ADR-0027 §D5 passo 5a)
 // =============================================================================
+// Infrastruttura trasversale (né auth né dominio): estratta da `apps/web/lib/api.ts`
+// come passo 5a prima di auth-web (5b), perché consumata sia dall'auth FE sia
+// dalle pagine di dominio (menu). Comportamento INVARIATO.
+//
 // Wrapper minimale di `fetch` con:
 //   - `tenantSlug` opzionale → header `X-Tenant-Slug` (pre-auth login/login-pin
 //     scope `/auth/login` + `/auth/login-pin`, backend TenantMiddleware D2a)

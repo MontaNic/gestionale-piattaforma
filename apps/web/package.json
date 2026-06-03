@@ -18,6 +18,7 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@gestionale/api-client": "workspace:*",
     "@gestionale/db": "workspace:*",
     "@gestionale/i18n": "workspace:*",
     "@gestionale/shared": "workspace:*",

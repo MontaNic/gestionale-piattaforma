@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from '@gestionale/ui';
 import { Button } from '@gestionale/ui';
 import { Card, CardContent } from '@gestionale/ui';
 import { useAuth } from '@/contexts/AuthContext';
-import { ApiError } from '@/lib/api';
+import { ApiError } from '@gestionale/api-client';
 import { messageForError } from '@/lib/error-codes';
 import {
   createCategory,

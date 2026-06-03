@@ -171,6 +171,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@gestionale/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@gestionale/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -253,6 +256,15 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+
+  packages/api-client:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.19)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/db:
     dependencies:

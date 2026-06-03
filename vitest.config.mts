@@ -18,6 +18,7 @@ export default defineConfig({
       'packages/ui/vitest.config.ts',
       'packages/shared/vitest.config.ts',
       'packages/i18n/vitest.config.ts',
+      'packages/api-client/vitest.config.ts',
     ],
   },
 });

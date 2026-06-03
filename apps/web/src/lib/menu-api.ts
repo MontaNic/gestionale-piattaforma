@@ -11,7 +11,8 @@
 // — queste funzioni la srotolano e ritornano il payload diretto.
 // =============================================================================
 
-import { apiDelete, apiGet, apiPatch, apiPost } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
+
 import { getAccessToken } from './auth';
 import type {
   Article,
