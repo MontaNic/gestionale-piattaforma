@@ -22,6 +22,7 @@ import { RequirePermissions } from '../rbac/decorators/require-permissions.decor
 import { CreatePriceListDto } from './dto/create-price-list.dto';
 import { UpdatePriceListDto } from './dto/update-price-list.dto';
 import { PriceListsService } from './price-lists.service';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('price-lists')
 export class PriceListsController {
@@ -30,7 +31,7 @@ export class PriceListsController {
   @Get()
   @RequirePermissions('menu.visualizza')
   async list(@CurrentUser() user: AuthenticatedUser | undefined) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.priceLists.list(user.tenantId);
     return { data };
   }
@@ -38,7 +39,7 @@ export class PriceListsController {
   @Get(':id')
   @RequirePermissions('menu.visualizza')
   async getById(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.priceLists.getById(user.tenantId, id);
     return { data };
   }
@@ -50,7 +51,7 @@ export class PriceListsController {
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Body() dto: CreatePriceListDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.priceLists.create(user.tenantId, user.id, dto);
     return { data };
   }
@@ -62,7 +63,7 @@ export class PriceListsController {
     @Param('id') id: string,
     @Body() dto: UpdatePriceListDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.priceLists.update(user.tenantId, user.id, id, dto);
     return { data };
   }
@@ -70,7 +71,7 @@ export class PriceListsController {
   @Delete(':id')
   @RequirePermissions('menu.prezzo.modifica')
   async softDelete(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.priceLists.softDelete(user.tenantId, user.id, id);
     return { data };
   }

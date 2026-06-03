@@ -24,6 +24,7 @@ import type {
   AuthenticatedRequest,
   AuthenticatedUser,
 } from './interfaces/authenticated-request.interface';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('auth')
 export class AuthController {
@@ -37,7 +38,7 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<{ data: AuthTokensPayload }> {
-    if (!tenantId) throw new UnauthorizedException('E_AUTH_TENANT_REQUIRED');
+    if (!tenantId) throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
     const tokens = await this.auth.login(tenantId, dto.email, dto.password, {
       ip: req.ip,
       userAgent: req.header('user-agent'),
@@ -64,7 +65,7 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Req() req: AuthenticatedRequest,
   ): Promise<void> {
-    if (!user || !req.sessionId) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user || !req.sessionId) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     await this.auth.logout(req.sessionId, user.id, user.tenantId);
   }
 
@@ -79,7 +80,7 @@ export class AuthController {
     @Body() dto: PinSetupDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<{ data: { success: true } }> {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const result = await this.auth.setupPin(user.id, user.tenantId, dto.currentPassword, dto.pin, {
       ip: req.ip,
       userAgent: req.header('user-agent'),
@@ -106,7 +107,7 @@ export class AuthController {
     @Body() dto: LoginPinDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<{ data: AuthTokensPayload }> {
-    if (!tenantId) throw new UnauthorizedException('E_AUTH_TENANT_REQUIRED');
+    if (!tenantId) throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
     const tokens = await this.auth.loginPin(tenantId, dto.pin, dto.deviceId, dto.deviceType, {
       ip: req.ip,
       userAgent: req.header('user-agent'),

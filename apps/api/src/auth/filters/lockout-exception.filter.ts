@@ -1,6 +1,7 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
 
 import { GlobalHttpExceptionFilter } from '../../common/filters/global-http-exception.filter';
+import { AuthErrorCode } from '@gestionale/shared';
 
 // =============================================================================
 // LockoutExceptionFilter — Retry-After: 900 fissi su E_AUTH_ACCOUNT_LOCKED
@@ -47,7 +48,7 @@ export class LockoutExceptionFilter extends GlobalHttpExceptionFilter implements
       typeof body === 'object' &&
       body !== null &&
       'errorCode' in body &&
-      (body as { errorCode: unknown }).errorCode === 'E_AUTH_ACCOUNT_LOCKED'
+      (body as { errorCode: unknown }).errorCode === AuthErrorCode.ACCOUNT_LOCKED
     );
   }
 }

@@ -60,6 +60,7 @@ import type { Request } from 'express';
 import { DbService } from '../../db/db.service';
 import { RedisService } from '../../redis/redis.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { AuthErrorCode } from '@gestionale/shared';
 
 interface RequestWithUser extends Request {
   user?: { tenantId?: string };
@@ -115,14 +116,14 @@ export class TenantConsistencyGuard implements CanActivate {
       this.logger.warn(
         `Slug "${headerSlug}" not found (JWT tenantId=${userTenantId}) — possible cross-tenant probe`,
       );
-      throw new UnauthorizedException('E_AUTH_TENANT_MISMATCH');
+      throw new UnauthorizedException(AuthErrorCode.TENANT_MISMATCH);
     }
 
     if (slugTenantId !== userTenantId) {
       this.logger.warn(
         `Mismatch JWT.tenantId=${userTenantId} vs header slug "${headerSlug}" → ${slugTenantId}`,
       );
-      throw new UnauthorizedException('E_AUTH_TENANT_MISMATCH');
+      throw new UnauthorizedException(AuthErrorCode.TENANT_MISMATCH);
     }
 
     return true;

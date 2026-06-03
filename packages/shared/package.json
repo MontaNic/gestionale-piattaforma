@@ -1,0 +1,36 @@
+{
+  "name": "@gestionale/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Codice condiviso non-UI/non-auth del core (ADR-0027 §D5 passo 3): tassonomia error-code agnostica (fonte unica), tipi/utility pure. Dual-package (ESM+CJS) per consumer Next (web) e NestJS (api).",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

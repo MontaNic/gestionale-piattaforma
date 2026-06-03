@@ -30,6 +30,7 @@ import type { NextFunction, Response } from 'express';
 
 import { DbService } from '../db/db.service';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -46,7 +47,7 @@ export class TenantMiddleware implements NestMiddleware {
 
     const slug = req.header('x-tenant-slug');
     if (!slug || typeof slug !== 'string') {
-      throw new UnauthorizedException('E_AUTH_TENANT_REQUIRED');
+      throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
     }
 
     // Slug lookup pre-tenant: usa system context (bypass RLS placeholder/real).
@@ -61,7 +62,7 @@ export class TenantMiddleware implements NestMiddleware {
     if (!tenant || !tenant.isActive) {
       // Stesso errore per "non esiste" e "inattivo": no info leak su esistenza
       // del tenant. Side-channel timing residuo accettato per F1.
-      throw new UnauthorizedException('E_AUTH_TENANT_REQUIRED');
+      throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
     }
 
     req.tenantId = tenant.id;
