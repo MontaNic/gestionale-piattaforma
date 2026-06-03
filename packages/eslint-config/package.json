@@ -1,0 +1,20 @@
+{
+  "name": "@gestionale/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Configurazione ESLint 9 flat config condivisa del core (ADR-0027 §D5 passo 1). Base agnostica + preset framework, consumata dai workspace tramite il flat config a root.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "dependencies": {
+    "@eslint/js": "^9.17.0",
+    "typescript-eslint": "^8.18.0"
+  },
+  "peerDependencies": {
+    "eslint": "^9.17.0"
+  }
+}
