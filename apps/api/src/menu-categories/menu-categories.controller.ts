@@ -22,6 +22,7 @@ import { RequirePermissions } from '../rbac/decorators/require-permissions.decor
 import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
 import { MenuCategoriesService } from './menu-categories.service';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('menus/:menuId/categories')
 export class MenuCategoriesController {
@@ -30,7 +31,7 @@ export class MenuCategoriesController {
   @Get()
   @RequirePermissions('menu.visualizza')
   async list(@CurrentUser() user: AuthenticatedUser | undefined, @Param('menuId') menuId: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.cats.listByMenu(user.tenantId, menuId);
     return { data };
   }
@@ -42,7 +43,7 @@ export class MenuCategoriesController {
     @Param('menuId') menuId: string,
     @Param('id') id: string,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.cats.getById(user.tenantId, menuId, id);
     return { data };
   }
@@ -55,7 +56,7 @@ export class MenuCategoriesController {
     @Param('menuId') menuId: string,
     @Body() dto: CreateMenuCategoryDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.cats.create(user.tenantId, user.id, menuId, dto);
     return { data };
   }
@@ -68,7 +69,7 @@ export class MenuCategoriesController {
     @Param('id') id: string,
     @Body() dto: UpdateMenuCategoryDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.cats.update(user.tenantId, user.id, menuId, id, dto);
     return { data };
   }
@@ -80,7 +81,7 @@ export class MenuCategoriesController {
     @Param('menuId') menuId: string,
     @Param('id') id: string,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.cats.softDelete(user.tenantId, user.id, menuId, id);
     return { data };
   }

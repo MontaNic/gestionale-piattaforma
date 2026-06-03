@@ -26,6 +26,7 @@ import { RequirePermissions } from '../rbac/decorators/require-permissions.decor
 import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('articles')
 export class ArticlesController {
@@ -38,7 +39,7 @@ export class ArticlesController {
     @Query('categoryId') categoryId?: string,
     @Query('menuId') menuId?: string,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.articles.list(user.tenantId, { categoryId, menuId });
     return { data };
   }
@@ -46,7 +47,7 @@ export class ArticlesController {
   @Get(':id')
   @RequirePermissions('menu.visualizza')
   async getById(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.articles.getById(user.tenantId, id);
     return { data };
   }
@@ -55,7 +56,7 @@ export class ArticlesController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('menu.piatto.crea')
   async create(@CurrentUser() user: AuthenticatedUser | undefined, @Body() dto: CreateArticleDto) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.articles.create(user.tenantId, user.id, dto);
     return { data };
   }
@@ -67,7 +68,7 @@ export class ArticlesController {
     @Param('id') id: string,
     @Body() dto: UpdateArticleDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.articles.update(user.tenantId, user.id, id, dto);
     return { data };
   }
@@ -75,7 +76,7 @@ export class ArticlesController {
   @Delete(':id')
   @RequirePermissions('menu.piatto.modifica')
   async softDelete(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.articles.softDelete(user.tenantId, user.id, id);
     return { data };
   }

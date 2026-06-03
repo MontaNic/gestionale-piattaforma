@@ -21,6 +21,7 @@ import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request
 import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
 import { ArticlePricesService } from './article-prices.service';
 import { SetArticlePriceDto, UpdateArticlePriceDto } from './dto/set-article-price.dto';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('articles/:articleId/prices')
 export class ArticlePricesController {
@@ -32,7 +33,7 @@ export class ArticlePricesController {
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Param('articleId') articleId: string,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.prices.listByArticle(user.tenantId, articleId);
     return { data };
   }
@@ -45,7 +46,7 @@ export class ArticlePricesController {
     @Param('articleId') articleId: string,
     @Body() dto: SetArticlePriceDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.prices.setPrice(user.tenantId, user.id, articleId, dto);
     return { data };
   }
@@ -58,7 +59,7 @@ export class ArticlePricesController {
     @Param('id') id: string,
     @Body() dto: UpdateArticlePriceDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.prices.updatePrice(user.tenantId, user.id, articleId, id, dto);
     return { data };
   }
@@ -70,7 +71,7 @@ export class ArticlePricesController {
     @Param('articleId') articleId: string,
     @Param('id') id: string,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.prices.removePrice(user.tenantId, user.id, articleId, id);
     return { data };
   }

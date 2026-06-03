@@ -20,19 +20,24 @@
 // errorCode. Ack: questo mapping diventa subsumed in TD-AY closure sessione 15.
 // =============================================================================
 
+import { AuthErrorCode, CommonErrorCode } from '@gestionale/shared';
+
 import { ApiError } from './api';
 
 const FALLBACK_MESSAGE = 'Si è verificato un errore. Riprova.';
 const CONNECTION_MESSAGE = 'Errore di connessione al server';
 
 export const ERROR_CODE_MESSAGES: Record<string, string> = {
-  E_AUTH_INVALID_CREDENTIALS: 'Email o password non corrette',
-  E_AUTH_ACCOUNT_LOCKED:
+  // Codici AGNOSTICI: chiavi dalla fonte unica @gestionale/shared (ADR-0027 §D5
+  // passo 3). I messaggi IT restano qui (i18n → packages/i18n, passo 4).
+  [AuthErrorCode.INVALID_CREDENTIALS]: 'Email o password non corrette',
+  [AuthErrorCode.ACCOUNT_LOCKED]:
     'Account temporaneamente bloccato per troppi tentativi falliti. Riprova tra qualche minuto.',
-  E_AUTH_TENANT_REQUIRED: 'Tenant non specificato. Riprova accedendo dal link corretto.',
-  E_AUTH_TENANT_MISMATCH: 'Accesso non autorizzato a questo tenant. Effettua nuovamente il login.',
-  E_AUTH_SESSION_INVALID: 'Sessione non valida. Effettua nuovamente il login.',
-  E_RATE_LIMITED: 'Troppe richieste. Attendi qualche istante e riprova.',
+  [AuthErrorCode.TENANT_REQUIRED]: 'Tenant non specificato. Riprova accedendo dal link corretto.',
+  [AuthErrorCode.TENANT_MISMATCH]:
+    'Accesso non autorizzato a questo tenant. Effettua nuovamente il login.',
+  [AuthErrorCode.SESSION_INVALID]: 'Sessione non valida. Effettua nuovamente il login.',
+  [CommonErrorCode.RATE_LIMITED]: 'Troppe richieste. Attendi qualche istante e riprova.',
 
   // F1 Menu CRUD (sessione 17 ADR-0019)
   E_MENU_NOT_FOUND: 'Menu non trovato.',
@@ -95,8 +100,8 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
 
   // Fallback difensivo: `parseError` srotola `E_VALIDATION` → codice specifico
   // quando `message[0]` è un taxonomy code; se non lo è, resta questo messaggio.
-  E_VALIDATION: 'I dati inseriti non sono validi. Controlla i campi e riprova.',
-  E_UNKNOWN: FALLBACK_MESSAGE,
+  [CommonErrorCode.VALIDATION]: 'I dati inseriti non sono validi. Controlla i campi e riprova.',
+  [CommonErrorCode.UNKNOWN]: FALLBACK_MESSAGE,
 };
 
 export function messageForErrorCode(code: string): string {

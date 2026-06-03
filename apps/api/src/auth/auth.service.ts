@@ -32,7 +32,7 @@ import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { id, runInTenantContext } from '@gestionale/db';
 
-import { AuthErrorCode } from '../common/error-codes';
+import { AuthErrorCode } from '@gestionale/shared';
 import { DbService } from '../db/db.service';
 import { MailService } from '../mail/mail.service';
 import { UsersService } from '../users/users.service';
@@ -112,7 +112,7 @@ export class AuthService {
     throw new HttpException(
       {
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
-        errorCode: 'E_AUTH_ACCOUNT_LOCKED',
+        errorCode: AuthErrorCode.ACCOUNT_LOCKED,
         message: 'Account temporaneamente bloccato per troppi tentativi falliti',
       },
       HttpStatus.TOO_MANY_REQUESTS,
@@ -388,7 +388,7 @@ export class AuthService {
   ): Promise<{ success: true }> {
     const user = await this.users.findById(userId);
     if (!user || !user.isActive || user.tenantId !== tenantId) {
-      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+      throw new UnauthorizedException(AuthErrorCode.INVALID_CREDENTIALS);
     }
 
     // Re-auth con password corrente (decisione 4 D2b)
@@ -401,7 +401,7 @@ export class AuthService {
         meta,
         payload: { reason: 'pin_setup_password_check_failed' },
       });
-      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+      throw new UnauthorizedException(AuthErrorCode.INVALID_CREDENTIALS);
     }
 
     // Pattern check (decisione 2 D2b)
@@ -505,7 +505,7 @@ export class AuthService {
         });
         this.throwAccountLocked();
       }
-      throw new UnauthorizedException('E_AUTH_INVALID_CREDENTIALS');
+      throw new UnauthorizedException(AuthErrorCode.INVALID_CREDENTIALS);
     }
 
     await this.lockout.resetAttempts(lockoutKey);

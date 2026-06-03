@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { CommonErrorCode } from '@gestionale/shared';
 
 // =============================================================================
 // GlobalHttpExceptionFilter — normalizza shape errore HTTP cross-endpoint (TD-AY)
@@ -47,12 +48,12 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
   };
 
   private static readonly STATUS_TO_DEFAULT_ERRORCODE: Record<number, string> = {
-    [HttpStatus.BAD_REQUEST]: 'E_VALIDATION',
+    [HttpStatus.BAD_REQUEST]: CommonErrorCode.VALIDATION,
     [HttpStatus.UNAUTHORIZED]: 'E_UNAUTHORIZED',
     [HttpStatus.FORBIDDEN]: 'E_FORBIDDEN',
     [HttpStatus.NOT_FOUND]: 'E_NOT_FOUND',
     [HttpStatus.CONFLICT]: 'E_CONFLICT',
-    [HttpStatus.TOO_MANY_REQUESTS]: 'E_RATE_LIMITED',
+    [HttpStatus.TOO_MANY_REQUESTS]: CommonErrorCode.RATE_LIMITED,
     [HttpStatus.INTERNAL_SERVER_ERROR]: 'E_INTERNAL',
   };
 
@@ -129,7 +130,7 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
 
       if (status === HttpStatus.BAD_REQUEST && Array.isArray(body.message)) {
         return {
-          errorCode: 'E_VALIDATION',
+          errorCode: CommonErrorCode.VALIDATION,
           message: body.message as string[],
           extras,
         };

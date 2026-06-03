@@ -29,6 +29,7 @@ import { TenantCreate } from '../throttler/decorators/tenant-create.decorator';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import type { CreateTenantResult } from './tenants.service';
 import { TenantsService } from './tenants.service';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('tenants')
 export class TenantsController {
@@ -45,7 +46,7 @@ export class TenantsController {
     if (!user) {
       // JwtAuthGuard globale rifiuta gia' senza token, ma defense in depth:
       // se per qualche bug arriva qui senza user, non procedere.
-      throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+      throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     }
     const result = await this.tenants.createTenant(dto, user.id);
     return { data: result };

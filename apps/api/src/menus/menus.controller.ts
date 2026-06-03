@@ -26,6 +26,7 @@ import { RequirePermissions } from '../rbac/decorators/require-permissions.decor
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { MenusService } from './menus.service';
+import { AuthErrorCode } from '@gestionale/shared';
 
 @Controller('menus')
 export class MenusController {
@@ -34,7 +35,7 @@ export class MenusController {
   @Get()
   @RequirePermissions('menu.visualizza')
   async list(@CurrentUser() user: AuthenticatedUser | undefined) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.menus.list(user.tenantId);
     return { data };
   }
@@ -42,7 +43,7 @@ export class MenusController {
   @Get(':id')
   @RequirePermissions('menu.visualizza')
   async getById(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.menus.getById(user.tenantId, id);
     return { data };
   }
@@ -51,7 +52,7 @@ export class MenusController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('menu.categoria.gestisci')
   async create(@CurrentUser() user: AuthenticatedUser | undefined, @Body() dto: CreateMenuDto) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.menus.create(user.tenantId, user.id, dto);
     return { data };
   }
@@ -63,7 +64,7 @@ export class MenusController {
     @Param('id') id: string,
     @Body() dto: UpdateMenuDto,
   ) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.menus.update(user.tenantId, user.id, id, dto);
     return { data };
   }
@@ -71,7 +72,7 @@ export class MenusController {
   @Delete(':id')
   @RequirePermissions('menu.categoria.gestisci')
   async softDelete(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.menus.softDelete(user.tenantId, user.id, id);
     return { data };
   }

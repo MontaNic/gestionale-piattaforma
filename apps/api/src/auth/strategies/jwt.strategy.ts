@@ -24,6 +24,7 @@ import type {
   AuthenticatedUser,
 } from '../interfaces/authenticated-request.interface';
 import type { JwtPayload } from '../interfaces/jwt-payload.interface';
+import { AuthErrorCode } from '@gestionale/shared';
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -78,7 +79,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       session.expiresAt < new Date() ||
       session.userId !== payload.sub
     ) {
-      throw new UnauthorizedException('E_AUTH_SESSION_INVALID');
+      throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     }
 
     const user = await this.db.prisma.user.findUnique({ where: { id: payload.sub } });

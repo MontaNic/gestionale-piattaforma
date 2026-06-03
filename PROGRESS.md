@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 3 giugno 2026 (estrazione core passo 2 — `packages/ui`, ADR-0027 §D5)
+**Ultimo aggiornamento:** 3 giugno 2026 (estrazione core passo 3 — `packages/shared`, ADR-0027 §D5)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -86,6 +86,38 @@ Secondo passo: design system condiviso. Rischio basso (nessun impatto auth/RLS/d
 **Nota ambiente:** `next start` (build di produzione) crasha qui con `EvalError: Code generation from strings disallowed` nel middleware edge-runtime (next-intl) — quirk ambientale pre-esistente, indipendente da questa PR (il middleware non è toccato). Verifica runtime fatta quindi su `next dev`, supportato.
 
 Prossimo passo estrazione (D5 passo 3): `packages/shared` (error-codes unificati FE/BE con test di parità, tipi/utility comuni).
+
+## [2026-06-03] Estrazione core — passo 3: `packages/shared` (ADR-0027 §D5)
+
+Terzo passo: codice condiviso non-UI/non-auth, in particolare la tassonomia error-code. NON è solo spostamento — c'è unificazione. Rischio basso-medio.
+
+**STOP iniziale — la premessa "due copie duplicate" era inesatta (segnalato prima di agire):** i due file NON erano copie:
+- `apps/api/.../common/error-codes.ts` = `enum` con **2 soli codici** (`E_AUTH_INVALID_CREDENTIALS`, `E_UNKNOWN`); di fatto il BE emetteva i codici come **string literal sparse** (es. `'E_AUTH_SESSION_INVALID'` in ~10 controller).
+- `apps/web/src/lib/error-codes.ts` = **catalogo messaggi** IT (`Record<code→stringa>`, ~60 chiavi) + helper, con dipendenza `ApiError` (FE).
+- La deriva reale era **BE-stringhe-sparse ↔ FE-chiavi**, non file-vs-file.
+
+**Confine applicato (decisione owner: Opzione A — solo codici agnostici):** in `packages/shared` vanno SOLO gli **8 codici agnostici** presenti sia nel catalogo FE sia emessi dal BE: `E_AUTH_{INVALID_CREDENTIALS, ACCOUNT_LOCKED, TENANT_REQUIRED, TENANT_MISMATCH, SESSION_INVALID}`, `E_RATE_LIMITED`, `E_VALIDATION`, `E_UNKNOWN`. **NON** spostati (e segnalati): i codici di **dominio** (`E_MENU_*/E_ARTICLE_*/E_PRICE_LIST_*` → restano nel verticale); gli altri `E_AUTH_*` **auth-interni** (validation/refresh/PIN/RBAC: `E_AUTH_INVALID_REFRESH_TOKEN`, `E_AUTH_PIN_*`, `E_AUTH_NOT_AUTHENTICATED`, validation DTO… → andranno in `packages/auth`, passo 7); i codici **BE-only HTTP-default** del `GlobalHttpExceptionFilter` (`E_UNAUTHORIZED/E_FORBIDDEN/E_NOT_FOUND/E_CONFLICT/E_INTERNAL`, non mappati dal FE → restano literal nel filter); i **messaggi IT** (i18n → `packages/i18n`, passo 4); `lib/types.ts` FE (`LoginResponse/MeResponse…`, contratti auth → `packages/auth-web`).
+
+**Cosa fatto:**
+- [x] Nuovo workspace `@gestionale/shared` **dual-package tsup** (ESM+CJS+dts, mirror di `@gestionale/db`) — consumabile da NestJS (CJS, via dist) e Next (ESM). `src/error-codes.ts` (creato con `git mv` dal vecchio enum BE, storia preservata) espone `AuthErrorCode` + `CommonErrorCode` (enum) + `PLATFORM_ERROR_CODES` + tipo `PlatformErrorCode`.
+- [x] BE wiring: rimosso `apps/api/src/common/error-codes.ts`; **~40 emission site agnostici** in **13 file** (controller/middleware/guard/strategy/filter/service) passati da string literal → enum della fonte unica (runtime identico: il valore enum È la stringa). Sanata l'incoerenza in `auth.service` (usava enum in un punto, literal in altri 3). `+ @gestionale/shared` a `apps/api`.
+- [x] FE wiring: le 8 chiavi agnostiche del catalogo `apps/web/src/lib/error-codes.ts` ora sono **computed key** dalla fonte unica (`[AuthErrorCode.X]`, `[CommonErrorCode.X]`); messaggi IT e chiavi di dominio invariati. `+ @gestionale/shared` a `apps/web`.
+- [x] Test di parità/forma: `packages/shared/src/error-codes.test.ts` (5 test: set atteso, naming `E_*`, no duplicati, **no codici di dominio**, stabilità valori enum). Nuovo vitest project registrato in `vitest.config.mts`.
+
+**Gate ADR-0027 — comportamento INVARIATO (prima → dopo):**
+
+| Gate | Prima | Dopo |
+|---|---|---|
+| `pnpm lint` | exit 0 | exit 0 |
+| `pnpm typecheck` | 5/5 | **7/7** (+`@gestionale/shared` typecheck/build) |
+| `pnpm test` | 104 / 13 file | **109 / 14 file** (95 api + 9 ui + **5 shared**) |
+| `pnpm format:check` | clean | clean |
+| `next build` (apps/web) | ok | ok |
+| Playwright chromium | 14/14 | **14/14 PASS** (incl. `login FAIL wrong password` → `E_AUTH_INVALID_CREDENTIALS` end-to-end, messaggio IT invariato) |
+
+**Dipendenze nuove:** nessuna runtime; solo devDeps di tooling già nel repo (tsup, vitest, typescript) nel nuovo package.
+
+Prossimo passo estrazione (D5 passo 4): `packages/i18n` (solo meccanismo; messaggi per-app con namespacing; +test switch/fallback). Qui confluiranno i messaggi IT del catalogo error-codes.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 
