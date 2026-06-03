@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { applyLocaleGuard } from '@gestionale/i18n/middleware';
+
 // =============================================================================
 // middleware.ts — Multi-tenant slug routing path-based (TD-2 ADR-0012)
 //                  + cookie locale validation (ADR-0018 Sub-DP-A)
@@ -16,10 +18,9 @@ import type { NextRequest } from 'next/server';
 // frontend client legge slug da `useParams()` (App Router) e lo passa nelle
 // API call.
 //
-// Locale (ADR-0018): cookie `NEXT_LOCALE` se invalido viene resettato a
-// `DEFAULT_LOCALE` (defense-in-depth — utente puo' settare valore arbitrario
-// via document.cookie). Locale resolution effettiva avviene server-side in
-// `src/i18n/request.ts` (next-intl getRequestConfig).
+// Locale (ADR-0018): `applyLocaleGuard` (meccanismo `@gestionale/i18n`, ADR-0027
+// §D5 passo 4) resetta il cookie `NEXT_LOCALE` se invalido (defense-in-depth).
+// Locale resolution effettiva avviene server-side in `src/i18n/request.ts`.
 // =============================================================================
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
@@ -38,20 +39,6 @@ const RESERVED_SLUGS = new Set([
   '_next',
   'favicon.ico',
 ]);
-
-const VALID_LOCALES = new Set(['it', 'en']);
-const DEFAULT_LOCALE = 'it';
-
-function applyLocaleGuard(req: NextRequest, response: NextResponse): NextResponse {
-  const raw = req.cookies.get('NEXT_LOCALE')?.value;
-  if (raw && !VALID_LOCALES.has(raw)) {
-    response.cookies.set('NEXT_LOCALE', DEFAULT_LOCALE, {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  }
-  return response;
-}
 
 export function middleware(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
