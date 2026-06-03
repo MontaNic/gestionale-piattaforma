@@ -11,7 +11,7 @@ import { Button } from '@gestionale/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gestionale/ui';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@gestionale/ui';
 import { Input } from '@gestionale/ui';
-import { apiPost, ApiError } from '@/lib/api';
+import { apiPost, ApiError } from '@gestionale/api-client';
 import { setTokens } from '@/lib/auth';
 import { messageForErrorCode } from '@/lib/error-codes';
 import type { LoginResponse } from '@/lib/types';

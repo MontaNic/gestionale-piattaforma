@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 4 — `packages/i18n`, ADR-0027 §D5)
+**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 5a — `packages/api-client`, ADR-0027 §D5 deviazione d'ordine)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -150,6 +150,34 @@ Quarto passo: il **meccanismo** di internazionalizzazione (NON i messaggi). Risc
 > **Nota build-order CI (lezione del passo 3):** i package **dual-package (tsup)** consumati da `apps/api` vanno aggiunti allo step "Build workspace packages" del job `e2e-playwright` in `ci.yml`, perché quel job avvia l'api con `pnpm dev` diretto (fuori da Turbo, quindi `^build` non scatta). Vale già per `db` e `shared`; varrà per `packages/auth` (passo 7). NB: **`packages/i18n` NON è interessato** perché è consumato solo da Next (`transpilePackages`, nessun `dist/`).
 
 Prossimo passo estrazione (D5 passo 5): `packages/auth-web` (FE: AuthContext/AuthGate/middleware/lib auth, coperto da Playwright).
+
+## [2026-06-04] Estrazione core — passo 5a: `packages/api-client` (ADR-0027 §D5, deviazione d'ordine)
+
+**Deviazione dall'ordine ADR-0027 §D5 (decisione owner, registrata qui):** nell'analisi pre-estrazione di auth-web (passo 5) è emerso che `apps/web/src/lib/api.ts` **non è auth-specifico** ma **infrastruttura HTTP trasversale**: il client generico (`apiGet/apiPost/apiPatch/apiDelete` + `ApiError` + `RequestOptions`) è consumato sia dall'auth FE (`AuthContext`, `auth-logout`, `login`) sia dal **dominio** (`menu-api.ts`, pagina `menu/[menuId]`, `error-codes.ts`). Metterlo in `auth-web` accoppierebbe il dominio ad "auth-web"; lasciarlo app-owned impedirebbe al package di consumarlo (un package non importa dal codice dell'app). → **Si estrae prima `packages/api-client` (passo 5a), poi `auth-web` (passo 5b) lo consumerà.** auth-web resta la sessione successiva.
+
+**Confine (nessuna sorpresa oltre a quella sopra):** spostato **solo** `api.ts` (client HTTP). Restano in `apps/web`: lo slug-routing del `middleware.ts` (dominio) + il locale guard (`@gestionale/i18n`) — verificato che **il middleware NON contiene logica auth** (l'auth FE è interamente client-side via AuthContext/AuthGate, coerente col TD-BA). `error-codes.ts` (catalogo messaggi IT + codici dominio) resta contenuto verticale e continua a consumare i codici da `@gestionale/shared`. **TD-1 (token in localStorage) NON toccato** — `api.ts` estratto com'è, comportamento identico.
+
+**Cosa fatto:**
+- [x] Nuovo workspace `@gestionale/api-client` **source export + `transpilePackages`** (mirror di ui/i18n — solo-Next, **nessun `dist/`/tsup**; il source export preserva l'inline di `process.env.NEXT_PUBLIC_API_URL` fatto da Next). `git mv` di `api.ts` → `src/index.ts` (storia preservata). **Zero dipendenze runtime** (solo `fetch`/`process.env`).
+- [x] Wiring **6 import site** ripuntati a `@gestionale/api-client` (era `@/lib/api` o `./api`): `contexts/AuthContext`, `lib/auth-logout`, `lib/error-codes`, `lib/menu-api`, `login/page`, `menu/[menuId]/page`. `+ @gestionale/api-client` a `apps/web`; `next.config.mjs` `transpilePackages` aggiornato.
+- [x] Test (chiude il gap "`api.ts` senza test propri"): `packages/api-client/src/api-client.test.ts` (10 test, `fetch` globale mockato: header tenant/bearer/content-type, 204 No Content, catena `parseError` errorCode → `code` → sintetico `E_RATE_LIMITED`/`E_UNKNOWN` → unwrap `E_VALIDATION`). Nuovo vitest project in `vitest.config.mts`.
+
+**Gate ADR-0027 — comportamento INVARIATO (prima → dopo):**
+
+| Gate | Prima | Dopo |
+|---|---|---|
+| `pnpm lint` | exit 0 | exit 0 |
+| `pnpm typecheck` | 8/8 | **9/9** (+`@gestionale/api-client`) |
+| `pnpm test` | 117 / 15 file | **127 / 16 file** (95 api + 9 ui + 5 shared + 8 i18n + **10 api-client**) |
+| `pnpm format:check` | clean | clean |
+| `next build` (apps/web) | ok | ok (da `.next` pulito; `NEXT_PUBLIC_API_URL` inlinato via transpilePackages) |
+| Playwright chromium | 14/14 | **14/14 PASS** |
+
+**Conferma flussi auth identici (gate critico):** i Playwright auth verdi end-to-end attraverso il client estratto — **login OK** (`apiPost /auth/login` → `setTokens` → dashboard), **login FAIL** (`E_AUTH_INVALID_CREDENTIALS` localizzato via `ApiError`), **logout** (`performLogout` → `apiPost /auth/logout` → clear + redirect), **redirect anonimo** (AuthGate), **shell render** (`apiGet /me` in AuthContext), **cross-tenant isolation**. Nessuna regressione su login/logout/redirect/refresh.
+
+**Dipendenze nuove:** nessuna runtime; solo devDeps di tooling già nel repo (`typescript`, `vitest`) nel nuovo package.
+
+Prossimo passo estrazione (D5 passo 5b): `packages/auth-web` (AuthContext/AuthGate/lib auth/types) che consumerà `@gestionale/api-client`. Il middleware resta in app (slug-routing dominio + locale guard i18n, nessuna logica auth da estrarre).
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 

@@ -1,4 +1,5 @@
-import { apiPost, ApiError } from './api';
+import { apiPost, ApiError } from '@gestionale/api-client';
+
 import { clearTokens, getAccessToken } from './auth';
 
 // =============================================================================

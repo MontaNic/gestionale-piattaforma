@@ -1,0 +1,27 @@
+{
+  "name": "@gestionale/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Client HTTP FE condiviso del core (ADR-0027 §D5 passo 5a): wrapper fetch tipizzato (apiGet/apiPost/apiPatch/apiDelete) + ApiError + RequestOptions, con header X-Tenant-Slug/Authorization e taxonomy errorCode. Infra trasversale (né auth né dominio). Consumato da Next via transpilePackages.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

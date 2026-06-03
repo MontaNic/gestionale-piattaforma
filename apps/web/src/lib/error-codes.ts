@@ -22,7 +22,7 @@
 
 import { AuthErrorCode, CommonErrorCode } from '@gestionale/shared';
 
-import { ApiError } from './api';
+import { ApiError } from '@gestionale/api-client';
 
 const FALLBACK_MESSAGE = 'Si è verificato un errore. Riprova.';
 const CONNECTION_MESSAGE = 'Errore di connessione al server';
