@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { RedisService } from '../redis/redis.service';
+import { RedisService } from '@gestionale/platform';
 
 // =============================================================================
 // LockoutService — Redis sliding window + auto-promotion a lockout (B1 fase 3)

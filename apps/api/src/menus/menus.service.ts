@@ -12,7 +12,7 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { id, type Menu, withTenantContextAtomicTx } from '@gestionale/db';
 
-import { catchUniqueViolation } from '../common/prisma-errors';
+import { catchUniqueViolation } from '@gestionale/platform';
 import { DbService } from '../db/db.service';
 import type { CreateMenuDto } from './dto/create-menu.dto';
 import type { UpdateMenuDto } from './dto/update-menu.dto';

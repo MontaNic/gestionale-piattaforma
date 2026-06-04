@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 5a — `packages/api-client`, ADR-0027 §D5 deviazione d'ordine)
+**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 6 — `packages/platform`, infra BE cross-cutting dual-package; PR aperta)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -214,6 +214,39 @@ Passo 5 vero e proprio: l'**autenticazione frontend client-side**. Rischio basso
 > **Nota build-order CI:** `auth-web` è consumato **solo** da Next (`transpilePackages`, nessun `dist/`) → **NON** richiede lo step "Build workspace packages" del job `e2e-playwright` (come ui/i18n/api-client; vale solo per i dual-package tsup `db`/`shared`/futuro `packages/auth`).
 
 Prossimo passo estrazione (D5 passo 6): `packages/db` (RLS engine, soft-delete, tabelle multi-tenant) — **prerequisito** il test RLS core-only non-superuser (ADR-0026 §D5). Poi passo 7 `packages/auth` (BE, massimo rischio).
+
+> **Rettifica d'ordine (vedi passo 6 sotto):** questa previsione del 5b è stata superata. L'ordine autoritativo resta quello dell'**ADR-0027 §D5**: passo 6 = `packages/platform`, passo 7 = `packages/auth`, passo 8 = `packages/db` (preceduto dal test RLS core-only non-superuser). `packages/db` resta quindi al passo 8, non al 6.
+
+## [2026-06-04] Estrazione core — passo 6: `packages/platform` (ADR-0027 §D5)
+
+Primo package estratto con **codice NestJS + DI** (i 5 precedenti erano front-end o funzionali). Infra backend cross-cutting in `@gestionale/platform`, **dual-package tsup** (ESM+CJS+dts, mirror di `db`/`shared`), consumato da `apps/api` (NestJS/CJS via `dist/`). Rischio applicativo basso (infra senza logica di dominio), ma primo banco di prova della DI sotto tsup → preceduto da una **probe di build** (STOP 0.5) prima di toccare il codice.
+
+**Confine applicato (scope ristretto vs §D5):**
+- **→ `@gestionale/platform`** (15 file, `git mv` storia preservata R100): `redis` (module+service), `mail` (module+service), `throttler` (module + guard `app-throttler` + 3 decorators + 2 utils + spec = 8), `common` (`GlobalHttpExceptionFilter` + `prisma-errors` + spec = 3).
+- **`health` DIFFERITO (deviazione registrata in ADR-0027 Addendum 2026-06-04):** dipende da `@Public` (decorator di `auth`, passo 7) e `DbService` (wrapper in `apps/api/src/db/`, passo 8), entrambi estratti DOPO platform → estrarlo ora invertirebbe il layer (`platform → apps/api/{auth,db}`). È inoltre endpoint terminale (0 consumatori) che *compone* auth+db+redis: concern applicativo, non infra di base. Resta scaffold in `apps/api`; rientro valutato al passo 7.
+- **Dipendenze incrociate (invariate):** `common → @gestionale/{db,shared}` (Prisma + `CommonErrorCode`); `throttler → redis` diventa intra-package. Nessun import di dominio (ristorazione) nei moduli estratti.
+
+**Cosa fatto:**
+- [x] Nuovo workspace `@gestionale/platform` dual-package tsup. Barrel `src/index.ts` espone la public surface; i 3 `*_METADATA` risiedono in `throttler.module.ts` (non nei decorator) → re-export dal file reale.
+- [x] **Convenzione build NestJS-dual (nuova, riusabile al passo 7):** `tsconfig.json` del package dichiara ESPLICITAMENTE `experimentalDecorators` + `emitDecoratorMetadata` (il `tsconfig.base.json` NON li eredita); `tsup.config.ts` elenca i runtime NestJS in `external`. Probe STOP 0.5: verificato nel dist che `design:paramtypes` è emesso coi **tipi reali** (`[ConfigService]`, non `Object`) e che `Test.createTestingModule().compile()` risolve la DI.
+- [x] Consumatori `apps/api` ripuntati a `@gestionale/platform` (**17 file**, incl. un `import()` dinamico in `auth.service.spec`; consolidati i 4 import di `app.module.ts` e i 2 di `auth.controller.ts`). `+ @gestionale/platform` (`workspace:*`) alle deps di `apps/api`.
+- [x] **CI build-order** (`ci.yml`, job `e2e-playwright`): step "Build workspace packages" esteso a `@gestionale/platform` (dual-package tsup consumato da `pnpm dev`, fuori da Turbo — lezione passo 3). Topo-order verificato: `pnpm --filter db --filter shared --filter platform build` compila platform per ultimo, nessuno split necessario.
+
+**Gate ADR-0027 — comportamento INVARIATO (prima → dopo):**
+
+| Gate | Esito |
+|---|---|
+| Build workspace (topo-order db+shared→platform) | ok |
+| `typecheck` (platform + api) | ok |
+| `test` unit | **95/95** (82 api + 13 platform; i 2 spec migrati girano in-package) |
+| `test:e2e` (full AppModule bootstrap, testcontainers Postgres+Redis) | **56 pass + 4 skip**, 10/10 file |
+| Bootstrap DI runtime | nessun `Nest can't resolve dependencies` (verificato via e2e che monta l'intero AppModule) |
+
+**Conferma DI reale (gate critico):** la suite e2e bootstrappa l'intero `AppModule` con i moduli estratti consumati da `dist/` — coperti `td-ad-throttler-redis-down` (fail-open Redis), `auth-login`, `rbac-permissions` (RedisService + AppThrottlerGuard), `tenant-consistency` (RedisService). `health` (intatto) continua a rispondere. Nessuna regressione.
+
+> **Nota build-order CI:** `platform` è il terzo dual-package tsup (dopo `db`/`shared`) che richiede lo step "Build workspace packages" del job `e2e-playwright`. Il futuro `packages/auth` (passo 7) lo erediterà.
+
+Prossimo passo estrazione (D5 passo 7): `packages/auth` (auth+rbac+users+tenancy + i 4 APP_GUARD) — **massimo rischio applicativo** (ordine guard deterministico da ri-verificare; e2e auth/rbac/tenant-consistency verdi costanti). La convenzione build NestJS-dual di questo passo è il riferimento. Resta valida la **nota/rischio sul passo 8** (`packages/db`): scrivere PRIMA il test RLS core-only come `gestionale_app` non-superuser (ADR-0026 §D5), perché gli e2e attuali girano da superuser e non esercitano la RLS a livello DB.
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 

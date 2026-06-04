@@ -1,6 +1,6 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
 
-import { GlobalHttpExceptionFilter } from '../../common/filters/global-http-exception.filter';
+import { GlobalHttpExceptionFilter } from '@gestionale/platform';
 import { AuthErrorCode } from '@gestionale/shared';
 
 // =============================================================================

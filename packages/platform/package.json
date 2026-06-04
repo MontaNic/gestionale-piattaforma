@@ -1,0 +1,52 @@
+{
+  "name": "@gestionale/platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Infra cross-cutting NestJS condivisa (redis, mail, throttler, common) come dual-package ESM+CJS. ADR-0027 §D5 passo 6.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/testing": "^11.1.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.17.0",
+    "@types/nodemailer": "^8.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@gestionale/db": "workspace:*",
+    "@gestionale/shared": "workspace:*",
+    "@nest-lab/throttler-storage-redis": "^1.2.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/throttler": "^6.5.0",
+    "ioredis": "^5.10.1",
+    "nodemailer": "^8.0.7",
+    "reflect-metadata": "^0.2.2"
+  }
+}

@@ -50,6 +50,9 @@ importers:
       '@gestionale/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@gestionale/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
       '@gestionale/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -363,6 +366,61 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@22.19.19)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/platform:
+    dependencies:
+      '@gestionale/db':
+        specifier: workspace:*
+        version: link:../db
+      '@gestionale/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@nest-lab/throttler-storage-redis':
+        specifier: ^1.2.0
+        version: 1.2.0(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(@nestjs/throttler@6.5.0(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(reflect-metadata@0.2.2))(ioredis@5.10.1)(reflect-metadata@0.2.2)
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: ^4.0.4
+        version: 4.0.4(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/throttler':
+        specifier: ^6.5.0
+        version: 6.5.0(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(reflect-metadata@0.2.2)
+      ioredis:
+        specifier: ^5.10.1
+        version: 5.10.1
+      nodemailer:
+        specifier: ^8.0.7
+        version: 8.0.7
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+    devDependencies:
+      '@nestjs/core':
+        specifier: ^11.0.0
+        version: 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.19)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/testing':
+        specifier: ^11.1.19
+        version: 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(@nestjs/platform-express@11.1.19)
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.40
+      '@types/nodemailer':
+        specifier: ^8.0.0
+        version: 8.0.0
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(@swc/core@1.15.33)(jiti@2.6.1)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@20.19.40)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@20.19.40)(typescript@5.9.3))(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/shared:
     devDependencies:
@@ -8866,7 +8924,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 20.19.40
+      '@types/node': 22.19.19
 
   '@types/chai@5.2.3':
     dependencies:
@@ -8875,7 +8933,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 20.19.40
+      '@types/node': 22.19.19
 
   '@types/cookiejar@2.1.5': {}
 
@@ -8908,7 +8966,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.1':
     dependencies:
-      '@types/node': 20.19.40
+      '@types/node': 22.19.19
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -8931,7 +8989,7 @@ snapshots:
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 20.19.40
+      '@types/node': 22.19.19
 
   '@types/methods@1.1.4': {}
 
@@ -8990,12 +9048,12 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 20.19.40
+      '@types/node': 22.19.19
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 20.19.40
+      '@types/node': 22.19.19
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:

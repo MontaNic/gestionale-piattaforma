@@ -10,7 +10,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
-import { GlobalHttpExceptionFilter } from './common/filters/global-http-exception.filter';
+import { GlobalHttpExceptionFilter } from '@gestionale/platform';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);

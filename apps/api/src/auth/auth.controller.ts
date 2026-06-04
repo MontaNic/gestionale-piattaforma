@@ -9,9 +9,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { AuthStrict, LoginPinThrottle } from '@gestionale/platform';
+
 import { CurrentTenant } from '../tenant/decorators/current-tenant.decorator';
-import { AuthStrict } from '../throttler/decorators/auth-strict.decorator';
-import { LoginPinThrottle } from '../throttler/decorators/login-pin.decorator';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
