@@ -67,6 +67,14 @@ RIPRESA PROGETTO — Piattaforma SaaS multi-tenant a verticali (core condiviso)
 - Procedere UN PASSO ALLA VOLTA. Non accorpare più azioni se Nicolò sta seguendo passo-passo; aspettare il suo via prima del passo successivo.
 - Per operazioni delicate (git, merge, comandi server): dare i comandi esatti da incollare e aspettare l'esito prima di proseguire.
 
+**Merge e CI — REGOLA FERMA (mai dare i due comandi insieme)**
+
+- La branch protection server-side NON è disponibile (GitHub Free su repo privato: i ruleset non si applicano), e "Allow auto-merge" senza required check non garantisce nulla. Quindi il guard-rail è SOLO procedurale e dipende da come Claude struttura i comandi.
+- MAI dare `gh pr checks` e `gh pr merge` nello stesso blocco / sulla stessa riga: incollati insieme, il merge parte mentre la CI è ancora "pending" (già successo 2 volte, PR #52 e #54). `gh pr checks` mostra lo stato in quell'istante, NON aspetta.
+- Dare SEMPRE prima, da solo: `gh pr checks <N> --watch` (resta in ascolto fino a fine check).
+- Solo DOPO che Nicolò conferma "verde", dare in un messaggio/comando SEPARATO: `gh pr merge <N> --squash --delete-branch`.
+- Non usare `--auto` come se fosse un guard-rail: su questo repo non lo è.
+
 **Verifica, non fiducia (vale soprattutto verso Claude Code)**
 
 - Le CONCLUSIONI di Code vanno verificate, non archiviate come vere. Esempio reale: Code ha riportato "la build di produzione crasha (next-intl), pre-esistente" → verificato, era FALSO: ambiente sporco (porte occupate). Chiedere sempre la prova quando una diagnosi ha conseguenze.
