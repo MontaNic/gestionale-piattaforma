@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription } from '@gestionale/ui';
 import { Button } from '@gestionale/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gestionale/ui';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@gestionale/auth-web';
 
 // =============================================================================
 // dashboard/page.tsx — Welcome page post-login (sotto (authenticated)/, STOP 6)

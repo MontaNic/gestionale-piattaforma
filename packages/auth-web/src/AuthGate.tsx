@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from './AuthContext';
 
 // =============================================================================
 // AuthGate — client guard redirect login (ADR-0018 §AuthGate)

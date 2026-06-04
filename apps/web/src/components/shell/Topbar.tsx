@@ -19,7 +19,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@gestionale/ui';
 import { locales, type Locale } from '@gestionale/i18n/config';
 import { setLocale } from '@gestionale/i18n/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@gestionale/auth-web';
 
 import { Sidebar } from './Sidebar';
 

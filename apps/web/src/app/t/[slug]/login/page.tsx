@@ -12,9 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gest
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@gestionale/ui';
 import { Input } from '@gestionale/ui';
 import { apiPost, ApiError } from '@gestionale/api-client';
-import { setTokens } from '@/lib/auth';
+import { setTokens, type LoginResponse } from '@gestionale/auth-web';
 import { messageForErrorCode } from '@/lib/error-codes';
-import type { LoginResponse } from '@/lib/types';
 
 // TD-2 ADR-0012 resolution: slug runtime da URL (`/t/<slug>/login`) via
 // useParams(). Middleware (src/middleware.ts) ha gia' validato il formato

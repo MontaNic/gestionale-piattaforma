@@ -11,6 +11,9 @@ const config: Config = {
     // usate dentro i componenti estratti vanno scansionate qui, altrimenti
     // Tailwind le purga e la resa cambia.
     '../../packages/ui/src/**/*.{js,ts,jsx,tsx}',
+    // Auth FE condiviso (@gestionale/auth-web, passo 5b): AuthGate rende lo
+    // spinner di loading con classi Tailwind — stessa esigenza di scansione.
+    '../../packages/auth-web/src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     container: {

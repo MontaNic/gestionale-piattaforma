@@ -2,7 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import type { ReactNode } from 'react';
 
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider } from '@gestionale/auth-web';
 
 // =============================================================================
 // app/t/[slug]/layout.tsx — Tenant-scoped providers (ADR-0018 Sub-DP-C)

@@ -10,7 +10,7 @@ import { MenuForm } from '@/components/menu/MenuForm';
 import { Alert, AlertDescription } from '@gestionale/ui';
 import { Button } from '@gestionale/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gestionale/ui';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@gestionale/auth-web';
 import { messageForError } from '@/lib/error-codes';
 import { createMenu, deleteMenu, listMenus } from '@/lib/menu-api';
 import type { CreateMenuInput, Menu } from '@/lib/menu-types';

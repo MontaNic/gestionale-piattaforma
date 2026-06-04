@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@gestionale/api-client": "workspace:*",
+    "@gestionale/auth-web": "workspace:*",
     "@gestionale/db": "workspace:*",
     "@gestionale/i18n": "workspace:*",
     "@gestionale/shared": "workspace:*",
