@@ -34,7 +34,7 @@ import { id, runInTenantContext } from '@gestionale/db';
 
 import { AuthErrorCode } from '@gestionale/shared';
 import { DbService } from '../db/db.service';
-import { MailService } from '../mail/mail.service';
+import { MailService } from '@gestionale/platform';
 import { UsersService } from '../users/users.service';
 import type { AuthErrorResponse } from './dto/auth-error-response.dto';
 import type { AuthTokensPayload } from './dto/auth-response.dto';

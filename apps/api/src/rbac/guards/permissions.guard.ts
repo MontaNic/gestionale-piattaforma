@@ -43,7 +43,7 @@ import type { Request } from 'express';
 
 import type { AuthenticatedUser } from '../../auth/interfaces/authenticated-request.interface';
 import { DbService } from '../../db/db.service';
-import { RedisService } from '../../redis/redis.service';
+import { RedisService } from '@gestionale/platform';
 import { UsersService } from '../../users/users.service';
 import {
   PERMISSIONS_METADATA_KEY,

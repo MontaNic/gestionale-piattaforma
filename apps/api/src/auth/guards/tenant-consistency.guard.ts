@@ -58,7 +58,7 @@ import { withSystemContext } from '@gestionale/db';
 import type { Request } from 'express';
 
 import { DbService } from '../../db/db.service';
-import { RedisService } from '../../redis/redis.service';
+import { RedisService } from '@gestionale/platform';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { AuthErrorCode } from '@gestionale/shared';
 

@@ -1,7 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RedisService } from '../redis/redis.service';
+import type { RedisService } from '@gestionale/platform';
 import { LockoutService } from './lockout.service';
 
 // =============================================================================

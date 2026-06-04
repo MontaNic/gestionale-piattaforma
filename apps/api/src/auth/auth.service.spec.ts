@@ -174,7 +174,7 @@ describe('AuthService', () => {
       users as unknown as UsersService,
       jwt as unknown as JwtService,
       lockout as unknown as import('./lockout.service').LockoutService,
-      mail as unknown as import('../mail/mail.service').MailService,
+      mail as unknown as import('@gestionale/platform').MailService,
     );
 
     vi.mocked(argon2.verify).mockReset();

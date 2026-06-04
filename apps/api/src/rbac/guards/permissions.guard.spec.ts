@@ -23,7 +23,7 @@ import { Reflector } from '@nestjs/core';
 import { describe, expect, it, vi, type Mocked } from 'vitest';
 
 import type { DbService } from '../../db/db.service';
-import type { RedisService } from '../../redis/redis.service';
+import type { RedisService } from '@gestionale/platform';
 import type { UsersService } from '../../users/users.service';
 import type { PermissionsMetadata } from '../interfaces/permissions-metadata.interface';
 import { PermissionsGuard } from './permissions.guard';

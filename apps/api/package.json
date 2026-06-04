@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@gestionale/db": "workspace:*",
+    "@gestionale/platform": "workspace:*",
     "@gestionale/shared": "workspace:*",
     "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@nestjs/common": "^11.0.0",

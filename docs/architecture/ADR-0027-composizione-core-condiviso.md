@@ -56,6 +56,7 @@ Ogni passo = feature branch + PR squash + baseline test verde come gate + un ADR
 4. `packages/i18n` — solo meccanismo; messaggi per-app con namespacing. Aggiungere test switch/fallback.
 5. `packages/auth-web` (FE) — AuthContext/AuthGate/middleware/lib auth. Coperto da Playwright.
 6. `packages/platform` (BE infra) — redis/mail/throttler/health/common.
+   > Nota esecuzione: scope ristretto a {redis,mail,throttler,common}; health differito — cfr. Addendum 2026-06-04.
 7. `packages/auth` (BE) — auth+rbac+users+tenancy + i 4 APP_GUARD. **Massimo rischio applicativo:** ordine guard ri-verificato a ogni passo; e2e auth/rbac/tenant-consistency verdi costanti.
 8. `packages/db` — separazione enum/seed core vs dominio + introduzione indirezione `getClientForTenant` (fase 1, ADR-0026 §D3). **Massimo rischio dati:** preceduto dal test RLS core-only come non-superuser (D4).
 9. Riframe del residuo ristorazione a scaffold (naming per D3).
@@ -81,3 +82,35 @@ Ogni passo = feature branch + PR squash + baseline test verde come gate + un ADR
 - [ ] Definire l'interfaccia `tenancy ↔ db` (ADR-0026 §D4) prima degli step 7-8.
 - [ ] Scrivere il test RLS core-only come non-superuser (prerequisito step 8).
 - [ ] Procedere all'estrazione seguendo D5, un package per PR, test verdi come gate.
+
+---
+
+## Addendum 2026-06-04 — Passo 6 (packages/platform): note di esecuzione
+
+### health differito (deviazione da §D5 passo 6)
+
+§D5 elencava `redis/mail/throttler/health/common` nel passo 6. In fase di estrazione
+`health` è risultato dipendere da due simboli NON ancora estratti:
+
+- `@Public` (decorator di `auth`, passo 7)
+- `DbService` (wrapper NestJS in `apps/api/src/db/`, passo 8)
+  Estrarlo ora introdurrebbe un riferimento all'indietro `packages/platform → apps/api/src/{auth,db}`
+  (inversione di layer). `health` è inoltre endpoint terminale (0 consumatori) che _compone_
+  auth+db+redis: più concern applicativo che infra di base. Decisione: `health` resta scaffold in
+  `apps/api`; rientro valutato al passo 7 (quando `@Public` sarà in `packages/auth`) o lasciato
+  app-level. **Scope passo 6 effettivo = `{redis, mail, throttler, common}`.**
+
+### Convenzione build package NestJS dual (verificata empiricamente — probe STOP 0.5)
+
+Primo package estratto con codice NestJS + DI (i precedenti erano front-end o funzionali).
+La DI NestJS risolve i costruttori via metadata `design:paramtypes`, che esbuild (motore di tsup)
+NON emette di default. La probe ha verificato che il dual-package tsup regge la DI **a condizione che**:
+
+1. il `tsconfig.json` del package dichiari ESPLICITAMENTE `experimentalDecorators: true` +
+   `emitDecoratorMetadata: true` — il `tsconfig.base.json` NON li eredita (usa `module: ESNext`
+   per i package non-NestJS; solo `apps/api/tsconfig.json` li attiva);
+2. `tsup.config.ts` elenchi i runtime NestJS in `external` (`@nestjs/*`, `ioredis`, `nodemailer`,
+   `reflect-metadata`, ...) per non bundlarli e preservare l'identità dei provider.
+   Con i due flag attivi tsup/esbuild emette `design:paramtypes` con i tipi reali (verificato nel
+   dist: `[ConfigService]`, non `Object`). **Convenzione da riusare per i prossimi package NestJS
+   (passo 7 `auth`).**
