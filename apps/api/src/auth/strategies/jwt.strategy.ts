@@ -13,12 +13,11 @@
 // attaccante che forge JWT con tenantId diverso vede 0 sessions -> 401.
 // =============================================================================
 
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { runInTenantContext } from '@gestionale/db';
+import { prisma, runInTenantContext } from '@gestionale/db';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { DbService } from '../../db/db.service';
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,
@@ -36,7 +35,7 @@ function getJwtSecret(): string {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(@Inject(DbService) private readonly db: DbService) {
+  constructor() {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -69,7 +68,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     req: AuthenticatedRequest,
     payload: JwtPayload,
   ): Promise<AuthenticatedUser> {
-    const session = await this.db.prisma.session.findUnique({
+    const session = await prisma.session.findUnique({
       where: { id: payload.sessionId },
     });
 
@@ -82,13 +81,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     }
 
-    const user = await this.db.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive || user.tenantId !== payload.tenantId) {
       throw new UnauthorizedException('E_AUTH_USER_INVALID');
     }
 
     // Update last_seen_at su ogni request (cheap, best-effort)
-    void this.db.prisma.session
+    void prisma.session
       .update({ where: { id: session.id }, data: { lastSeenAt: new Date() } })
       .catch(() => {
         /* silent: lastSeenAt e' best-effort, non blocchiamo auth */
