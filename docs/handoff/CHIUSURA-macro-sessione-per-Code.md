@@ -34,18 +34,47 @@ Regole attive:
 ## Blocco di chiusura sessione (da far scrivere a Code, o scrivere tu, a fine sessione)
 
 ```
-CHIUSURA SESSIONE — [data]
+CHIUSURA SESSIONE — 2026-06-04
 
-- Passo affrontato: [....]
-- Cosa fatto: [package creato, file spostati, test aggiunti...]
-- PR: #[numero] — stato: [aperta / mergiata]
-- Gate: lint [..] / typecheck [..] / test [..] / Playwright [..] / next build [..]
-- Decisioni prese in sessione: [....]
-- Sorprese / scoperte: [....]   ← anche le stime sbagliate, dichiarate
-- Tech-debt o note registrate: [....]
-- Checkpoint: [commit/tag]   PROGRESS aggiornato: [sì/no]
-- PROSSIMO PASSO: [....] con criteri di completamento: [....]
-- Cosa serve da Nicolò prima di proseguire: [....]
+- Passo affrontato: estrazione core passo 5 (5a packages/api-client + 5b packages/auth-web, ADR-0027 §D5)
+- Cosa fatto: estratti 2 package — api-client (client HTTP generico: apiGet/apiPost/apiPatch/
+  apiDelete + ApiError + RequestOptions) e auth-web (AuthContext/AuthGate/auth/auth-logout/types).
+  Consumer ripuntati ai package; test aggiunti (10 api-client + 12 auth-web). Installato gh CLI
+  sul server (PR ora apribili da terminale).
+- PR: #50 (api-client) MERGED @ b93aa9e · #51 (docs/handoff templates) MERGED @ 32f3cb9 ·
+  #52 (auth-web) MERGED @ 9a2198b
+- Gate ultima PR (#52): lint 0 / typecheck 10/10 / test 139 in 18 file / Playwright chromium 14/14 /
+  next build (da .next pulito) ok
+- Decisioni prese in sessione:
+  · api.ts è infra HTTP condivisa (consumata anche dal dominio) → estratta come packages/api-client
+    in un passo 5a separato (deviazione d'ordine rispetto ad ADR-0027 §D5, annotata in PROGRESS),
+    così auth-web la consuma senza accoppiare il dominio ad "auth-web".
+  · auth-web dipende SOLO da @gestionale/api-client (+ peerDeps react/react-dom/next), NON da
+    @gestionale/shared: i 5 file non importano error-codes (usano ApiError da api-client).
+  · il path /t/<slug> resta dentro auth-web come convenzione di routing della piattaforma (TD-2).
+- Sorprese / scoperte:
+  · middleware.ts NON contiene logica auth (l'auth FE è interamente client-side) → resta in apps/web
+    (slug-routing dominio + locale guard i18n), niente da estrarne.
+  · grafo dipendenze di auth-web più pulito dell'atteso: nessuna dipendenza da shared (smentita
+    l'ipotesi iniziale del prompt che prevedeva il consumo di error-codes da shared).
+- Tech-debt o note registrate:
+  · nota di parametrizzazione futura: lo schema URL /t/<slug>/login assunto da AuthContext/AuthGate
+    è da parametrizzare al 2° verticale con schema diverso (registrata in PROGRESS + barrel del package,
+    NON è un task ora).
+  · TD-1 (token in localStorage) non toccato: estratto com'è, comportamento identico.
+  · lezione gh pr merge --auto: mergiare solo a CI verde, evitare il merge su check pending
+    (come capitato con #52).
+- Checkpoint: main @ 9a2198b   PROGRESS aggiornato: sì (sezione passo 5b + nota parametrizzazione)
+- PROSSIMO PASSO: passo 6 — packages/platform (BE infra: redis/mail/throttler/health/common).
+  Criteri di completamento: package estratto, gate verde costante, comportamento backend INVARIATO.
+  ⚠️ Da qui inizia il BACKEND: rientra il build-order CI — i package dual-package (tsup) consumati
+     da apps/api vanno aggiunti allo step "Build workspace packages" del job e2e-playwright in
+     ci.yml (gira fuori da Turbo, quindi ^build non scatta). NB: api-client/auth-web/ui/i18n NON
+     erano interessati perché consumati solo da Next via transpilePackages.
+- PROMEMORIA passo 8 (packages/db): scrivere il test RLS core-only come gestionale_app NON-superuser
+  PRIMA di toccare packages/db (ADR-0026 §D5: gli e2e attuali girano da superuser e quindi non
+  esercitano la RLS a livello DB).
+- Cosa serve da Nicolò prima di proseguire: conferma avvio passo 6 in una nuova sessione.
 ```
 
 ---
