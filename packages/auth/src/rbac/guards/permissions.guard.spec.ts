@@ -19,7 +19,7 @@
 
 import { type ExecutionContext, ForbiddenException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
-import { Reflector } from '@nestjs/core';
+import type { Reflector } from '@nestjs/core';
 import { describe, expect, it, vi, type Mocked } from 'vitest';
 
 import type { RedisService } from '@gestionale/platform';

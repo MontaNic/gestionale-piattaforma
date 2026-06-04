@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 
-import { Public } from '../auth/decorators/public.decorator';
+import { Public } from '@gestionale/auth';
 import type { HealthDto } from './health.dto';
 import { HealthService } from './health.service';
 

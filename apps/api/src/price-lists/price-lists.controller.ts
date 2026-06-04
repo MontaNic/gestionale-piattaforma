@@ -16,9 +16,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
-import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@gestionale/auth';
 import { CreatePriceListDto } from './dto/create-price-list.dto';
 import { UpdatePriceListDto } from './dto/update-price-list.dto';
 import { PriceListsService } from './price-lists.service';

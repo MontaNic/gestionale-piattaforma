@@ -7,25 +7,27 @@ import {
   MailModule,
   RedisModule,
 } from '@gestionale/platform';
+import {
+  AuthModule,
+  JwtAuthGuard,
+  PermissionsGuard,
+  RbacModule,
+  TenantConsistencyGuard,
+  TenantContextInterceptor,
+  TenantMiddleware,
+  TenantModule,
+  TenantsModule,
+  UsersModule,
+} from '@gestionale/auth';
 
 import { AppController } from './app.controller';
 import { ArticlesModule } from './articles/articles.module';
-import { AuthModule } from './auth/auth.module';
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { TenantConsistencyGuard } from './auth/guards/tenant-consistency.guard';
-import { TenantContextInterceptor } from './context/tenant-context.interceptor';
 import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { MenuCategoriesModule } from './menu-categories/menu-categories.module';
 import { MenusModule } from './menus/menus.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
-import { PermissionsGuard } from './rbac/guards/permissions.guard';
-import { RbacModule } from './rbac/rbac.module';
-import { TenantMiddleware } from './tenant/tenant.middleware';
-import { TenantModule } from './tenant/tenant.module';
-import { TenantsModule } from './tenants/tenants.module';
-import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [

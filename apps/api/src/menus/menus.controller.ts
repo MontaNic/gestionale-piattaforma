@@ -20,9 +20,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
-import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@gestionale/auth';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { MenusService } from './menus.service';

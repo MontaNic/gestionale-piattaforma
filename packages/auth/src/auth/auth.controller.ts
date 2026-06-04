@@ -16,10 +16,10 @@ import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import type { AuthTokensPayload } from './dto/auth-response.dto';
-import { LoginDto } from './dto/login.dto';
-import { LoginPinDto } from './dto/login-pin.dto';
-import { PinSetupDto } from './dto/pin-setup.dto';
-import { RefreshDto } from './dto/refresh.dto';
+import type { LoginDto } from './dto/login.dto';
+import type { LoginPinDto } from './dto/login-pin.dto';
+import type { PinSetupDto } from './dto/pin-setup.dto';
+import type { RefreshDto } from './dto/refresh.dto';
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,

@@ -58,6 +58,7 @@ Ogni passo = feature branch + PR squash + baseline test verde come gate + un ADR
 6. `packages/platform` (BE infra) — redis/mail/throttler/health/common.
    > Nota esecuzione: scope ristretto a {redis,mail,throttler,common}; health differito — cfr. Addendum 2026-06-04.
 7. `packages/auth` (BE) — auth+rbac+users+tenancy + i 4 APP_GUARD. **Massimo rischio applicativo:** ordine guard ri-verificato a ogni passo; e2e auth/rbac/tenant-consistency verdi costanti.
+   > Nota esecuzione: eseguito in 7a (disaccoppia DbService) + 7b (estrazione). 39 file, health differito DP-A — cfr. Addendum 2026-06-04 (passo 7).
 8. `packages/db` — separazione enum/seed core vs dominio + introduzione indirezione `getClientForTenant` (fase 1, ADR-0026 §D3). **Massimo rischio dati:** preceduto dal test RLS core-only come non-superuser (D4).
 9. Riframe del residuo ristorazione a scaffold (naming per D3).
 
@@ -114,3 +115,44 @@ NON emette di default. La probe ha verificato che il dual-package tsup regge la 
    Con i due flag attivi tsup/esbuild emette `design:paramtypes` con i tipi reali (verificato nel
    dist: `[ConfigService]`, non `Object`). **Convenzione da riusare per i prossimi package NestJS
    (passo 7 `auth`).**
+
+---
+
+## Addendum 2026-06-04 — Passo 7 (packages/auth): note di esecuzione
+
+### Scomposizione 7a + 7b
+
+Il passo 7 è stato eseguito in due PR per separare il rischioso dal meccanico:
+
+- **7a** (#58, refactor): i moduli auth iniettavano il wrapper locale `DbService`
+  (`apps/api/src/db/`, estratto solo al passo 8) → back-ref bloccante per l'estrazione.
+  Disaccoppiati 7 file usando direttamente il singleton `prisma` di `@gestionale/db`
+  (loro fonte già esistente per le funzioni RLS). `DbService` invariato, ancora iniettabile
+  per i consumatori fuori scope (`health` + 5 service di dominio): dipendenza
+  `apps/api → apps/api` valida fino al passo 8. Anti-astrazione (§F1): uso del singleton
+  concreto già condiviso, nessuna porta/interfaccia per un wrapper di ~12 righe.
+- **7b** (estrazione): `git mv` di 39 file (auth+rbac+users+tenants+tenant+context) in
+  `@gestionale/auth`, dual-package tsup. Barrel a 17 simboli (superficie consumata).
+
+### Wiring multi-tenant sicuro (resta nello scaffold)
+
+La registrazione `APP_INTERCEPTOR` (`TenantContextInterceptor`) + i 4 `APP_GUARD` in ordine
+deterministico (`AppThrottlerGuard`[platform] → `JwtAuthGuard` → `TenantConsistencyGuard` →
+`PermissionsGuard`) e `configure()/consumer.apply(TenantMiddleware).forRoutes(...)` restano in
+`app.module.ts`. L'estrazione ha cambiato SOLO i path d'import dei simboli; ordine e logica
+byte-identici (cfr. ADR-0017 / Discovery #36 sull'ordine guard). Validato e2e: la catena guard
+opera nell'ordine reale (auth → tenant-consistency → permissions; throttler fail-open).
+
+### health differito (DP-health = A)
+
+`health` dipende da `@Public` (risolto: ora `@gestionale/auth`) e ancora da `DbService` locale
+(passo 8). Rientro pieno impossibile senza ri-introdurre il back-ref appena rimosso. Decisione:
+`health` resta scaffold in `apps/api`, importa `@Public` da `@gestionale/auth`; rientro pieno
+valutato al passo 8/9. Coerente con la linea "non re-introdurre back-ref per anticipare rientri".
+
+### Build
+
+Profilo NestJS-dual del passo 6 riusato senza probe (convenzione DI già validata): tsconfig con
+`experimentalDecorators`+`emitDecoratorMetadata`, tsup `external` esteso (`@nestjs/jwt`,
+`@nestjs/passport`, `passport-jwt`, `argon2`, `class-validator`, `rxjs`, `@gestionale/platform`).
+CI: step build workspace esteso a `--filter @gestionale/auth` (topo-order ok, nessuno split).

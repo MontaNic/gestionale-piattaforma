@@ -16,9 +16,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
-import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@gestionale/auth';
 import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
 import { MenuCategoriesService } from './menu-categories.service';
