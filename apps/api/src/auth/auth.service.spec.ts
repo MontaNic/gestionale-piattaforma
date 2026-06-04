@@ -21,7 +21,6 @@
 import type { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DbService } from '../db/db.service';
 import type { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 
@@ -35,13 +34,24 @@ vi.mock('argon2', () => ({
   },
 }));
 
-// Mock @gestionale/db module-level. AuthService importa solo `id()`; DbService
-// importa `prisma` (singleton) ma nei test usiamo `useValue` con mock manuale,
-// quindi `prisma` esportato qui non viene mai chiamato — basta esista perche'
-// l'import statico di DbService non lanci ReferenceError al module load.
+// Mock @gestionale/db module-level. AuthService usa `id()`, gli helper ALS e il
+// singleton `prisma` (post sub-7a: accesso diretto, non piu' via DbService).
+// `prisma` e' un mock hoisted di cui i test controllano session/auditLog.
+const { mockPrisma } = vi.hoisted(() => ({
+  mockPrisma: {
+    session: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    auditLog: { create: vi.fn() },
+  },
+}));
+
 vi.mock('@gestionale/db', () => ({
   id: vi.fn(() => '00000000-0000-7000-8000-000000000001'),
-  prisma: {},
+  prisma: mockPrisma,
   uuidv7: vi.fn(() => '00000000-0000-7000-8000-000000000001'),
   createPrismaClient: vi.fn(),
   // RLS helpers (D3a): AuthService.refresh wrappa il flusso in runInTenantContext.
@@ -109,15 +119,7 @@ describe('AuthService', () => {
     findAllWithPinByTenant: ReturnType<typeof vi.fn>;
     setPinHash: ReturnType<typeof vi.fn>;
   };
-  let prisma: {
-    session: {
-      create: ReturnType<typeof vi.fn>;
-      findUnique: ReturnType<typeof vi.fn>;
-      update: ReturnType<typeof vi.fn>;
-      updateMany: ReturnType<typeof vi.fn>;
-    };
-    auditLog: { create: ReturnType<typeof vi.fn> };
-  };
+  const prisma = mockPrisma;
   let jwt: { signAsync: ReturnType<typeof vi.fn>; verifyAsync: ReturnType<typeof vi.fn> };
   let lockout: {
     checkLockout: ReturnType<typeof vi.fn>;
@@ -138,15 +140,11 @@ describe('AuthService', () => {
       findAllWithPinByTenant: vi.fn().mockResolvedValue([]),
       setPinHash: vi.fn().mockResolvedValue(undefined),
     };
-    prisma = {
-      session: {
-        create: vi.fn().mockResolvedValue(baseSession),
-        findUnique: vi.fn(),
-        update: vi.fn().mockResolvedValue(baseSession),
-        updateMany: vi.fn(),
-      },
-      auditLog: { create: vi.fn().mockResolvedValue(undefined) },
-    };
+    prisma.session.create.mockReset().mockResolvedValue(baseSession);
+    prisma.session.findUnique.mockReset();
+    prisma.session.update.mockReset().mockResolvedValue(baseSession);
+    prisma.session.updateMany.mockReset();
+    prisma.auditLog.create.mockReset().mockResolvedValue(undefined);
     jwt = {
       signAsync: vi.fn().mockResolvedValue('eyJ.mocked.token'),
       verifyAsync: vi.fn(),
@@ -170,7 +168,6 @@ describe('AuthService', () => {
     // Manual instantiation: cast dei mock al tipo dei collaboratori reali.
     // Bypass del DI container Nest (vedi nota sopra su emitDecoratorMetadata).
     auth = new AuthService(
-      { prisma } as unknown as DbService,
       users as unknown as UsersService,
       jwt as unknown as JwtService,
       lockout as unknown as import('./lockout.service').LockoutService,

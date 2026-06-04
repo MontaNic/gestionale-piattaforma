@@ -30,10 +30,9 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
-import { id, runInTenantContext } from '@gestionale/db';
+import { id, prisma, runInTenantContext } from '@gestionale/db';
 
 import { AuthErrorCode } from '@gestionale/shared';
-import { DbService } from '../db/db.service';
 import { MailService } from '@gestionale/platform';
 import { UsersService } from '../users/users.service';
 import type { AuthErrorResponse } from './dto/auth-error-response.dto';
@@ -76,7 +75,6 @@ export class AuthService {
   // "Cannot read properties of undefined (reading 'checkLockout')". Pattern
   // @Inject mantenuto come defensive (production-safe, zero impatto runtime).
   constructor(
-    @Inject(DbService) private readonly db: DbService,
     @Inject(UsersService) private readonly users: UsersService,
     @Inject(JwtService) private readonly jwt: JwtService,
     @Inject(LockoutService) private readonly lockout: LockoutService,
@@ -278,7 +276,7 @@ export class AuthService {
     payload: JwtPayload,
     meta: { ip?: string; userAgent?: string },
   ): Promise<AuthTokensPayload> {
-    const session = await this.db.prisma.session.findUnique({
+    const session = await prisma.session.findUnique({
       where: { id: payload.sessionId },
     });
 
@@ -304,7 +302,7 @@ export class AuthService {
     // garantire la security action anche se mail fail (sendSafe fail-open
     // interno comunque, ma defensive).
     if (!session.isActive) {
-      const revoked = await this.db.prisma.session.updateMany({
+      const revoked = await prisma.session.updateMany({
         where: { userId: session.userId, isActive: true },
         data: { isActive: false },
       });
@@ -343,7 +341,7 @@ export class AuthService {
     }
 
     // Rotation normale (D2a flow): disattiva session corrente + crea nuova.
-    await this.db.prisma.session.update({
+    await prisma.session.update({
       where: { id: session.id },
       data: { isActive: false },
     });
@@ -531,7 +529,7 @@ export class AuthService {
   // LOGOUT — invalida session corrente
   // ---------------------------------------------------------------------------
   async logout(sessionId: string, userId: string, tenantId: string): Promise<void> {
-    await this.db.prisma.session.update({
+    await prisma.session.update({
       where: { id: sessionId },
       data: { isActive: false },
     });
@@ -577,7 +575,7 @@ export class AuthService {
 
     const refreshTokenHash = await argon2.hash(refreshToken, { type: argon2.argon2id });
 
-    await this.db.prisma.session.create({
+    await prisma.session.create({
       data: {
         id: sessionId,
         userId,
@@ -618,7 +616,7 @@ export class AuthService {
     payload: Record<string, unknown>;
   }): Promise<void> {
     try {
-      await this.db.prisma.auditLog.create({
+      await prisma.auditLog.create({
         data: {
           id: id(),
           tenantId: input.tenantId,

@@ -38,11 +38,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { id, runInTenantContext } from '@gestionale/db';
+import { id, prisma, runInTenantContext } from '@gestionale/db';
 import type { Request } from 'express';
 
 import type { AuthenticatedUser } from '../../auth/interfaces/authenticated-request.interface';
-import { DbService } from '../../db/db.service';
 import { RedisService } from '@gestionale/platform';
 import { UsersService } from '../../users/users.service';
 import {
@@ -63,7 +62,6 @@ export class PermissionsGuard implements CanActivate {
     @Inject(UsersService) private readonly usersService: UsersService,
     @Inject(RedisService) private readonly redisService: RedisService,
     @Inject(ConfigService) private readonly configService: ConfigService,
-    @Inject(DbService) private readonly db: DbService,
   ) {
     const ttl = parseInt(this.configService.get<string>('RBAC_CACHE_TTL_S') ?? '', 10);
     this.cacheTtlS = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_CACHE_TTL_S;
@@ -234,7 +232,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     try {
-      await this.db.prisma.auditLog.create({
+      await prisma.auditLog.create({
         data: {
           id: id(),
           tenantId,

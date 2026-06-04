@@ -9,15 +9,23 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DbService } from '../db/db.service';
 import { UsersService } from './users.service';
 
-// Mock @gestionale/db: hasPermission non chiama runInTenantContext/withSystemContext
-// direttamente, ma il client Prisma e' iniettato via DbService -> i nostri mock
-// sostituiscono findFirst, non serve toccare gli helpers ALS.
+// Mock @gestionale/db: UsersService usa il singleton `prisma` importato dal
+// package (non piu' via DbService). Sostituiamo `prisma` con un mock hoisted di
+// cui controlliamo findFirst; gli helper ALS non sono chiamati da hasPermission
+// ma restano esportati per coerenza del module mock.
+const { mockPrisma } = vi.hoisted(() => ({
+  mockPrisma: {
+    user: {
+      findFirst: vi.fn(),
+    },
+  },
+}));
+
 vi.mock('@gestionale/db', () => ({
   id: vi.fn(() => '00000000-0000-7000-8000-000000000001'),
-  prisma: {},
+  prisma: mockPrisma,
   uuidv7: vi.fn(),
   createPrismaClient: vi.fn(),
   runInTenantContext: vi.fn(<T>(_ctx: unknown, fn: () => Promise<T> | T) => Promise.resolve(fn())),
@@ -30,24 +38,13 @@ vi.mock('@gestionale/db', () => ({
 const USER_WITH_PERM = '00000000-0000-7000-8000-aaaaaaaaaaaa';
 const USER_WITHOUT_PERM = '00000000-0000-7000-8000-bbbbbbbbbbbb';
 
-interface MockPrisma {
-  user: {
-    findFirst: ReturnType<typeof vi.fn>;
-  };
-}
-
 describe('UsersService.hasPermission', () => {
   let users: UsersService;
-  let prisma: MockPrisma;
+  const prisma = mockPrisma;
 
   beforeEach(() => {
-    prisma = {
-      user: {
-        findFirst: vi.fn(),
-      },
-    };
-    const db = { prisma } as unknown as DbService;
-    users = new UsersService(db);
+    prisma.user.findFirst.mockReset();
+    users = new UsersService();
   });
 
   it('returns true when findFirst resolves to a user row (permission present via roles->permissions chain)', async () => {

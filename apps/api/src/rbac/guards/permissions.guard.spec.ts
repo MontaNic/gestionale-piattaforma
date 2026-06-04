@@ -22,11 +22,24 @@ import type { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { describe, expect, it, vi, type Mocked } from 'vitest';
 
-import type { DbService } from '../../db/db.service';
 import type { RedisService } from '@gestionale/platform';
 import type { UsersService } from '../../users/users.service';
 import type { PermissionsMetadata } from '../interfaces/permissions-metadata.interface';
 import { PermissionsGuard } from './permissions.guard';
+
+// Mock @gestionale/db: post sub-7a la guard accede al singleton `prisma` (audit
+// insert su deny path) e usa runInTenantContext/id. `prisma` e' un mock hoisted;
+// runInTenantContext passthrough (esegue la callback senza ALS reale).
+const { mockDbPrisma } = vi.hoisted(() => ({
+  mockDbPrisma: { auditLog: { create: vi.fn() } },
+}));
+
+vi.mock('@gestionale/db', () => ({
+  id: vi.fn(() => '00000000-0000-7000-8000-00000000a0d1'),
+  prisma: mockDbPrisma,
+  runInTenantContext: vi.fn(<T>(_ctx: unknown, fn: () => Promise<T> | T) => Promise.resolve(fn())),
+  withSystemContext: vi.fn(<T>(fn: () => Promise<T> | T) => Promise.resolve(fn())),
+}));
 
 interface MockContextOptions {
   user: { id: string; tenantId: string } | undefined;
@@ -70,17 +83,16 @@ function createGuard(): {
     get: vi.fn().mockReturnValue('60'),
   } as unknown as ConfigService;
 
-  const auditCreate = vi.fn().mockResolvedValue({});
-  const db = {
-    prisma: { auditLog: { create: auditCreate } },
-  } as unknown as DbService;
+  // audit insert ora va sul singleton `prisma` mockato (hoisted). Reset per-guard
+  // così ogni test parte pulito; default resolved (insert ok).
+  mockDbPrisma.auditLog.create.mockReset().mockResolvedValue({});
+  const auditCreate = mockDbPrisma.auditLog.create;
 
   const guard = new PermissionsGuard(
     reflector as unknown as Reflector,
     usersService as unknown as UsersService,
     redisService,
     configService,
-    db,
   );
 
   return { guard, reflector, usersService, redisClient, auditCreate };

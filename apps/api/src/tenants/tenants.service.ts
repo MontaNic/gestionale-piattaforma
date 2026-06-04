@@ -20,11 +20,10 @@
 // - Audit log con tenantId del nuovo tenant + action 'tenant.created'
 // =============================================================================
 
-import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
-import { id, withSystemContextAtomicTx } from '@gestionale/db';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { id, prisma, withSystemContextAtomicTx } from '@gestionale/db';
 import argon2 from 'argon2';
 
-import { DbService } from '../db/db.service';
 import type { CreateTenantDto } from './dto/create-tenant.dto';
 
 export interface CreateTenantResult {
@@ -42,8 +41,6 @@ const SEDE_DEFAULT_POSTAL_CODE = '20100';
 export class TenantsService {
   private readonly logger = new Logger(TenantsService.name);
 
-  constructor(@Inject(DbService) private readonly db: DbService) {}
-
   async createTenant(dto: CreateTenantDto, createdBy: string): Promise<CreateTenantResult> {
     // Authorization: gestita via @RequirePermissions('sistema.tenant.gestisci')
     // su TenantsController#create() (RBAC Guard sessione 11, ADR-0017).
@@ -60,7 +57,7 @@ export class TenantsService {
     // -------------------------------------------------------------------------
     // 2. Atomic bootstrap (single $transaction, system context)
     // -------------------------------------------------------------------------
-    return withSystemContextAtomicTx(this.db.prisma, async (tx) => {
+    return withSystemContextAtomicTx(prisma, async (tx) => {
       // 2.1 Slug uniqueness
       const existing = await tx.tenant.findUnique({ where: { slug: dto.slug } });
       if (existing) {

@@ -54,10 +54,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { withSystemContext } from '@gestionale/db';
+import { prisma, withSystemContext } from '@gestionale/db';
 import type { Request } from 'express';
 
-import { DbService } from '../../db/db.service';
 import { RedisService } from '@gestionale/platform';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { AuthErrorCode } from '@gestionale/shared';
@@ -80,7 +79,6 @@ export class TenantConsistencyGuard implements CanActivate {
   // PARAMTYPES_METADATA bypassando il lookup design:paramtypes.
   constructor(
     @Inject(Reflector) private readonly reflector: Reflector,
-    @Inject(DbService) private readonly db: DbService,
     @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
@@ -160,7 +158,7 @@ export class TenantConsistencyGuard implements CanActivate {
     // resolution e' cross-tenant by-design — coerente con tenant.middleware.ts
     // pre-auth lookup).
     const tenant = await withSystemContext(() =>
-      this.db.prisma.tenant.findUnique({
+      prisma.tenant.findUnique({
         where: { slug },
         select: { id: true, isActive: true, deletedAt: true },
       }),

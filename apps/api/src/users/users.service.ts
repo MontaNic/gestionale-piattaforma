@@ -5,9 +5,8 @@
 // hydrated profile (user + roles + permissions) per endpoint /me.
 // =============================================================================
 
-import { Inject, Injectable } from '@nestjs/common';
-
-import { DbService } from '../db/db.service';
+import { Injectable } from '@nestjs/common';
+import { prisma } from '@gestionale/db';
 
 export interface FullProfile {
   user: {
@@ -26,17 +25,15 @@ export interface FullProfile {
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject(DbService) private readonly db: DbService) {}
-
   /** Lookup user per (tenantId, email). Niente leak su esistenza-email. */
   async findByTenantEmail(tenantId: string, email: string) {
-    return this.db.prisma.user.findUnique({
+    return prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email } },
     });
   }
 
   async findById(userId: string) {
-    return this.db.prisma.user.findUnique({ where: { id: userId } });
+    return prisma.user.findUnique({ where: { id: userId } });
   }
 
   /**
@@ -52,7 +49,7 @@ export class UsersService {
    * @param excludeId  User da escludere dal set (es. user che sta cambiando il proprio PIN)
    */
   async findAllWithPinByTenant(tenantId: string, excludeId?: string) {
-    return this.db.prisma.user.findMany({
+    return prisma.user.findMany({
       where: {
         tenantId,
         pinHash: { not: null },
@@ -64,21 +61,21 @@ export class UsersService {
   }
 
   async setPinHash(userId: string, pinHash: string): Promise<void> {
-    await this.db.prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: { pinHash },
     });
   }
 
   async incrementFailedAttempts(userId: string): Promise<void> {
-    await this.db.prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: { failedLoginAttempts: { increment: 1 } },
     });
   }
 
   async recordSuccessfulLogin(userId: string): Promise<void> {
-    await this.db.prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: { failedLoginAttempts: 0, lastLoginAt: new Date() },
     });
@@ -98,7 +95,7 @@ export class UsersService {
    * tech debt F2 se profiling lo giustifica).
    */
   async hasPermission(userId: string, permissionCode: string): Promise<boolean> {
-    const result = await this.db.prisma.user.findFirst({
+    const result = await prisma.user.findFirst({
       where: {
         id: userId,
         roles: {
@@ -126,7 +123,7 @@ export class UsersService {
    * set di tutti i codes dei role assegnati (tenant-wide o per-sede).
    */
   async findFullProfile(userId: string): Promise<FullProfile | null> {
-    const user = await this.db.prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
         roles: {

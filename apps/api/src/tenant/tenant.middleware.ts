@@ -24,19 +24,15 @@
 // in ADR-0008 per Redis cache TTL=60s.
 // =============================================================================
 
-import { Inject, Injectable, type NestMiddleware, UnauthorizedException } from '@nestjs/common';
-import { runInTenantContext, withSystemContext } from '@gestionale/db';
+import { Injectable, type NestMiddleware, UnauthorizedException } from '@nestjs/common';
+import { prisma, runInTenantContext, withSystemContext } from '@gestionale/db';
 import type { NextFunction, Response } from 'express';
 
-import { DbService } from '../db/db.service';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { AuthErrorCode } from '@gestionale/shared';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
-  // @Inject esplicito — Discovery #29 B2b.
-  constructor(@Inject(DbService) private readonly db: DbService) {}
-
   async use(req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> {
     // Skip se request gia' autenticato: JwtStrategy.validate() ha gia' messo
     // req.tenantId con la fonte autorevole (JWT payload). Header trusted-only
@@ -53,7 +49,7 @@ export class TenantMiddleware implements NestMiddleware {
     // Slug lookup pre-tenant: usa system context (bypass RLS placeholder/real).
     // Necessario perche' non abbiamo ancora il tenantId da settare.
     const tenant = await withSystemContext(() =>
-      this.db.prisma.tenant.findUnique({
+      prisma.tenant.findUnique({
         where: { slug },
         select: { id: true, isActive: true },
       }),
