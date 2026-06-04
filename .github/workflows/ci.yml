@@ -233,6 +233,14 @@ jobs:
       - name: Seed database (tenant demo + acme)
         run: pnpm --filter @gestionale/db db:seed
 
+      - name: RLS core-only enforcement (gestionale_app, non-superuser)
+        # Prerequisito passo 8 (ADR-0027 §D4 / ADR-0026 §D5): unico test che esercita
+        # la RLS DB-level reale (gira come gestionale_app NOSUPERUSER; il superuser
+        # bypassa RLS anche con FORCE). DATABASE_URL = gestionale_app gia' nel .env
+        # post-rotate (step sopra). Non-distruttivo (read seed + write-block respinto).
+        # Exit != 0 -> step rompe = falla di isolamento reale rilevata.
+        run: pnpm --filter @gestionale/db smoke:rls-core
+
       - name: Build workspace packages (db + shared + platform + auth)
         # api dev richiede i dual-package built per risolvere i workspace import
         # a runtime (dist/). Questo job avvia l'api via `pnpm dev` diretto, NON
