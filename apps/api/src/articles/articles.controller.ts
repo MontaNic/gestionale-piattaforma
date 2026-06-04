@@ -20,9 +20,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
-import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@gestionale/auth';
 import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';

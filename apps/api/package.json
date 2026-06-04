@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --project=unit --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@gestionale/auth": "workspace:*",
     "@gestionale/db": "workspace:*",
     "@gestionale/platform": "workspace:*",
     "@gestionale/shared": "workspace:*",

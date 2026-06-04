@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 6 — `packages/platform`, infra BE cross-cutting dual-package; PR aperta)
+**Ultimo aggiornamento:** 4 giugno 2026 (estrazione core passo 7 — `packages/auth`, blocco multi-tenant sicuro dual-package, 7a+7b; PR aperta)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -247,6 +247,39 @@ Primo package estratto con **codice NestJS + DI** (i 5 precedenti erano front-en
 > **Nota build-order CI:** `platform` è il terzo dual-package tsup (dopo `db`/`shared`) che richiede lo step "Build workspace packages" del job `e2e-playwright`. Il futuro `packages/auth` (passo 7) lo erediterà.
 
 Prossimo passo estrazione (D5 passo 7): `packages/auth` (auth+rbac+users+tenancy + i 4 APP_GUARD) — **massimo rischio applicativo** (ordine guard deterministico da ri-verificare; e2e auth/rbac/tenant-consistency verdi costanti). La convenzione build NestJS-dual di questo passo è il riferimento. Resta valida la **nota/rischio sul passo 8** (`packages/db`): scrivere PRIMA il test RLS core-only come `gestionale_app` non-superuser (ADR-0026 §D5), perché gli e2e attuali girano da superuser e non esercitano la RLS a livello DB.
+
+## [2026-06-04] Estrazione core — passo 7: `packages/auth` (ADR-0027 §D5)
+
+Il **blocco multi-tenant sicuro** (auth + rbac + users + tenancy) — massimo rischio applicativo del piano. Eseguito in **due PR** per separare il rischioso dal meccanico: **7a** (#58, refactor d'accesso DB) + **7b** (estrazione vera e propria).
+
+**7a — disaccoppia `DbService` (preparatorio, #58):**
+- I moduli auth iniettavano il wrapper locale `DbService` (`apps/api/src/db/`, estratto solo al passo 8) → **back-ref bloccante** per l'estrazione. Disaccoppiati **7 file di produzione** usando direttamente il singleton `prisma` di `@gestionale/db` (già loro fonte per le funzioni RLS `runInTenantContext`/`withSystemContext*`). 3 spec migrati da mock-via-costruttore a `vi.mock('@gestionale/db')`.
+- `DbService` **invariato**, ancora iniettabile per i consumatori fuori scope (`health` + 5 service di dominio): dipendenza `apps/api → apps/api` valida fino al passo 8. Anti-astrazione (§F1): singleton concreto già condiviso, nessuna porta/interfaccia per un wrapper di ~12 righe.
+
+**7b — estrazione `@gestionale/auth` (questa PR):**
+- **→ `@gestionale/auth`** dual-package tsup: `git mv` di **39 file** (storia preservata) — `auth` (21), `rbac` (6), `users` (3), `tenants` (5, CRUD onboarding), `tenant` (3, infra middleware/decorator), `context` (1, interceptor). Zero riferimenti di dominio (ristorazione).
+- Barrel `src/index.ts` = **17 simboli** (superficie consumata): `AuthModule/RbacModule/UsersModule/TenantsModule/TenantModule`, 3 guard (`JwtAuthGuard/TenantConsistencyGuard/PermissionsGuard`), `TenantContextInterceptor`, `TenantMiddleware`, `Public/IS_PUBLIC_KEY/CurrentUser/CurrentTenant/RequirePermissions`, `UsersService`, interfacce `AuthenticatedUser/AuthenticatedRequest/FullProfile`.
+- **Wiring resta nello scaffold** `app.module.ts`: `APP_INTERCEPTOR` (`TenantContextInterceptor`) + i 4 `APP_GUARD` in ordine deterministico (`AppThrottlerGuard`[platform] → `JwtAuthGuard` → `TenantConsistencyGuard` → `PermissionsGuard`) + `configure()/forRoutes(TenantMiddleware)`. L'estrazione ha cambiato **solo i path d'import**; ordine e logica **byte-identici** (ADR-0017 / Discovery #36).
+- **10 consumatori** `apps/api` riscritti a `@gestionale/auth` (import-only; `health.controller` solo per `@Public`). `+ @gestionale/auth` (`workspace:*`) alle deps di `apps/api`.
+- **CI build-order**: step esteso a `--filter @gestionale/auth` (topo-order ok, nessuno split). Profilo NestJS-dual del passo 6 riusato senza probe; `external` esteso (jwt/passport/argon2/class-validator/rxjs/platform).
+
+**`health` differito (DP-health = A):** importa `@Public` da `@gestionale/auth` ma **resta scaffold** in `apps/api` (back-ref `DbService` locale, risolto al passo 8). Rientro pieno impossibile senza re-introdurre il back-ref appena rimosso al 7a. Cfr. ADR-0027 Addendum passo 7.
+
+**Gate ADR-0027 — comportamento INVARIATO:**
+
+| Gate | Esito |
+|---|---|
+| Build topo-order (db+shared+platform+**auth**) | ok (auth per ultimo, DTS emessi) |
+| `typecheck` (auth + api) | ok |
+| `test` unit — redistribuzione | **39 auth + 43 api = 82** (somma conservata vs pre-7b) |
+| `test:e2e` (full AppModule bootstrap, testcontainers) | **56 pass + 4 skip**, 10/10 file |
+| Catena guard e2e (ordine reale) | ok (auth → tenant-consistency → permissions; throttler fail-open) |
+
+**Conferma catena guard (gate critico):** la suite e2e bootstrappa l'intero `AppModule` con i guard consumati da `@gestionale/auth` (dist) — coperti `rbac-permissions` (deny → 403 `E_AUTH_INSUFFICIENT_PERMISSIONS` + audit insert), `tenant-consistency`, `auth-login` (+ `forRoutes(TenantMiddleware)`), `td-ad-throttler-redis-down` (fail-open). Nessun `Nest can't resolve dependencies`.
+
+> **Nota:** `@gestionale/auth` è il quarto dual-package tsup (db/shared/platform/auth) nello step "Build workspace packages" del job `e2e-playwright`.
+
+Prossimo passo estrazione (D5 passo 8): `packages/db` — **massimo rischio dati**. **VINCOLO FERMO:** PRIMA scrivere il **test RLS core-only** come `gestionale_app` **NON-superuser** (ADR-0026 §D5) — i test e2e attuali girano da superuser (Testcontainers Postgres default) e quindi **NON esercitano la RLS a livello DB**: senza questa correzione il test "core-only" non testerebbe l'isolamento reale. Solo dopo: separazione enum/seed core vs dominio + indirezione `getClientForTenant` (ADR-0026 §D3).
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 

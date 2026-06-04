@@ -19,10 +19,12 @@
 // Niente perdita di significato: stiamo testando la business logic, non il DI.
 
 import type { JwtService } from '@nestjs/jwt';
+import type { MailService } from '@gestionale/platform';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
+import type { LockoutService } from './lockout.service';
 
 // Mock argon2 module-level: verify() configurabile per test, hash() ritorna
 // stub deterministico per evitare cost CPU del KDF reale durante i test.
@@ -170,8 +172,8 @@ describe('AuthService', () => {
     auth = new AuthService(
       users as unknown as UsersService,
       jwt as unknown as JwtService,
-      lockout as unknown as import('./lockout.service').LockoutService,
-      mail as unknown as import('@gestionale/platform').MailService,
+      lockout as unknown as LockoutService,
+      mail as unknown as MailService,
     );
 
     vi.mocked(argon2.verify).mockReset();

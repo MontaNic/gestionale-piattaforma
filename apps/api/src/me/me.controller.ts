@@ -1,9 +1,7 @@
 import { Controller, Get, Inject, NotFoundException } from '@nestjs/common';
 
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/interfaces/authenticated-request.interface';
-import { UsersService } from '../users/users.service';
-import type { FullProfile } from '../users/users.service';
+import { CurrentUser, UsersService } from '@gestionale/auth';
+import type { AuthenticatedUser, FullProfile } from '@gestionale/auth';
 
 @Controller('me')
 export class MeController {

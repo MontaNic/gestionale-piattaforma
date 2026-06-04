@@ -233,13 +233,14 @@ jobs:
       - name: Seed database (tenant demo + acme)
         run: pnpm --filter @gestionale/db db:seed
 
-      - name: Build workspace packages (db + shared + platform)
+      - name: Build workspace packages (db + shared + platform + auth)
         # api dev richiede i dual-package built per risolvere i workspace import
         # a runtime (dist/). Questo job avvia l'api via `pnpm dev` diretto, NON
         # via `turbo run test:e2e`, quindi il `dependsOn: ["^build"]` di Turbo
         # NON scatta qui: il build va esplicitato. @gestionale/shared (ADR-0027
-        # §D5 passo 3) e @gestionale/platform (passo 6) si aggiungono a @gestionale/db.
-        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform build
+        # §D5 passo 3), @gestionale/platform (passo 6) e @gestionale/auth (passo 7)
+        # si aggiungono a @gestionale/db. auth dipende da db/shared/platform → in coda.
+        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
 
       - name: Start API server (background)
         # ts-node-dev background; PID salvato per cleanup.
