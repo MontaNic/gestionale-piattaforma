@@ -60,6 +60,7 @@ Ogni passo = feature branch + PR squash + baseline test verde come gate + un ADR
 7. `packages/auth` (BE) — auth+rbac+users+tenancy + i 4 APP_GUARD. **Massimo rischio applicativo:** ordine guard ri-verificato a ogni passo; e2e auth/rbac/tenant-consistency verdi costanti.
    > Nota esecuzione: eseguito in 7a (disaccoppia DbService) + 7b (estrazione). 39 file, health differito DP-A — cfr. Addendum 2026-06-04 (passo 7).
 8. `packages/db` — separazione enum/seed core vs dominio + introduzione indirezione `getClientForTenant` (fase 1, ADR-0026 §D3). **Massimo rischio dati:** preceduto dal test RLS core-only come non-superuser (D4).
+   > Nota esecuzione: prerequisito RLS chiuso in 8a (`smoke:rls-core` in CI, percorso X). Finding e2e-api-non-in-CI → TD-CB. Cfr. Addendum 2026-06-04 (passo 8a).
 9. Riframe del residuo ristorazione a scaffold (naming per D3).
 
 ## Conseguenze
@@ -156,3 +157,37 @@ Profilo NestJS-dual del passo 6 riusato senza probe (convenzione DI già validat
 `experimentalDecorators`+`emitDecoratorMetadata`, tsup `external` esteso (`@nestjs/jwt`,
 `@nestjs/passport`, `passport-jwt`, `argon2`, `class-validator`, `rxjs`, `@gestionale/platform`).
 CI: step build workspace esteso a `--filter @gestionale/auth` (topo-order ok, nessuno split).
+
+---
+
+## Addendum 2026-06-04 — Passo 8a (prerequisito RLS): note di esecuzione
+
+### Prerequisito ADR-0026 §D5 chiuso
+
+Il passo 8 è preceduto dal test RLS core-only come `gestionale_app` non-superuser (§D4/§D5).
+Finding del preflight: gli e2e api Vitest+testcontainers (56) **non girano in CI** (solo unit +
+Playwright web); la RLS DB-level non era esercitata in CI (i test attuali girano da superuser, che
+bypassa la RLS anche con `FORCE`). Scelta (percorso X, footprint minimo): un check DB-level dedicato
+in CI riusando l'infra già presente nel job `e2e-playwright` (ruolo `gestionale_app` ruotato,
+`DATABASE_URL` app-role, seed demo/acme) — invece di portare l'intera suite e2e api in CI (scope ben
+più ampio, rischio Docker-in-CI dentro il passo a massimo rischio dati).
+
+Artefatto: `packages/db/scripts/smoke-rls-core.ts` (script `smoke:rls-core`), 9 scenari core-only su
+`tenants/sedi/users/audit_logs` (+ `roles/user_roles`), come `gestionale_app`:
+
+- S0 preludio auto-diagnostico: asserisce `current_user = gestionale_app`, `rolsuper = false`,
+  `rolbypassrls = false` (un fallimento spiega da sé che l'env punta al ruolo sbagliato);
+- read-isolation cross-tenant, write-block (WITH CHECK, non-distruttivo), bypass system/super-admin,
+  fail-fast (`RlsNoContextError` fuori contesto).
+  Step CI in `e2e-playwright` dopo `db:seed`; exit ≠0 → step rompe. Verificato: 9/9 PASS, non-distruttivo
+  (secondo run identico, insert cross-tenant respinti non persistono), 56 e2e + harness invariati.
+
+### TD-CB — e2e api Vitest+testcontainers non in CI
+
+**Stato:** aperto. Gli e2e api (56) e `smoke:rls-e2e` girano solo in locale; in CI girano unit +
+Playwright web + (ora) `smoke:rls-core`. **Conseguenza:** i 3 test "isolation" applicativi
+(`menu-tenant-isolation`, `soft-delete-rls`, `tenant-consistency`) in CI girerebbero da superuser →
+validano isolamento applicativo, non enforcement DB-level. **Migration path:** portare la suite e2e api
+in CI come `gestionale_app` (Docker-in-CI per testcontainers, o riuso del service container del job
+`e2e-playwright`), rendendo veri anche quei 3 test. Mitigazione attuale: `smoke:rls-core` copre
+l'enforcement DB-level core-only in CI. Da pianificare come passo dedicato (non in 8a/8b).
