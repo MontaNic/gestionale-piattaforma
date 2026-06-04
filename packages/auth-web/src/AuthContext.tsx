@@ -13,9 +13,9 @@ import { useRouter } from 'next/navigation';
 
 import { apiGet, ApiError } from '@gestionale/api-client';
 
-import { AUTH_CHANGE_EVENT, clearTokens, getAccessToken } from '@/lib/auth';
-import { performLogout } from '@/lib/auth-logout';
-import type { MeResponse, MeRole, MeUser } from '@/lib/types';
+import { AUTH_CHANGE_EVENT, clearTokens, getAccessToken } from './auth';
+import { performLogout } from './auth-logout';
+import type { MeResponse, MeRole, MeUser } from './types';
 
 // =============================================================================
 // AuthContext — tenant-scoped auth state (ADR-0018 §AuthContext strategy)

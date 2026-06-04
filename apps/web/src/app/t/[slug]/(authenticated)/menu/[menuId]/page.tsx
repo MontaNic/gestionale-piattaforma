@@ -12,7 +12,7 @@ import { MenuForm } from '@/components/menu/MenuForm';
 import { Alert, AlertDescription } from '@gestionale/ui';
 import { Button } from '@gestionale/ui';
 import { Card, CardContent } from '@gestionale/ui';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@gestionale/auth-web';
 import { ApiError } from '@gestionale/api-client';
 import { messageForError } from '@/lib/error-codes';
 import {

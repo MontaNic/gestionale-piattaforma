@@ -12,8 +12,8 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
+import { getAccessToken } from '@gestionale/auth-web';
 
-import { getAccessToken } from './auth';
 import type {
   Article,
   ArticlePrice,

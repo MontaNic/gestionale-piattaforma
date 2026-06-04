@@ -179,6 +179,42 @@ Prossimo passo estrazione (D5 passo 5): `packages/auth-web` (FE: AuthContext/Aut
 
 Prossimo passo estrazione (D5 passo 5b): `packages/auth-web` (AuthContext/AuthGate/lib auth/types) che consumerà `@gestionale/api-client`. Il middleware resta in app (slug-routing dominio + locale guard i18n, nessuna logica auth da estrarre).
 
+## [2026-06-04] Estrazione core — passo 5b: `packages/auth-web` (ADR-0027 §D5)
+
+Passo 5 vero e proprio: l'**autenticazione frontend client-side**. Rischio basso-medio (auth FE), mitigato dal fatto che il client HTTP era già estratto al 5a (`@gestionale/api-client`) e che il middleware non contiene logica auth (l'auth FE è interamente client-side, coerente con TD-BA). Chiude il gap "AuthContext/AuthGate senza test propri".
+
+**Confine applicato (mappa pre-estrazione confermata, due assunzioni del prompt corrette prima di agire):**
+- **→ `@gestionale/auth-web`** (5 file, `git mv` storia preservata): `AuthContext.tsx` (`'use client'`, fetch `/me` + cross-tab sync), `AuthGate.tsx` (`'use client'`, redirect anonimo), `auth.ts` (token storage localStorage), `auth-logout.ts` (`performLogout`), `types.ts` (contratti `LoginResponse/MeUser/MeRole/MeResponse`).
+- **Sorte di `types.ts`:** separa pulitamente — contiene **solo** contratti auth del flusso login/`/me`, **zero tipi di dominio** (i tipi Menu vivono nel separato `lib/menu-types.ts`, che resta in app). Estratto interamente.
+- **Grafo dipendenze reale = `auth-web → @gestionale/api-client`** soltanto (+ peerDeps `react`/`react-dom`/`next` per `useRouter`). **NON** dipende da `@gestionale/shared`: il prompt ipotizzava un consumo di error-codes, ma nessuno dei 5 file li importa (usano `ApiError` da api-client). Nessun ciclo. Più pulito dell'atteso.
+- **→ resta in `apps/web`:** `middleware.ts` (slug-routing dominio + locale guard i18n), `lib/error-codes.ts` (catalogo messaggi IT + codici dominio), `lib/menu-api.ts`/`menu-types.ts`/pagine `menu/*` (consumer, ripuntati al package).
+
+**Cosa fatto:**
+- [x] Nuovo workspace `@gestionale/auth-web` **source export + `transpilePackages`** (mirror di ui/i18n/api-client — solo-Next, **nessun `dist/`/tsup**; le direttive `"use client"` di AuthContext/AuthGate sono preservate). Barrel `src/index.ts` esporta la public surface (`AuthProvider`/`useAuth`/`AuthGate` + token helper + `performLogout` + tipi). `git mv` dei 5 file (storia preservata); import interni riscritti a relativi (`@/lib/auth`→`./auth`, ecc.), `@gestionale/api-client` invariato.
+- [x] Wiring **9 import site** ripuntati a `@gestionale/auth-web`: `login/page` (setTokens+LoginResponse), `lib/menu-api` (getAccessToken), `t/[slug]/layout` (AuthProvider), `shell/Topbar` + 4 pagine `(authenticated)/*` (useAuth), `(authenticated)/layout` (AuthGate). `+ @gestionale/auth-web` a `apps/web`; `next.config.mjs` `transpilePackages` aggiornato; **`tailwind.config.ts` content** `+ '../../packages/auth-web/src/**'` (critico — AuthGate rende lo spinner con classi Tailwind, lezione del passo `ui`); root `vitest.config.mts` `+` nuovo project.
+- [x] Test (chiude il gap auth FE): `auth.test.ts` (6 — token storage + dispatch `AUTH_CHANGE_EVENT`) + `auth-context.test.tsx` (6 — jsdom, mock api-client/next: AuthProvider monta→fetch `/me`→stati `useAuth` anonimo/autenticato/401-clear; AuthGate redirect anonimo / spinner loading / render autenticato).
+
+**Gate ADR-0027 — comportamento INVARIATO (prima → dopo):**
+
+| Gate | Prima | Dopo |
+|---|---|---|
+| `pnpm lint` | exit 0 | exit 0 |
+| `pnpm typecheck` | 9/9 | **10/10** (+`@gestionale/auth-web`) |
+| `pnpm test` | 127 / 16 file | **139 / 18 file** (95 api + 9 ui + 5 shared + 8 i18n + 10 api-client + **12 auth-web**) |
+| `pnpm format:check` | clean | clean |
+| `next build` (apps/web) | ok | ok (da `.next` pulito; login/dashboard/menu compilano con `transpilePackages` + `"use client"`) |
+| Playwright chromium | 14/14 | **14/14 PASS** |
+
+**Conferma flussi auth identici (gate critico):** i Playwright auth verdi end-to-end attraverso il package estratto — **login OK** (setup demo+acme + `auth-login` → dashboard), **login FAIL** (`E_AUTH_INVALID_CREDENTIALS` localizzato, resta su login), **logout** (`auth-logout` + topbar → clear token + redirect), **redirect anonimo** (`auth-redirect` + AuthGate via shell), **shell render** (`apiGet /me` in AuthContext), **cross-tenant isolation**. `refresh` = `AuthContext.refresh()` (re-fetch `/me`) preservato; lo storage del refresh-token resta identico. Nessuna regressione.
+
+**TD-1 (token in localStorage) NON toccato:** estratto com'è, comportamento identico. La migrazione a httpOnly cookie resta task separato (porterà con sé lo spostamento di AuthGate a middleware server-side, TD-BA).
+
+> **Nota di parametrizzazione futura (registrata, NON task ora):** `AuthContext`/`AuthGate` assumono lo schema URL multi-tenant path-based `/t/<slug>/login` (convenzione core piattaforma, TD-2). È un'assunzione di routing **da parametrizzare** quando arriverà un secondo verticale con schema URL diverso — annotata nel barrel `packages/auth-web/src/index.ts`.
+
+> **Nota build-order CI:** `auth-web` è consumato **solo** da Next (`transpilePackages`, nessun `dist/`) → **NON** richiede lo step "Build workspace packages" del job `e2e-playwright` (come ui/i18n/api-client; vale solo per i dual-package tsup `db`/`shared`/futuro `packages/auth`).
+
+Prossimo passo estrazione (D5 passo 6): `packages/db` (RLS engine, soft-delete, tabelle multi-tenant) — **prerequisito** il test RLS core-only non-superuser (ADR-0026 §D5). Poi passo 7 `packages/auth` (BE, massimo rischio).
+
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
 
 ---

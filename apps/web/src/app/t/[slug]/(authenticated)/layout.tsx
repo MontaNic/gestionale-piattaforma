@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { AuthGate } from '@/components/auth/AuthGate';
+import { AuthGate } from '@gestionale/auth-web';
 import { MainLayout } from '@/components/shell/MainLayout';
 
 // =============================================================================
