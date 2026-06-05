@@ -245,7 +245,9 @@ interface SeedDevTenantParams {
   tplPermissions: { permissionId: string }[];
 }
 
-async function seedDevTenant(params: SeedDevTenantParams): Promise<void> {
+async function seedDevTenant(
+  params: SeedDevTenantParams,
+): Promise<{ tenantId: string; tenantSlug: string }> {
   const { tenant: tenantInfo, sede: sedeInfo, user: userInfo } = params;
 
   // 1. Tenant
@@ -347,14 +349,11 @@ async function seedDevTenant(params: SeedDevTenantParams): Promise<void> {
     console.log(`  user_roles: ${userInfo.email} -> Super Admin (tenant-wide) already exists`);
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 7. F1 Menu domain (sessione 17, ADR-0019) — dimostrativo per tenant dev
-  // ───────────────────────────────────────────────────────────────────────────
-  // Menu "Pranzo" + 3 categorie (Antipasti, Primi, Pizze) + 5 articoli +
-  // 1 PriceList "Base" (4 canali) + 5 ArticlePrice (price == basePrice).
-  // Idempotente: upsert su unique compound (vedi @@unique nello schema).
-  // ───────────────────────────────────────────────────────────────────────────
-  await seedDevMenu(tenant.id, tenantInfo.slug);
+  // Il seed DOMINIO (F1 Menu) è orchestrato come fase separata in main()
+  // (ADR-0027 §D5 passo 8b-1: confine core/dominio). `seedDevTenant` resta
+  // responsabile del solo CORE del tenant e ritorna gli id necessari alla fase
+  // dominio top-level.
+  return { tenantId: tenant.id, tenantSlug: tenantInfo.slug };
 }
 
 interface ArticleSeed {
@@ -691,7 +690,7 @@ async function main(): Promise<void> {
       where: { templateId: superAdminTpl.id },
     });
 
-    await seedDevTenant({
+    const demo = await seedDevTenant({
       tenant: { slug: 'demo', name: 'Demo Pizzeria' },
       sede: {
         name: 'Sede Principale',
@@ -710,7 +709,7 @@ async function main(): Promise<void> {
       tplPermissions,
     });
 
-    await seedDevTenant({
+    const acme = await seedDevTenant({
       tenant: { slug: 'acme', name: 'Pizzeria Acme' },
       sede: {
         name: 'Sede Centro',
@@ -728,6 +727,17 @@ async function main(): Promise<void> {
       superAdminTplDescription: superAdminTpl.description,
       tplPermissions,
     });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
+    // passo 8b-1): estratta dal core del tenant e orchestrata qui al top-level.
+    // Menu "Pranzo" + 3 categorie + 5 articoli + 1 PriceList "Base" + 5
+    // ArticlePrice per ciascun tenant dev. Gira nello stesso system context
+    // ereditato da withSystemContext(main). Dev-only come il resto del seed dev.
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log('Dev data — dominio (F1 Menu):');
+    await seedDevMenu(demo.tenantId, demo.tenantSlug);
+    await seedDevMenu(acme.tenantId, acme.tenantSlug);
 
     console.log('');
   } else {

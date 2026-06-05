@@ -305,8 +305,16 @@ model AuditLog {
 }
 
 // =============================================================================
-// F1 Menu domain (sessione 17, ADR-0019)
+// ═══ CONFINE CORE / DOMINIO — F1 Menu domain (sessione 17, ADR-0019) ═══
 // =============================================================================
+// CONVENTION (ADR-0026 D1, ADR-0027 §D5 passo 8b-1): questo banner segna il
+// confine tra CORE e DOMINIO nell'UNICO file schema. NO split multi-file —
+// "il data layer si arricchisce, non si splitta" (ADR-0026 D1/D6).
+//   • Sopra il confine: modelli/enum CORE (piattaforma: tenancy, auth, rbac,
+//     audit, sessioni). NB: l'enum DeviceType resta CORE (usato da Session).
+//   • Sotto il confine: modelli/enum DOMINIO (verticale ristorazione).
+//   • Nuovi modelli/enum: core sopra, dominio sotto.
+// -----------------------------------------------------------------------------
 // 5 modelli business: Menu, MenuCategory, Article, PriceList, ArticlePrice
 // 2 placeholder PRE F2 (Gate D29): Recipe, PricingRule
 // 5 enum nuovi: Allergen, DietaryTag, PrintDepartment, ArticleAvailability, Channel
