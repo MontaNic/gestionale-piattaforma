@@ -9,8 +9,8 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile, organizzata in
 > Il protocollo per le sessioni AI è in [STARTER_PROMPT.md](./STARTER_PROMPT.md).
 > ⚠️ Scope ridefinito da [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md): da gestionale ristorazione a piattaforma a verticali con core condiviso.
 
-> ✅ **Primo login browser funzionante + Auth E2E hardening 100% completo (B1 + B2a + B2b).**
-> Macro-task **D3a + D3b + D4 + E1 + E2 + B1 + B2a + B2b** completati: RLS attivo runtime, endpoint `POST /tenants` atomic con permission check `sistema.tenant.gestisci`, **apps/web Next.js 15 + Tailwind 3.4 + shadcn/ui** consumer di `@gestionale/db` via dual package exports, **frontend con `/login` + `/dashboard`** (primo login browser end-to-end), **rate limiting Redis (4 throttler) + account lockout sliding window + email notification Mailpit + per-tenant rate-limit `/auth/login-pin` + ThrottlerGuard fail-open verified Redis DOWN end-to-end** (TD-AD RESOLVED). **E2E test framework attivo** (`@testcontainers/postgresql` + `@testcontainers/redis` + supertest, Vitest projects array unit/e2e split). Cross-tenant lookup bloccato a livello DB, app role `gestionale_app` (NOSUPERUSER, NOBYPASSRLS), 10 endpoint operativi su `:3000`, **CORS abilitato**, frontend `:3001`. **29/29 test verdi** (25 unit + 4 e2e). Dettagli in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) (RLS) + [ADR-0010](./docs/architecture/ADR-0010-tenant-bootstrap.md) (tenant bootstrap) + [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md) (dual package + Next.js scaffold) + [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) (frontend auth flow E2) + [ADR-0013](./docs/architecture/ADR-0013-auth-e2e-hardening-b1.md) (B1 rate limit + lockout) + [ADR-0014](./docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md) (B2a email + login-pin per-tenant) + [ADR-0015](./docs/architecture/ADR-0015-auth-e2e-hardening-b2b.md) (B2b E2E + TD-AD fix).
+> ✅ **Estrazione del core tecnico condiviso completa** (ADR-0027 §D5, passo 9 — 5 giugno 2026).
+> La foundation costruita nelle sessioni 1-21 (auth multi-tenant + RLS, RBAC cross-tenant defense-in-depth, audit, rate-limit/lockout, email, i18n, shell UI) è estratta in **9 `packages/` condivisi**; `apps/*` ospita il verticale **ristorazione**, ora **congelato come scaffold/boilerplate** (vedi [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md)). Prossimo scope: avvio del primo verticale reale (studi commercialisti). Stato dettagliato, roadmap e storico macro-task in [PROGRESS.md](./PROGRESS.md).
 
 ## Stack
 
@@ -35,9 +35,9 @@ Vincolato dalla sezione A3 del brief.
 ## Struttura monorepo
 
 ```
-apps/         Applicazioni (web, api, kds) — Next.js / NestJS
-packages/     Codice condiviso (ui, shared, fiscal-drivers, plugin-sdk, ai-tools, eslint-config)
-plugins/      Plugin ufficiali sviluppati internamente
+apps/         Verticali che consumano il core — oggi solo ristorazione (api NestJS + web Next.js), congelata a scaffold (ADR-0025)
+packages/     Core tecnico condiviso (9): api-client · auth · auth-web · db · eslint-config · i18n · platform · shared · ui
+plugins/      Plugin ufficiali interni (placeholder, sviluppo futuro)
 infra/        Dockerfile, compose, configurazioni Caddy
 docs/         ADR (docs/architecture), decisioni di prodotto (docs/decisions), API, ai-prompts
 scripts/      Script operativi (backup, migrazioni custom, ecc.)
