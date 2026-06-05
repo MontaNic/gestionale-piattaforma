@@ -4,7 +4,7 @@
 > **Da leggere PRIMA del `PROJECT_BRIEF.md` per capire lo stato corrente.**
 > Aggiornato dopo ogni macro-task completato.
 
-**Ultimo aggiornamento:** 4 giugno 2026 (passo 8a — prerequisito RLS chiuso: `smoke:rls-core` in CI come `gestionale_app` non-superuser; PR aperta)
+**Ultimo aggiornamento:** 5 giugno 2026 (passo 9 — riframe verticale a scaffold + **chiusura estrazione core ADR-0027 §D5**: 9 package estratti, `apps/*` = verticale ristorazione scaffold congelato, naming A mantenuto, TD-CC; 142 unit / 13 task turbo)
 **Fase corrente:** Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a Auth + D2-vitest + D2b PIN POS + D3a RLS framework + D3b RLS activation + D4 Tenant bootstrap + E1 Next.js scaffold + E2 Login form UI + B1 Auth E2E hardening + B2a email + login-pin rate-limit + B2b E2E full bootstrap Testcontainers + TD-AD fix + TD-2 Multi-tenant slug routing frontend path-based + TD-4 Playwright E2E frontend CI + RBAC enforcement Guard + PR 2 TD-H/TD-AJ lockout per-tenant + errorCode + F1 shell UI foundation + **TD-7 backend Guard cross-tenant defense-in-depth** completi. **F1 Core MVP foundation pronta**: shell visuale 8 nav placeholder per Menu/Mappa/Comande/Cassa/KDS/Report/Settings/Dashboard; auth gating via AuthContext+AuthGate refactor; i18n switcher it/en cookie-based; theme toggle light/dark/system; defense-in-depth backend completo via `TenantConsistencyGuard` APP_GUARD globale. **Test totali**: 48 unit backend + **13/13 e2e Testcontainers backend** (5 nuovi `tenant-consistency` + 8 esistenti) + target 9/9 Playwright chromium PASS invariati.
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -300,6 +300,26 @@ Il passo 8 (`packages/db`) è preceduto dal **prerequisito RLS** (ADR-0026 §D5 
 Prossimo passo estrazione (D5 passo 8b): `packages/db` — separazione **enum/seed core vs dominio** + indirezione **additiva** `getClientForTenant(ctx)` (ritorna il client condiviso, ADR-0026 §D3 fase 1). Prerequisito di confine: definire l'interfaccia **tenancy ↔ db** (chi possiede la mappa routing-key, §D4). **Prerequisito RLS ora soddisfatto (8a).**
 
 > ✅ **TD-7 sessione 16 RESOLVED** (ADR-0012 §TD-7 sessione 16 update): `TenantConsistencyGuard` `@Injectable()` registrato `APP_GUARD` globale post-`JwtAuthGuard` pre-`PermissionsGuard` chiude defense-in-depth backend per client non-browser (curl, mobile app future, integrazioni API). Logica 5 branch: skip `@Public` + skip se `req.user` assente + skip se header `X-Tenant-Slug` assente (backward-compat) + lookup `tenantId` by slug (cache Redis 60s TTL, fallback Postgres `withSystemContext`) + mismatch detection vs `req.user.tenantId` (JWT subject) → `401 E_AUTH_TENANT_MISMATCH` via `GlobalHttpExceptionFilter` (sessione 15) ZERO config aggiuntivo. 1A SPLIT decision: TD-7 standalone S16 + Menu CRUD progressivo S17+ (scope F1 reale ~5-7 modelli Prisma da BRIEF B3 + gate accettazione D5). 2 TD candidate nuovi (TD-BJ cache invalidation tenant lifecycle + TD-BK audit log persistente `tenant_mismatch_attempt`). Discoveries cumulative: **51** (+1 sessione 16, candidate Redis cache TTL persistence cross-test artifact). Foundation cleanup carry-over sessioni 11-15: **100% ✅**. **TD-7 cross-tenant defense-in-depth backend: 100% ✅** (sessione 16). Prossimo task: sessione 17 jump a F1 Menu CRUD schema completo F1 design + migration + CRUD backend (5-7 modelli Prisma).
+
+## [2026-06-05] Estrazione core — passo 9: riframe verticale a scaffold + **chiusura §D5** (ADR-0027)
+
+Ultimo passo dell'ordine §D5. Passo **atomico, documentale** (zero file di codice toccati).
+
+**Estrazione core COMPLETA.** I passi §D5 1→8b sono chiusi. Il core tecnico agnostico vive in **9 package**: `eslint-config`, `ui`, `shared`, `i18n`, `auth-web`, `api-client` (FE) · `platform`, `auth`, `db` (BE). `apps/api` + `apps/web` = **verticale ristorazione, scaffold congelato** (ADR-0025: dominio non sviluppato, riferimento boilerplate). Confine core/dominio dei verticali documentato in `apps/README.md` (nuovo).
+- Passi 8b-1 (`#62`, separazione seed core/dominio + convention confine schema) e 8b-2 (`#63`, indirezione `getClientForTenant` fase 1 + addendum ADR-0026 §D4) mergiati prima del 9.
+
+**Decisione naming (§D3, deferita → presa ora) = A — mantieni i nomi.** `apps/api`/`apps/web` NON si rinominano: con un solo verticale è churn anticipato; il trigger è l'arrivo del 2° verticale (commercialisti/StudioDesk). → registrato **TD-CC**.
+
+**Chiusura differiti "al passo 8/9" — tutti RESTANO app-level/scaffold (decisionale, zero codice):**
+- **health** resta in `apps/api` (estrarlo → ciclo `platform → apps/api/db`; concern applicativo, endpoint terminale).
+- **DbService** resta in `apps/api` (wrapper ~12 righe, 6 consumer tutti scaffold/app → infra di scaffold, non core; §F1).
+- **me** resta in `apps/api` (core-residuo app-level, thin controller su `@gestionale/auth`).
+
+**Invariato:** wiring `APP_INTERCEPTOR` + 4 `APP_GUARD` deterministici + `TenantMiddleware.forRoutes` in `app.module.ts` byte-identico (Discovery #36). Nessun `.ts`/`.tsx`/`.prisma`/`.json` di codice toccato.
+
+**Test totali (realtà post-8b):** **142 unit** su **13 task turbo** (95 api~~/82~~→ ora 43 api + 39 auth + 13 platform + 12 auth-web + 10 api-client + 9 ui + 8 i18n + 5 shared + **3 db**) · **56 e2e** Testcontainers backend (4 skip) · **14 Playwright** chromium. Sostituisce il conteggio stale "95/95".
+
+> **TD-CC — rename `apps/api`/`apps/web` → `apps/restaurant-*` al 2° verticale** (aperto): naming mantenuto oggi (decisione A); rename al secondo verticale per disambiguare. Strutturale-ma-meccanico (directory + `package.json` name + path-alias + CI build-order + import). Severità BASSA, trigger = avvio 2° verticale, ~1-2h. Cfr. ADR-0027 Addendum passo 9.
 
 ---
 

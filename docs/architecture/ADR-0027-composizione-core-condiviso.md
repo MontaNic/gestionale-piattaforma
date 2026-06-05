@@ -191,3 +191,57 @@ validano isolamento applicativo, non enforcement DB-level. **Migration path:** p
 in CI come `gestionale_app` (Docker-in-CI per testcontainers, o riuso del service container del job
 `e2e-playwright`), rendendo veri anche quei 3 test. Mitigazione attuale: `smoke:rls-core` copre
 l'enforcement DB-level core-only in CI. Da pianificare come passo dedicato (non in 8a/8b).
+
+---
+
+## Addendum 2026-06-05 — Passo 9 (riframe verticale a scaffold): chiusura §D5
+
+Ultimo passo dell'ordine §D5. Passo **atomico, documentale** (zero file di codice toccati): chiude
+l'estrazione del core e formalizza lo stato del residuo ristorazione.
+
+### Estrazione core completa
+
+I passi §D5 1→8b sono chiusi. Il core tecnico agnostico vive ora in **9 package**: `eslint-config`,
+`ui`, `shared`, `i18n`, `auth-web`, `platform`, `auth`, `db` (+ `api-client` FE). `apps/api` e
+`apps/web` **non si splittano oltre**: sono il **verticale ristorazione allo stato di scaffold
+congelato** (ADR-0025: il dominio ristorazione non viene sviluppato, serve da riferimento boilerplate).
+Confine core/dominio dentro i verticali documentato in `apps/README.md`.
+
+### Decisione naming (§D3, deferita → presa ora) = A — mantieni i nomi
+
+`apps/api`/`apps/web` **NON** si rinominano. §D3 aveva deferito il naming "a core estratto"; con un
+**solo** verticale il rename è churn anticipato senza beneficio. Il trigger naturale è l'arrivo del
+**2° verticale** (commercialisti / StudioDesk, ADR-0025): a quel punto `apps/api` diventa ambiguo vs
+un `apps/accountant-*`. Coerente con la disciplina YAGNI del progetto (cfr. RoutingKey/catalogo
+deferiti a fase 2 in ADR-0026 §D4). → registrato come **TD-CC** (sotto).
+
+### Chiusura differiti "al passo 8/9" — tutti RESTANO app-level/scaffold (chiusura decisionale, zero codice)
+
+Nessun rientro a `packages/*`:
+
+- **health** — resta in `apps/api`. Estrarlo in `platform` re-introdurrebbe il ciclo
+  `platform → apps/api/db` (inversione di layer); è concern applicativo (compone auth+db+redis,
+  endpoint terminale 0-consumer), non infra di base. `@Public` è già da `@gestionale/auth`; l'unico
+  residuo locale è `DbService`.
+- **DbService** — resta in `apps/api`. Wrapper di ~12 righe, 6 consumer (5 service di dominio +
+  health) **tutti scaffold/app-level** → è infrastruttura di scaffold, non core da estrarre. La
+  dipendenza `apps/api → apps/api` è **valida e definitiva** nello scaffold (§F1: nessuna porta per
+  un wrapper di 12 righe). Il destino di DbService è legato a quello di health: entrambi restano.
+- **me** — core-residuo app-level identico a health (thin controller `/me` su `@gestionale/auth`);
+  stesso destino, resta.
+
+### Cosa NON è cambiato
+
+Il wiring `APP_INTERCEPTOR` (`TenantContextInterceptor`) + i 4 `APP_GUARD` in ordine deterministico
+(`AppThrottlerGuard` → `JwtAuthGuard` → `TenantConsistencyGuard` → `PermissionsGuard`) +
+`configure()/forRoutes(TenantMiddleware)` in `app.module.ts` resta **byte-identico** (Discovery #36).
+Il passo 9 non tocca alcun file `.ts`/`.tsx`/`.prisma`/`.json` di codice.
+
+### TD-CC (nuovo) — rename `apps/api`/`apps/web` → `apps/restaurant-*` al 2° verticale
+
+**Stato:** aperto. Il naming del verticale è mantenuto oggi (decisione A); il rename va fatto quando
+arriva il **secondo verticale reale** (commercialisti), per disambiguare `apps/api` da
+`apps/accountant-*`. Lavoro **strutturale-ma-meccanico**: directory + `package.json` `name` +
+path-alias `@gestionale/*` + build-order CI + import. **Confine:** finché non fatto, `apps/api` e
+`apps/web` denotano implicitamente il verticale ristorazione. Severità **BASSA**, trigger = avvio 2°
+verticale, stima ~1-2h.
