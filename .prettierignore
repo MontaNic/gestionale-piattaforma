@@ -14,3 +14,7 @@ pnpm-lock.yaml
 PROJECT_BRIEF.md
 PROGRESS.md
 STARTER_PROMPT.md
+
+# Materiale di riferimento importato (StudioDesk: schema SQL + dev guide).
+# Documentazione-fonte read-only, fedele all'originale — fuori scope Prettier.
+docs/studiodesk/
