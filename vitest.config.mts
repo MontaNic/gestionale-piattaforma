@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     projects: [
       'apps/api/vitest.config.ts',
+      'packages/db/vitest.config.ts',
       'packages/ui/vitest.config.ts',
       'packages/shared/vitest.config.ts',
       'packages/i18n/vitest.config.ts',
