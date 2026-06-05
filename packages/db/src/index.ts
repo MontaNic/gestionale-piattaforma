@@ -23,6 +23,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 
 import { rlsExtension } from './rls';
+import type { TenantContext } from './rls';
 import { softDeleteExtension } from './soft-delete';
 
 /**
@@ -60,6 +61,24 @@ export type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
  * NestJS DI). Importare `prisma` qui per script seed / smoke / utility.
  */
 export const prisma: ExtendedPrismaClient = createPrismaClient();
+
+/**
+ * Indirezione tenant→client (ADR-0026 §D3 fase 1).
+ *
+ * FASE 1 (attuale): ritorna SEMPRE l'unico client condiviso, ignorando `ctx`.
+ * È un seam additivo che prepara il routing multi-DB senza cambiarlo ora —
+ * nessun consumer è ancora rewirato (adozione = fase 2 / passo meccanico).
+ *
+ * La risoluzione del routing-key (slug→tenant→{mode,connString}) NON vive qui:
+ * appartiene al layer tenancy (oggi i lookup in `@gestionale/auth`, futuro
+ * `packages/tenancy`), che passa un `ctx` già risolto. `packages/db` lo CONSUMA.
+ * Vedi ADR-0026 §D4 (ownership) — addendum 8b-2.
+ *
+ * @param _ctx contesto tenant (riservato fase 2; ignorato in fase 1)
+ */
+export function getClientForTenant(_ctx: TenantContext): ExtendedPrismaClient {
+  return prisma;
+}
 
 export { PrismaClient, Prisma };
 

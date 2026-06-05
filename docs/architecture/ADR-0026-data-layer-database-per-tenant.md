@@ -38,6 +38,20 @@ ADR-0025 ha fissato la piattaforma a verticali con core condiviso. È emerso un 
 - La mappa `tenant → {mode: shared|dedicated, connString, server}` vive in un **catalogo nel database condiviso** (control plane), interrogabile senza già sapere il DB del tenant.
 - La **risoluzione del routing-key** avviene dove oggi si popola l'ALS (middleware/JWT, futuro `packages/tenancy`): tenancy risolve il routing-key, `packages/db` lo usa in `getClientForTenant`. **Interfaccia tenancy ↔ db da definire prima di estrarre quei package** (chi possiede la mappa).
 
+#### Addendum 8b-2 (2026-06-05) — attuazione §D3 fase 1: `getClientForTenant` + ownership routing-key
+
+Attuazione di §D3 fase 1 e §D4 (estrazione core ADR-0027 §D5 passo 8b, track 2/2). Non è una decisione nuova: formalizza ciò che §D3/§D4 già prevedevano, con l'evidenza empirica raccolta.
+
+1. **Introdotto** — `getClientForTenant(ctx: TenantContext): ExtendedPrismaClient` in `packages/db` (`src/index.ts`), puramente additivo: in fase 1 ritorna **sempre** il singleton condiviso `prisma`, ignorando `ctx`. Nessun pooling/singleton/extension chain modificato. **Nessun consumer rewirato** — è solo il seam; l'adozione ai call-site è un passo meccanico di fase 2.
+
+2. **Ownership routing-key (decisione §D4 attuata)** — la mappa routing-key (slug→tenant, futuro tenant→`{mode, connString}`) **NON vive in `packages/db`**. Vive nel layer tenancy: oggi i 3 lookup `slug→tenantId` in `@gestionale/auth` (`tenant-consistency.guard.ts`, `tenant.middleware.ts`, `tenants.service.ts`), domani `packages/tenancy`. `packages/db` espone **solo** il consumer (`getClientForTenant`) e riceve un `ctx` già risolto.
+
+3. **Evidenza dirimente (perché non in `db`)** — la mappa _cached_ dipende da Redis (`@gestionale/platform`), e `platform` dipende già da `@gestionale/db`. Far scendere la routing-key cached in `db` creerebbe il ciclo `db ↔ platform`. Inoltre `packages/db` è oggi una **foglia** del grafo (non importa alcun `@gestionale/*`): introdurre l'ownership della mappa lì romperebbe questa proprietà. → la routing-key non appartiene a `packages/db`. (Fatto empirico verificato in preflight 8b STOP 0.)
+
+4. **Confine fase 1 / fase 2** — deferito a fase 2 (estrazione `packages/tenancy` + arrivo del secondo `mode` dedicated-DB): `RoutingKey` tipizzato, catalogo control-plane (`tenant→{mode, connString, server}` nel DB condiviso), evoluzione `DbService.clientFor(ctx)` (§D6). Inventarli ora = build-ahead risk → si applica la disciplina YAGNI del progetto (§F1).
+
+5. **Firma `ctx`** — riusa il `TenantContext` esistente (`{ tenantId: string | null; isSuperAdmin: boolean }`, già ciò che fluisce nell'ALS RLS). **Nessun tipo nuovo** in fase 1.
+
 ### D5 — FINDING PRIORITARIO: i test e2e attuali NON esercitano la RLS
 
 Scoperta del PoC, **rischio già presente oggi, indipendente dal database-per-tenant**:
@@ -80,7 +94,7 @@ Scoperta del PoC, **rischio già presente oggi, indipendente dal database-per-te
 
 ## Follow-up
 
-- [ ] Definire l'interfaccia `tenancy ↔ db` (chi possiede la mappa tenant→DB) prima di estrarre quei package.
+- [~] Definire l'interfaccia `tenancy ↔ db` (chi possiede la mappa tenant→DB) prima di estrarre quei package. — _ownership decisa in 8b-2 (mappa in tenancy/`@gestionale/auth`, `db` la consuma via `getClientForTenant`); il tipo `RoutingKey` e il catalogo control-plane restano deferiti a fase 2 (Addendum sotto §D4)._
 - [ ] Riscrivere/aggiungere il **test RLS core-only come `gestionale_app` non-superuser** (prerequisito dello step `packages/db`); valutare allineamento dell'intero gate e2e all'app role (D5).
-- [ ] Fase 1: introdurre l'indirezione `getClientForTenant` (ritorna il client condiviso) come step additivo.
+- [x] Fase 1: introdurre l'indirezione `getClientForTenant` (ritorna il client condiviso) come step additivo. — _fatto in 8b-2 (2026-06-05), vedi Addendum sotto §D4._
 - [ ] Fase 2 (a richiesta cliente): registry+LRU, orchestratore migration multi-DB, provisioning idempotente, decisione PgBouncer/RLS.

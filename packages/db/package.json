@@ -36,7 +36,8 @@
     "smoke:rls-e2e": "dotenv -e ../../.env -- tsx scripts/smoke-rls-e2e.ts",
     "smoke:rls-core": "dotenv -e ../../.env -- tsx scripts/smoke-rls-core.ts",
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -45,7 +46,8 @@
     "@types/node": "^20.17.0",
     "dotenv-cli": "^11.0.0",
     "tsup": "^8.5.0",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@prisma/client": "6",
