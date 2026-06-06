@@ -56,7 +56,7 @@ export const base = tseslint.config(
   },
 );
 
-// Preset NestJS (apps/api): override per i pattern del framework.
+// Preset NestJS (apps/restaurant-api): override per i pattern del framework.
 // ESLint 9 flat config NON fa config-discovery automatica nei workspace, quindi il
 // consumer applica questo preset a un proprio glob (vedi ADR-0007). Le regole sono
 // agnostiche rispetto al layout: il `files` resta a carico del root config.

@@ -45,7 +45,7 @@ services:
     command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec']
     ports:
       # Pattern simmetrico al postgres binding sopra: 127.0.0.1-only.
-      # apps/api gira sull'host (ts-node-dev) e deve raggiungere Redis via
+      # apps/restaurant-api gira sull'host (ts-node-dev) e deve raggiungere Redis via
       # localhost per rate limiting + lockout (B1, ADR-0013). Quando l'API
       # verra' containerizzata, il binding host potra' essere rimosso
       # (parla via service name "redis" sulla network bridge).
@@ -95,9 +95,9 @@ services:
     restart: unless-stopped
     ports:
       # Pattern simmetrico postgres/redis: 127.0.0.1-only.
-      # apps/api gira sull'host (ts-node-dev) e parla SMTP via localhost.
+      # apps/restaurant-api gira sull'host (ts-node-dev) e parla SMTP via localhost.
       # Web UI accessibile via SSH tunnel se Nicolò vuole ispezionare email.
-      - '127.0.0.1:1025:1025' # SMTP (apps/api → mailpit)
+      - '127.0.0.1:1025:1025' # SMTP (apps/restaurant-api → mailpit)
       - '127.0.0.1:8025:8025' # Web UI + REST API (/api/v1/messages — NB: v1, era v2 su MailHog)
     environment:
       # In-memory storage (MP_DATABASE non impostato → default RAM).

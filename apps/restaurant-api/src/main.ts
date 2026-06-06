@@ -1,5 +1,5 @@
 // =============================================================================
-// main.ts — Entrypoint apps/api (NestJS bootstrap)
+// main.ts — Entrypoint apps/restaurant-api (NestJS bootstrap)
 // =============================================================================
 // Avvia NestJS su PORT (default 3000). Reflect-metadata richiesto
 // per la decorator metadata propagation (Nest DI, ParamTypes, ecc.).

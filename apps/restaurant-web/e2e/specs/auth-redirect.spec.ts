@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * Override default storage state (setup project genera .auth/demo.json riusato
  * di default in chromium project) con stato anonimo via test.use.
  *
- * Comportamento empirico (apps/web/src/app/t/[slug]/dashboard/page.tsx:26-31):
+ * Comportamento empirico (apps/restaurant-web/src/app/t/[slug]/dashboard/page.tsx:26-31):
  * - Client Component, useEffect dopo mount
  * - getAccessToken() null → router.replace(loginUrl)
  * - Quindi: brief render iniziale, poi redirect JS-driven (~ms)

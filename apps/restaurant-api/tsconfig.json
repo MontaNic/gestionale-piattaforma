@@ -14,7 +14,7 @@
     // tsconfig.build.json dedicato con outDir + rootDir + exclude di
     // node_modules workspace deps.
     "noEmit": true,
-    // declaration:false override base (sessione 17). Apps/api e' leaf consumer
+    // declaration:false override base (sessione 17). Apps/restaurant-api e' leaf consumer
     // non libreria pubblicata: niente .d.ts da emettere. Override evita TS2742
     // "inferred type cannot be named without a reference to '@prisma/client/
     // runtime/library'" sui return type che terminano in Prisma.Decimal (es.

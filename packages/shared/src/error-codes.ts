@@ -4,14 +4,14 @@
 // Pattern (ADR-0016 TD-AJ resolution):
 //   - Il backend emette `errorCode` esplicito nel body delle HttpException
 //     (oltre a statusCode + message + timestamp).
-//   - Il frontend `parseError()` (apps/web/src/lib/api.ts) legge `errorCode` →
-//     messaggio i18n-ready via `ERROR_CODE_MESSAGES` (apps/web/src/lib/error-codes.ts).
+//   - Il frontend `parseError()` (apps/restaurant-web/src/lib/api.ts) legge `errorCode` →
+//     messaggio i18n-ready via `ERROR_CODE_MESSAGES` (apps/restaurant-web/src/lib/error-codes.ts).
 //   - Naming convention: prefix `E_` + dominio (`AUTH_`, ...) + descrittore.
 //
 // SCOPE di questo file (passo 3): SOLO i codici **agnostici** (auth/common,
 // cross-cutting di piattaforma). I codici di **dominio** ristorazione
 // (E_MENU_*/E_ARTICLE_*/E_PRICE_LIST_*) NON sono core e restano nel verticale
-// (emessi da apps/api domain services, mappati a messaggi in apps/web). I
+// (emessi da apps/restaurant-api domain services, mappati a messaggi in apps/restaurant-web). I
 // messaggi italiani sono contenuto i18n → andranno in packages/i18n (passo 4).
 //
 // Prima del passo 3 questi codici erano duplicati/divergenti: il BE li emetteva

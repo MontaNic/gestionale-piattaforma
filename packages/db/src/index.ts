@@ -85,7 +85,7 @@ export { PrismaClient, Prisma };
 // -----------------------------------------------------------------------------
 // Domain enum re-exports (consumer-friendly, no direct @prisma/client dep)
 // -----------------------------------------------------------------------------
-// Pattern: i package consumer (apps/api, future apps/web SSR) non dichiarano
+// Pattern: i package consumer (apps/restaurant-api, future apps/restaurant-web SSR) non dichiarano
 // @prisma/client come dep diretta — accedono ai tipi/valori via @gestionale/db.
 // Le enum Prisma sono sia valore (runtime, per IsEnum class-validator) sia
 // tipo. Re-export named per supportare entrambi gli usi.

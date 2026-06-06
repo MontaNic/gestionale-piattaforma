@@ -9,11 +9,11 @@ import path from 'node:path';
  * - 1 test per tenant esegue login flow reale via UI
  * - Cattura storage state (localStorage tokens TD-2) in file JSON
  * - File riusato in test "authenticated" via use.storageState
- * - Path: apps/web/e2e/.auth/<slug>.json (gitignored)
+ * - Path: apps/restaurant-web/e2e/.auth/<slug>.json (gitignored)
  *
  * Credenziali: lette da .env.e2e (NON hardcoded) — vedi STOP 2 Fase 2.4
  * Tokens: localStorage keys `gestionale_access_token` + `gestionale_refresh_token`
- * (vedi apps/web/src/lib/auth.ts).
+ * (vedi apps/restaurant-web/src/lib/auth.ts).
  *
  * Anti-pattern evitati:
  * - NO login HTTP diretto API (vogliamo testare anche flow UI middleware TD-2)
@@ -36,7 +36,7 @@ function getTenantCreds(slug: string): TenantCreds {
   if (!email || !password) {
     throw new Error(
       `Missing credentials for tenant "${slug}". ` +
-        `Set E2E_${SLUG}_EMAIL and E2E_${SLUG}_PASSWORD in apps/web/.env.e2e`,
+        `Set E2E_${SLUG}_EMAIL and E2E_${SLUG}_PASSWORD in apps/restaurant-web/.env.e2e`,
     );
   }
 

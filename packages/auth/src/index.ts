@@ -2,7 +2,7 @@
 // @gestionale/auth — superficie pubblica (ADR-0027 §D5 passo 7)
 // Core auth multi-tenant NestJS: auth, rbac, users, tenancy (tenant + tenants),
 // tenant-context. Il wiring dei 4 APP_GUARD + APP_INTERCEPTOR + middleware
-// resta nello scaffold consumatore (apps/api/src/app.module.ts).
+// resta nello scaffold consumatore (apps/restaurant-api/src/app.module.ts).
 // `health` NON rientra (resta scaffold, DP-health=A — back-ref DbService, passo 8).
 // =============================================================================
 

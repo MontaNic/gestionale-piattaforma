@@ -6,10 +6,10 @@ import path from 'node:path';
 dotenv.config({ path: path.join(import.meta.dirname, '.env.e2e') });
 
 /**
- * Playwright config — apps/web E2E
+ * Playwright config — apps/restaurant-web E2E
  *
  * Pattern fondante (ADR-0016, sessione 10):
- * - testDir: apps/web/e2e/ (separazione da Vitest unit in src/)
+ * - testDir: apps/restaurant-web/e2e/ (separazione da Vitest unit in src/)
  * - baseURL: http://localhost:3001 (default Next.js dev frontend)
  * - webServer: NON autostart in CI (assumiamo dev server già up via docker-compose o pnpm dev)
  *   Locale: webServer opzionale, Nicolò può lanciarlo manualmente con pnpm dev

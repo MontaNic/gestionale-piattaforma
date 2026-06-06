@@ -28,7 +28,7 @@ import { AuthErrorCode } from '@gestionale/shared';
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error('JWT_SECRET env var required (apps/api auth module)');
+    throw new Error('JWT_SECRET env var required (apps/restaurant-api auth module)');
   }
   return secret;
 }

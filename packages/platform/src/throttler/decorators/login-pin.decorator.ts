@@ -19,7 +19,7 @@ import { LOGIN_PIN_METADATA } from '../throttler.module';
 // TD-Y ADR-0014: deviceId NON nel tracker triplet (scope B2a, raccomandato
 // completare per F1 PWA cameriere offline-first).
 //
-// Target endpoint: POST /auth/login-pin (apps/api/src/auth/auth.controller.ts)
+// Target endpoint: POST /auth/login-pin (apps/restaurant-api/src/auth/auth.controller.ts)
 // =============================================================================
 export const LoginPinThrottle = (): MethodDecorator & ClassDecorator =>
   applyDecorators(SetMetadata(LOGIN_PIN_METADATA, true));

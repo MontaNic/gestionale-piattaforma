@@ -33,7 +33,7 @@ import { skipIfMetadataAbsent } from './utils/skip-if-metadata.util';
 // =============================================================================
 
 // Metadata keys: applicate dai custom decorator @AuthStrict() / @TenantCreate()
-// che arriveranno in fase 2 (apps/api/src/throttler/decorators/). Export qui
+// che arriveranno in fase 2 (apps/restaurant-api/src/throttler/decorators/). Export qui
 // per poter essere consumate dal decorator senza duplicare la stringa.
 export const AUTH_STRICT_METADATA = 'gestionale:throttle:auth-strict';
 export const TENANT_CREATE_METADATA = 'gestionale:throttle:tenant-create';

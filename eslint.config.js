@@ -7,10 +7,10 @@ import base, { nestjs } from '@gestionale/eslint-config';
 
 export default [
   ...base,
-  // NestJS workspace (apps/api): il glob app-specifico resta qui (conoscenza del
+  // NestJS workspace (apps/restaurant-api): il glob app-specifico resta qui (conoscenza del
   // layout del repo), il preset di regole/parserOptions arriva dal package.
   {
-    files: ['apps/api/**/*.ts'],
+    files: ['apps/restaurant-api/**/*.ts'],
     ...nestjs,
   },
 ];
