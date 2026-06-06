@@ -239,7 +239,9 @@ Il passo 9 non tocca alcun file `.ts`/`.tsx`/`.prisma`/`.json` di codice.
 
 ### TD-CC (nuovo) — rename `apps/api`/`apps/web` → `apps/restaurant-*` al 2° verticale
 
-**Stato:** aperto. Il naming del verticale è mantenuto oggi (decisione A); il rename va fatto quando
+**Stato: RISOLTO 2026-06-06** (PR #68, `6e32528`) — rename `apps/api,web → restaurant-api,restaurant-web` + package name `@gestionale/restaurant-*` eseguito all'avvio del verticale commercialisti. Diff meccanico simmetrico (96/96), storia preservata via `git mv`, gate verde = baseline.
+
+**Stato originario:** aperto. Il naming del verticale è mantenuto oggi (decisione A); il rename va fatto quando
 arriva il **secondo verticale reale** (commercialisti), per disambiguare `apps/api` da
 `apps/accountant-*`. Lavoro **strutturale-ma-meccanico**: directory + `package.json` `name` +
 path-alias `@gestionale/*` + build-order CI + import. **Confine:** finché non fatto, `apps/api` e
