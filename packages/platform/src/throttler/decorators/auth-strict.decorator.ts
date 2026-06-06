@@ -12,7 +12,7 @@ import { AUTH_STRICT_METADATA } from '../throttler.module';
 // TTL/limit NON passati qui: vengono dalla forRootAsync (env-driven). Il
 // decorator e' puro opt-in semantico, niente override numerico.
 //
-// Target endpoint (apps/api/src/auth/auth.controller.ts):
+// Target endpoint (apps/restaurant-api/src/auth/auth.controller.ts):
 //   - POST /auth/login
 //   - POST /auth/login-pin
 // =============================================================================

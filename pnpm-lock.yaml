@@ -45,7 +45,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@20.19.40)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@20.19.40)(typescript@5.9.3))(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
 
-  apps/api:
+  apps/restaurant-api:
     dependencies:
       '@gestionale/auth':
         specifier: workspace:*
@@ -175,7 +175,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@20.19.40)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@20.19.40)(typescript@5.9.3))(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
 
-  apps/web:
+  apps/restaurant-web:
     dependencies:
       '@gestionale/api-client':
         specifier: workspace:*
@@ -11161,7 +11161,7 @@ snapshots:
 
   fork-ts-checker-webpack-plugin@9.1.0(typescript@5.9.3)(webpack@5.106.0(@swc/core@1.15.33)(lightningcss@1.32.0)):
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       chalk: 4.1.2
       chokidar: 4.0.3
       cosmiconfig: 8.3.6(typescript@5.9.3)

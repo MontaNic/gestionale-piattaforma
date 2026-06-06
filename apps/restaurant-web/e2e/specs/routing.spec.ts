@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Routing tests — middleware TD-2 path-based (apps/web/src/middleware.ts).
+ * Routing tests — middleware TD-2 path-based (apps/restaurant-web/src/middleware.ts).
  *
  * Test idempotenti (no DB mutation), no storage state richiesto.
  *

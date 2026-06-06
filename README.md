@@ -83,7 +83,7 @@ Razionale completo: [ADR-0004](./docs/architecture/ADR-0004-local-git-hooks.md).
 
 Schema multi-tenant, migrations, seed e Prisma client tipizzato (con soft-delete + RLS extension applicate) in [`packages/db/`](./packages/db/). `DATABASE_URL` è letta dal root `.env` (gli script `prisma:*`, `db:seed`, `smoke:*` usano `dotenv-cli` per puntarlo).
 
-Da E1 (2026-05-13) `packages/db` ha **build step via `tsup`** ([ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)): emette `dist/index.{cjs,mjs,d.cts,d.ts}` con `exports` conditional. Consumer CJS (apps/api) carica `dist/index.cjs`, consumer ESM (apps/web, futuro worker/kds) carica `dist/index.mjs`. `pnpm --filter @gestionale/db build` produce gli artifact; Turbo `dependsOn: ["^build"]` orchestra la build automaticamente quando si lancia `pnpm dev` (root) o `pnpm exec turbo run dev --filter=<consumer>`.
+Da E1 (2026-05-13) `packages/db` ha **build step via `tsup`** ([ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)): emette `dist/index.{cjs,mjs,d.cts,d.ts}` con `exports` conditional. Consumer CJS (apps/restaurant-api) carica `dist/index.cjs`, consumer ESM (apps/restaurant-web, futuro worker/kds) carica `dist/index.mjs`. `pnpm --filter @gestionale/db build` produce gli artifact; Turbo `dependsOn: ["^build"]` orchestra la build automaticamente quando si lancia `pnpm dev` (root) o `pnpm exec turbo run dev --filter=<consumer>`.
 
 #### Database setup (D3b RLS Active) — pattern dual-URL + post-migration password rotation
 
@@ -152,13 +152,13 @@ const client = createPrismaClient();
 
 Al bootstrap del primo tenant (logica F1 NestJS), i 6 `system_role_templates` con `isDefault: true` saranno clonati come `roles` con il `tenant_id` reale (più copia dei mapping permission).
 
-### API server (`apps/api`)
+### API server (`apps/restaurant-api`)
 
-Backend NestJS 11 (CommonJS) in [`apps/api/`](./apps/api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck + auth module completo: email/password + JWT + refresh rotation + theft detection (D2a + D2-vitest) e **PIN POS login** (D2b).
+Backend NestJS 11 (CommonJS) in [`apps/restaurant-api/`](./apps/restaurant-api/) — consumer di `@gestionale/db`. F1 scaffold con healthcheck + auth module completo: email/password + JWT + refresh rotation + theft detection (D2a + D2-vitest) e **PIN POS login** (D2b).
 
 ```bash
 # Dev server (ts-node-dev + watch + restart automatico)
-pnpm --filter @gestionale/api dev
+pnpm --filter @gestionale/restaurant-api dev
 
 # Endpoint pubblici
 curl http://localhost:3000/api/v1/                # → "Gestionale API"
@@ -351,7 +351,7 @@ Multi-tenant isolation enforced runtime via PostgreSQL Row Level Security (vedi 
 
 - **AsyncLocalStorage context** (`packages/db/src/rls.ts`): ALS singleton + helpers `runInTenantContext`, `withSystemContext`, `withSuperAdminContext`. Propaga `(tenantId, isSuperAdmin)` lungo l'intera chain async.
 - **Prisma extension RLS** (`rlsExtension`): wrappa ogni operazione model in `$transaction` interactive con `SET LOCAL app.tenant_id` + `SET LOCAL app.is_super_admin`. Fail-fast: throw `RLS_NO_CONTEXT` se la query parte fuori da context.
-- **TenantContextInterceptor** (`apps/api/src/context/tenant-context.interceptor.ts`): globale post-JwtAuthGuard, wrappa handler in `runInTenantContext({tenantId: req.tenantId, isSuperAdmin: false})`. Skip per route Public senza tenant (root, /health, /auth/refresh).
+- **TenantContextInterceptor** (`apps/restaurant-api/src/context/tenant-context.interceptor.ts`): globale post-JwtAuthGuard, wrappa handler in `runInTenantContext({tenantId: req.tenantId, isSuperAdmin: false})`. Skip per route Public senza tenant (root, /health, /auth/refresh).
 - **TenantMiddleware** (refactor D3a): slug lookup in `withSystemContext`, dopo resolve `runInTenantContext(...)` per il resto della chain. Pre-auth routes (login, login-pin).
 - **AuthService.refresh wrap**: `/auth/refresh` non passa per middleware tenant → wrap interno con tenantId dal payload JWT.
 - **JwtStrategy.validate wrap** (post-D3a finding emerso a STEP 2 D3b): query Prisma dentro `validate()` runnano al guard stage, prima dell'Interceptor. Wrap in `runInTenantContext(payload.tenantId)` per defense in depth.
@@ -395,19 +395,19 @@ Healthcheck restituisce **HTTP 200** quando il DB ping (`SELECT 1`) riesce; **HT
 
 Razionale scaffold + 4 course corrections empiriche (tsx fail su decorator metadata, swc detour 13min, packages/db CJS tech debt, enableShutdownHooks): [ADR-0007](./docs/architecture/ADR-0007-nestjs-api-scaffold.md). **Update E1**: CC2 (packages/db CJS forzato) risolto via dual package strategy — vedi [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md).
 
-### Frontend (`apps/web`)
+### Frontend (`apps/restaurant-web`)
 
-Next.js 15 App Router + React 18.3 + Tailwind 3.4 + shadcn/ui. Scaffold E1 in [`apps/web/`](./apps/web/), consumer di `@gestionale/db` via **dual package exports** (CJS+ESM+DTS generato da `tsup` — vedi [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)).
+Next.js 15 App Router + React 18.3 + Tailwind 3.4 + shadcn/ui. Scaffold E1 in [`apps/restaurant-web/`](./apps/restaurant-web/), consumer di `@gestionale/db` via **dual package exports** (CJS+ESM+DTS generato da `tsup` — vedi [ADR-0011](./docs/architecture/ADR-0011-dual-package-strategy-and-nextjs-scaffold.md)).
 
 ```bash
 # Dev server (via Turbo — auto-build packages/db prima di avviare Next)
-pnpm exec turbo run dev --filter=@gestionale/web   # → http://localhost:3001
+pnpm exec turbo run dev --filter=@gestionale/restaurant-web   # → http://localhost:3001
 
 # Build production
-pnpm --filter @gestionale/web build
+pnpm --filter @gestionale/restaurant-web build
 
 # Typecheck
-pnpm --filter @gestionale/web typecheck
+pnpm --filter @gestionale/restaurant-web typecheck
 ```
 
 A regime E1: home statica a `:3001` con `<h1>Gestionale Platform</h1>` + Button shadcn renderizzato (smoke visivo dell'integrazione Tailwind + shadcn). **E2** ha sostituito la home con redirect client-side + introdotto `/login` + `/dashboard`. **F1-shell (sessione 14)** ha aggiunto shell UI completa: Sidebar 8 nav (Dashboard/Menu/Mappa/Comande/Cassa/KDS/Report/Settings) + Topbar (avatar dropdown con theme toggle light/dark/system + locale switcher it/en + logout) + AuthContext+AuthGate refactor estrazione da dashboard inline. i18n via `next-intl@4.12.0` cookie-based (`NEXT_LOCALE`, `localePrefix: 'never'`, no segment URL). 7 placeholder route "Coming soon" pronti per implementation feature business. Vedi [ADR-0018](./docs/architecture/ADR-0018-f1-shell-ui-foundation.md).
@@ -422,8 +422,8 @@ Primo flow end-to-end frontend↔API via browser. Stack: App Router pages + Next
 
 ```bash
 # Avvia entrambi i dev server (2 terminali OR pnpm dev root)
-pnpm exec turbo run dev --filter=@gestionale/api    # → :3000
-pnpm exec turbo run dev --filter=@gestionale/web    # → :3001
+pnpm exec turbo run dev --filter=@gestionale/restaurant-api    # → :3000
+pnpm exec turbo run dev --filter=@gestionale/restaurant-web    # → :3001
 
 # Browser: http://localhost:3001 → redirect /t/demo/login (default tenant dev)
 # Credenziali seedate D3b:
@@ -435,17 +435,17 @@ pnpm exec turbo run dev --filter=@gestionale/web    # → :3001
 **Multi-tenant routing path-based (TD-2 resolution, sessione 9)**:
 
 - Pattern URL: `/t/<slug>/<page>` (es. `/t/demo/login`, `/t/acme/dashboard`)
-- [`apps/web/src/middleware.ts`](./apps/web/src/middleware.ts) Next.js 15 edge-side: slug validation regex + `RESERVED_SLUGS` Set (coerente backend `FORBIDDEN_SLUGS` D4)
+- [`apps/restaurant-web/src/middleware.ts`](./apps/restaurant-web/src/middleware.ts) Next.js 15 edge-side: slug validation regex + `RESERVED_SLUGS` Set (coerente backend `FORBIDDEN_SLUGS` D4)
 - Root `/` → redirect `/t/demo/login` (default tenant dev) — Server Component fallback + middleware edge
 - Slug invalid (es. `INVALID-FOO` uppercase) o reserved (es. `api`, `admin`) → redirect `/not-found`
 - Client components leggono slug runtime via `useParams<{slug:string}>()` (App Router idiomatic)
-- API client [`apps/web/src/lib/api.ts`](./apps/web/src/lib/api.ts): `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata. `tenantSlug` → header `X-Tenant-Slug`. Backend API contract INVARIATO.
+- API client [`apps/restaurant-web/src/lib/api.ts`](./apps/restaurant-web/src/lib/api.ts): `RequestOptions { tenantSlug?, accessToken? }` interface tipizzata. `tenantSlug` → header `X-Tenant-Slug`. Backend API contract INVARIATO.
 
 Pattern struttura: 5 pages (`/`, `/not-found`, `/t/[slug]/login`, `/t/[slug]/dashboard`, root middleware) + 3 lib (`api.ts` API client typed con `ApiError` + `RequestOptions`, `auth.ts` token storage con SSR guards, `types.ts` matching empirico `/me` response). `router.replace`/`router.push` tenant-aware via template literal `/t/${tenantSlug}/<page>`. Error discrimination per `E_AUTH_INVALID_CREDENTIALS` → UX-friendly "Email o password non corrette".
 
 Razionale completo: [ADR-0012](./docs/architecture/ADR-0012-frontend-auth-flow.md) — 6 decisioni E2 (localStorage vs cookie, RHF+zod, tenant slug hardcoded → **risolto TD-2**, pages structure, no auto-refresh, shadcn CLI add) + sezione **TD-2 Resolution** (path-based vs subdomain vs query param, smoke server-side 7/7), 5 discoveries (E2 + #31 Next.js dynamic segment shell escape), 7 tech debt (TD-1 → TD-7).
 
-**Entrypoint dev — anti-pattern noto**: `pnpm --filter @gestionale/web dev` **bypassa Turbo** (chiama lo script direttamente, salta `dependsOn`). Se `packages/db/dist/` non esiste fallisce con `Cannot find module`. Usa sempre uno di questi due:
+**Entrypoint dev — anti-pattern noto**: `pnpm --filter @gestionale/restaurant-web dev` **bypassa Turbo** (chiama lo script direttamente, salta `dependsOn`). Se `packages/db/dist/` non esiste fallisce con `Cannot find module`. Usa sempre uno di questi due:
 
 - `pnpm dev` (root, Turbo orchestra l'intera build chain dev di tutti i workspace)
 - `pnpm exec turbo run dev --filter=<workspace>` (filtra a un workspace ma mantiene la chain)
@@ -460,14 +460,14 @@ Vitest 3.2.4 con pattern `projects` array (Vitest 4-ready). Config in [`vitest.c
 # Tutti i test del monorepo (propaga via Turbo)
 pnpm test
 
-# Solo apps/api in watch mode
-pnpm --filter @gestionale/api test:watch
+# Solo apps/restaurant-api in watch mode
+pnpm --filter @gestionale/restaurant-api test:watch
 
 # Coverage v8 (locale)
-pnpm --filter @gestionale/api test:coverage
+pnpm --filter @gestionale/restaurant-api test:coverage
 ```
 
-Pattern test attuale: unit test con istanziazione manuale dei service NestJS + mock providers via `vi.fn()` (bypass DI container, vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md) sezione "D2-vitest implementation"). **E2E test framework attivo da B2b** (`apps/api/test/e2e/`).
+Pattern test attuale: unit test con istanziazione manuale dei service NestJS + mock providers via `vi.fn()` (bypass DI container, vedi [ADR-0008](./docs/architecture/ADR-0008-auth-module.md) sezione "D2-vitest implementation"). **E2E test framework attivo da B2b** (`apps/restaurant-api/test/e2e/`).
 
 ### E2E tests (Testcontainers)
 
@@ -477,16 +477,16 @@ Stack: `supertest@7.x` + `@testcontainers/postgresql@11.x` + `@testcontainers/re
 
 ```bash
 # E2E only (slow, ~13s con container start + Prisma migrate)
-pnpm --filter @gestionale/api test:e2e
+pnpm --filter @gestionale/restaurant-api test:e2e
 
 # Unit only (fast, ~700ms, no Docker)
-pnpm --filter @gestionale/api test
+pnpm --filter @gestionale/restaurant-api test
 
 # Entrambi
-pnpm --filter @gestionale/api test:all
+pnpm --filter @gestionale/restaurant-api test:all
 ```
 
-Helpers in [`apps/api/test/e2e/helpers/`](./apps/api/test/e2e/helpers/):
+Helpers in [`apps/restaurant-api/test/e2e/helpers/`](./apps/restaurant-api/test/e2e/helpers/):
 
 - `test-containers.ts` — `startTestContainers()` (Promise.all Postgres+Redis + Prisma migrate) + `stopTestContainers()`
 - `test-app.ts` — `createTestApp()` (env override + lazy AppModule import) + `truncateDatabase()` + `seedMinimal()` (tenant demo + admin con argon2)
@@ -507,23 +507,23 @@ Pre-requisiti dev locale:
 
 ```bash
 # Browser binaries (~1.2GB in ~/.cache/ms-playwright, una tantum)
-cd apps/web && pnpm exec playwright install
+cd apps/restaurant-web && pnpm exec playwright install
 
 # Host system libs apt (Ubuntu 22.04 minimal, una tantum — Discovery #32)
 sudo pnpm exec playwright install-deps
 ```
 
-Stack dev up obbligatorio: `docker compose -f docker-compose.dev.yml up -d` + `pnpm dev` (background in tab dedicata) + `apps/web/.env.e2e` con credenziali seed (template `.env.e2e.example` committato).
+Stack dev up obbligatorio: `docker compose -f docker-compose.dev.yml up -d` + `pnpm dev` (background in tab dedicata) + `apps/restaurant-web/.env.e2e` con credenziali seed (template `.env.e2e.example` committato).
 
 ```bash
-cd apps/web
+cd apps/restaurant-web
 pnpm test:e2e:chromium   # Run Chromium (default, ~9s)
 pnpm test:e2e:ui          # UI mode debug visivo (port forward Mac richiesto)
 pnpm test:e2e:debug       # Debug step-by-step
 pnpm test:e2e:report      # Apri ultimo HTML report
 ```
 
-Files chiave: [`apps/web/e2e/auth.setup.ts`](./apps/web/e2e/auth.setup.ts) (login UI demo + acme → storage state `.auth/<slug>.json`), [`apps/web/e2e/specs/`](./apps/web/e2e/specs/) (7 spec + smoke), [`apps/web/playwright.config.ts`](./apps/web/playwright.config.ts) (4 projects: setup + chromium/firefox/webkit).
+Files chiave: [`apps/restaurant-web/e2e/auth.setup.ts`](./apps/restaurant-web/e2e/auth.setup.ts) (login UI demo + acme → storage state `.auth/<slug>.json`), [`apps/restaurant-web/e2e/specs/`](./apps/restaurant-web/e2e/specs/) (7 spec + smoke), [`apps/restaurant-web/playwright.config.ts`](./apps/restaurant-web/playwright.config.ts) (4 projects: setup + chromium/firefox/webkit).
 
 CI: job `e2e-playwright` in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) (container `mcr.microsoft.com/playwright:v1.60.0-jammy` + services Docker Postgres 16 / Redis 7 / Mailpit v1.30, Chromium-only default).
 
@@ -535,14 +535,14 @@ CI: job `e2e-playwright` in [`.github/workflows/ci.yml`](./.github/workflows/ci.
 
 RBAC enforcement attivo da sessione 11 (vedi [ADR-0017](./docs/architecture/ADR-0017-rbac-permissions-guard.md)).
 
-- **`@RequirePermissions(...)` decorator** ([apps/api/src/rbac/decorators/](./apps/api/src/rbac/decorators/)): protegge endpoint con check permission lazy lookup
+- **`@RequirePermissions(...)` decorator** ([apps/restaurant-api/src/rbac/decorators/](./apps/restaurant-api/src/rbac/decorators/)): protegge endpoint con check permission lazy lookup
   - AND default: `@RequirePermissions('users.read', 'users.write')` = ENTRAMBE richieste
   - OR opt-in: `@RequirePermissions({ mode: 'OR' }, 'admin', 'manager')` = ALMENO UNA
-- **PermissionsGuard APP_GUARD globale** ([apps/api/src/rbac/guards/permissions.guard.ts](./apps/api/src/rbac/guards/permissions.guard.ts)): cache Redis TTL 60s (env `RBAC_CACHE_TTL_S`) + fallback DB (Pattern fail-open layered 4° livello, coerente B1/B2a/B2b)
+- **PermissionsGuard APP_GUARD globale** ([apps/restaurant-api/src/rbac/guards/permissions.guard.ts](./apps/restaurant-api/src/rbac/guards/permissions.guard.ts)): cache Redis TTL 60s (env `RBAC_CACHE_TTL_S`) + fallback DB (Pattern fail-open layered 4° livello, coerente B1/B2a/B2b)
 - **Audit action `auth.permission_denied`**: dedupe Redis 60s per anti-flood (`audit:permdenied:<userId>:<endpoint>`)
 - **Permission codes**: seedati in [`packages/db/prisma/seed.ts`](./packages/db/prisma/seed.ts) (32 permessi, 6 system role templates clonati al bootstrap tenant)
 
-Ordine APP_GUARDs deterministico (sessione 11 Discovery #36): `AppThrottlerGuard` → `JwtAuthGuard` → `PermissionsGuard`, tutti registrati in [`app.module.ts`](./apps/api/src/app.module.ts).
+Ordine APP_GUARDs deterministico (sessione 11 Discovery #36): `AppThrottlerGuard` → `JwtAuthGuard` → `PermissionsGuard`, tutti registrati in [`app.module.ts`](./apps/restaurant-api/src/app.module.ts).
 
 **Test outcomes**: 20/20 unit rbac (mock Redis+DB+Reflector) + 3/3 e2e Testcontainers (admin allow / limited deny / audit row).
 
@@ -550,7 +550,7 @@ Comandi disponibili oggi (root):
 
 ```bash
 pnpm lint          # ESLint su tutto il repo (eslint .)
-pnpm typecheck     # turbo run typecheck → propaga ai workspace (@gestionale/db, @gestionale/api)
+pnpm typecheck     # turbo run typecheck → propaga ai workspace (@gestionale/db, @gestionale/restaurant-api)
 pnpm format:check  # Prettier --check (CI lo verifica)
 pnpm format:write  # Prettier --write per allineare il repo
 pnpm test          # turbo run test → propaga ai workspace con spec files

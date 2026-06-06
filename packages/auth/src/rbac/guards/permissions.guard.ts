@@ -98,7 +98,7 @@ export class PermissionsGuard implements CanActivate {
     // TenantContextInterceptor globale che setta ALS al controller stage).
     // Le query Prisma downstream (hasPermission lookup, audit insert) hanno
     // bisogno di ALS context, sennò RlsNoContextError. Pattern simmetrico a
-    // JwtStrategy.validate() (apps/api/src/auth/strategies/jwt.strategy.ts:62-65).
+    // JwtStrategy.validate() (apps/restaurant-api/src/auth/strategies/jwt.strategy.ts:62-65).
     return runInTenantContext({ tenantId: user.tenantId, isSuperAdmin: false }, () =>
       this.checkPermissions(request, user, metadata),
     );

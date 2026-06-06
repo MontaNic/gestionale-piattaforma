@@ -1,5 +1,5 @@
 // =============================================================================
-// vitest.config.mts (apps/api) — Vitest projects array (B2b)
+// vitest.config.mts (apps/restaurant-api) — Vitest projects array (B2b)
 // =============================================================================
 // 2 progetti separati:
 //   - unit (default `pnpm test`): src/**/*.spec.ts, FAST, no infrastruttura
@@ -25,16 +25,16 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [
     swc.vite({
-      // Discovery #29 B2b: config inline (ridondante con apps/api/.swcrc
+      // Discovery #29 B2b: config inline (ridondante con apps/restaurant-api/.swcrc
       // perche' unplugin-swc cerca .swcrc da Vitest cwd root, NON da
-      // apps/api). Config esplicito + tsconfigFile: false evita merge confuso.
+      // apps/restaurant-api). Config esplicito + tsconfigFile: false evita merge confuso.
       //
       // keepClassNames: true ⭐ critical NestJS DI (no class renaming →
       //   il token registrato in IoC corrisponde a quello cercato via
       //   design:paramtypes).
       // decoratorMetadata + legacyDecorator → emit Stage 1 decorators
       //   + Reflect.metadata('design:paramtypes', ...).
-      // module.type: commonjs → apps/api CJS (ADR-0007 CC2), runtime allineato.
+      // module.type: commonjs → apps/restaurant-api CJS (ADR-0007 CC2), runtime allineato.
       tsconfigFile: false,
       sourceMaps: true,
       jsc: {

@@ -13,7 +13,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET env var required (apps/api AuthModule init)');
+  throw new Error('JWT_SECRET env var required (apps/restaurant-api AuthModule init)');
 }
 
 @Module({

@@ -13,9 +13,9 @@ import { test, expect } from '@playwright/test';
  * Fix: login UI inline genera JWT "usa-e-getta" che logout può invalidare
  * senza side effect su altri test. Costa ~1s extra ma test self-contained.
  *
- * Selettori empirici (apps/web/src/app/t/[slug]/dashboard/page.tsx):
+ * Selettori empirici (apps/restaurant-web/src/app/t/[slug]/dashboard/page.tsx):
  * - Logout: <Button variant="outline">Esci</Button> (durante logout "Uscita...")
- * - localStorage keys (apps/web/src/lib/auth.ts):
+ * - localStorage keys (apps/restaurant-web/src/lib/auth.ts):
  *   gestionale_access_token + gestionale_refresh_token
  */
 

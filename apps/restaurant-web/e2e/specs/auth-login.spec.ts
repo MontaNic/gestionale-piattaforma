@@ -11,7 +11,7 @@ import { test, expect } from '@playwright/test';
  *
  * Rate limit B1: 5 fail/min per tenant. Solo 1 fail test = 1/5 → OK in run veloci.
  *
- * Selettori empirici (apps/web/src/app/t/[slug]/login/page.tsx):
+ * Selettori empirici (apps/restaurant-web/src/app/t/[slug]/login/page.tsx):
  * - shadcn/ui Input via RHF Controller → textbox role + accessible name
  * - Submit: <Button type="submit">Accedi</Button>
  * - Error: <Alert variant="destructive">. Mapping via lib/error-codes.ts:

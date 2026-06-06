@@ -11,7 +11,7 @@ import { TENANT_CREATE_METADATA } from '../throttler.module';
 // userId-or-IP (vedi guards/app-throttler.guard.ts) — attacker autenticato
 // con `sistema.tenant.gestisci` non puo' bypassare con IP rotation.
 //
-// Target endpoint (apps/api/src/tenants/tenants.controller.ts):
+// Target endpoint (apps/restaurant-api/src/tenants/tenants.controller.ts):
 //   - POST /tenants
 // =============================================================================
 export const TenantCreate = (): MethodDecorator & ClassDecorator =>

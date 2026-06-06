@@ -1,5 +1,5 @@
 // =============================================================================
-// test/setup.ts — Global setup per Vitest in apps/api (project `unit`)
+// test/setup.ts — Global setup per Vitest in apps/restaurant-api (project `unit`)
 // =============================================================================
 // Vitest carica questo file una volta prima di qualsiasi test file unit.
 //

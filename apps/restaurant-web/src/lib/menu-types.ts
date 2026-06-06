@@ -1,7 +1,7 @@
 // =============================================================================
 // menu-types.ts — Domain types F1 Menu UI (S19 ADR-0020)
 // =============================================================================
-// Shape allineata alle response backend `{ data }` di apps/api
+// Shape allineata alle response backend `{ data }` di apps/restaurant-api
 // (menus / menu-categories / articles controllers, S17 ADR-0019).
 //
 // Note di serializzazione JSON:

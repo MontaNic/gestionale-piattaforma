@@ -63,7 +63,7 @@ jobs:
     # TD-4 sessione 10 — E2E foundation.
     # Container Playwright (mcr.microsoft.com/playwright:v1.60.0-jammy) ha
     # browser + OS deps preinstallati: evita `playwright install --with-deps`
-    # (~2-3 min). Pinned alla stessa versione del client (apps/web/package.json
+    # (~2-3 min). Pinned alla stessa versione del client (apps/restaurant-web/package.json
     # @playwright/test 1.60.0); aggiornare in coppia per evitare API drift.
     container:
       image: mcr.microsoft.com/playwright:v1.60.0-jammy
@@ -188,12 +188,12 @@ jobs:
           LOCKOUT_DURATION_MS=${{ env.LOCKOUT_DURATION_MS }}
           EOF
 
-      - name: Write apps/web/.env.e2e for Playwright credentials
+      - name: Write apps/restaurant-web/.env.e2e for Playwright credentials
         # Playwright auth.setup.ts legge .env.e2e via dotenv (vedi
-        # apps/web/playwright.config.ts). Credenziali matchano seed dev
+        # apps/restaurant-web/playwright.config.ts). Credenziali matchano seed dev
         # (packages/db/prisma/seed.ts tenant demo + acme).
         run: |
-          cat > apps/web/.env.e2e <<'EOF'
+          cat > apps/restaurant-web/.env.e2e <<'EOF'
           E2E_DEMO_EMAIL=admin@demo.local
           E2E_DEMO_PASSWORD=Admin123!
           E2E_ACME_EMAIL=manager@acme.local
@@ -255,13 +255,13 @@ jobs:
         # nohup + redirect log per debug post-mortem se test FAIL.
         run: |
           mkdir -p /tmp/ci-logs
-          cd apps/api
+          cd apps/restaurant-api
           nohup pnpm dev > /tmp/ci-logs/api.log 2>&1 &
           echo $! > /tmp/ci-logs/api.pid
 
       - name: Start Web server (background)
         run: |
-          cd apps/web
+          cd apps/restaurant-web
           nohup pnpm dev > /tmp/ci-logs/web.log 2>&1 &
           echo $! > /tmp/ci-logs/web.pid
 
@@ -303,7 +303,7 @@ jobs:
           redis-cli -h redis FLUSHDB
 
       - name: Run Playwright E2E (Chromium)
-        working-directory: apps/web
+        working-directory: apps/restaurant-web
         run: pnpm test:e2e:ci
 
       - name: Stop dev servers (cleanup)
@@ -317,7 +317,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ github.run_id }}
-          path: apps/web/playwright-report/
+          path: apps/restaurant-web/playwright-report/
           retention-days: 7
 
       - name: Upload test-results (on failure)
@@ -325,7 +325,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ github.run_id }}
-          path: apps/web/test-results/
+          path: apps/restaurant-web/test-results/
           retention-days: 3
 
       - name: Upload dev server logs (on failure)

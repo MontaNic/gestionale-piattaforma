@@ -1,5 +1,5 @@
 {
-  "name": "@gestionale/api",
+  "name": "@gestionale/restaurant-api",
   "version": "0.0.0",
   "private": true,
   "description": "NestJS API per la piattaforma Gestionale (consumer di @gestionale/db). F1 scaffold con healthcheck — auth e business logic in macro-task successivi.",

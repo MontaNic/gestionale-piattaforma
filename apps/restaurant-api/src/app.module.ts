@@ -33,7 +33,7 @@ import { PriceListsModule } from './price-lists/price-lists.module';
   imports: [
     // ConfigModule globale: rende ConfigService DI-iniettabile ovunque senza
     // re-import. Le env vars sono gia' caricate da dotenv-cli wrapper degli
-    // script dev/start:prod (vedi package.json apps/api), quindi qui niente
+    // script dev/start:prod (vedi package.json apps/restaurant-api), quindi qui niente
     // envFilePath: ConfigService legge process.env.
     ConfigModule.forRoot({ isGlobal: true }),
     DbModule,

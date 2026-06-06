@@ -30,7 +30,7 @@ test-results/
 playwright/.cache/
 blob-report/
 # Playwright auth storage state (generato runtime, contiene tokens sessione)
-apps/web/e2e/.auth/
+apps/restaurant-web/e2e/.auth/
 
 # --- Environment ---
 .env
