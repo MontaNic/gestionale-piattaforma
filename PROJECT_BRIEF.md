@@ -818,7 +818,7 @@ L'AI Assistant è un **copilota della direzione**: assistente conversazionale ch
 
 ### Architettura
 
-- Tour definiti come JSON config in `apps/web/onboarding/`.
+- Tour definiti come JSON config in `apps/restaurant-web/onboarding/`.
 - Knowledge base come MDX files versionati in repo.
 - Search via MeiliSearch (stesso indice della search globale).
 
@@ -1374,3 +1374,7 @@ Per ogni nuova feature proposta in futuro, valutare:
 Se le risposte sono: 1) no, 2) pochi, 3) no, 4) sì, 5) sì → **scartare** o **mettere in BACKLOG**.
 
 > "Il prodotto perfetto non è quello a cui non si può più aggiungere nulla, ma quello da cui non si può più togliere nulla." (parafrasi Antoine de Saint-Exupéry)
+
+## F7. Naming / brand (idee future)
+
+**Naming / brand (idea futura, decisione differita):** valutare rebrand della piattaforma a **"One Platform"**. Tre livelli a costo crescente: brand/display (banale) → repo GitHub (`gestionale-piattaforma` → `one-platform`, meccanico, redirect GitHub) → scope tecnico (`@gestionale/*` → `@oneplatform/*`: epica — ogni package/app, path-alias, build-order, CI). Se mai eseguito, il livello 3 va fatto **prima** di aggiungere altri verticali (il churn scala col numero di package). Non deciso.

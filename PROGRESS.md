@@ -5,6 +5,7 @@
 > Aggiornato dopo ogni macro-task completato.
 
 **Ultimo aggiornamento:** 5 giugno 2026 (passo 9 — riframe verticale a scaffold + **chiusura estrazione core ADR-0027 §D5**: 9 package estratti, `apps/*` = verticale ristorazione scaffold congelato, naming A mantenuto, TD-CC; 142 unit / 13 task turbo)
+**Aggiornamento 6 giugno 2026:** rename verticale ristorazione eseguito — `apps/api,web` → `apps/restaurant-api,restaurant-web` + package name `@gestionale/restaurant-*` (PR #68, `6e32528`); **TD-CC risolto**; doc allineati (apps/README, PROJECT_BRIEF, ADR-0027). `docs/handoff/HANDOFF.md` differito a riscrittura di fine sessione.
 **Fase corrente:** Foundation tecnica completa e **ora estratta nel core condiviso**. Macro-task costruiti (sessioni 1-21): Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a/D2b Auth (email/password + PIN POS) + D3a/D3b RLS (framework + activation) + D4 Tenant bootstrap + E1/E2 Next.js scaffold + Login UI + B1/B2a/B2b Auth E2E hardening (rate-limit + lockout + email + Testcontainers) + TD-2 multi-tenant routing + TD-4 Playwright E2E + RBAC enforcement Guard + TD-7 cross-tenant defense-in-depth. **Estrazione core ADR-0027 §D5 chiusa (passo 9)**: 9 `packages/` condivisi (api-client, auth, auth-web, db, eslint-config, i18n, platform, shared, ui); `apps/*` = verticale ristorazione **congelato a scaffold/boilerplate** (shell 8-nav, auth gating, i18n it/en, theme) per ADR-0025. **Test**: 142 unit + 13 task turbo verdi. **Prossimo scope:** avvio primo verticale reale (studi commercialisti).
 
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
@@ -319,7 +320,7 @@ Ultimo passo dell'ordine §D5. Passo **atomico, documentale** (zero file di codi
 
 **Test totali (realtà post-8b):** **142 unit** su **13 task turbo** (95 api~~/82~~→ ora 43 api + 39 auth + 13 platform + 12 auth-web + 10 api-client + 9 ui + 8 i18n + 5 shared + **3 db**) · **56 e2e** Testcontainers backend (4 skip) · **14 Playwright** chromium. Sostituisce il conteggio stale "95/95".
 
-> **TD-CC — rename `apps/api`/`apps/web` → `apps/restaurant-*` al 2° verticale** (aperto): naming mantenuto oggi (decisione A); rename al secondo verticale per disambiguare. Strutturale-ma-meccanico (directory + `package.json` name + path-alias + CI build-order + import). Severità BASSA, trigger = avvio 2° verticale, ~1-2h. Cfr. ADR-0027 Addendum passo 9.
+> **TD-CC — rename `apps/api`/`apps/web` → `apps/restaurant-*` al 2° verticale** (RISOLTO 2026-06-06, PR #68): naming mantenuto oggi (decisione A); rename al secondo verticale per disambiguare. Strutturale-ma-meccanico (directory + `package.json` name + path-alias + CI build-order + import). Severità BASSA, trigger = avvio 2° verticale, ~1-2h. Cfr. ADR-0027 Addendum passo 9.
 
 ---
 
