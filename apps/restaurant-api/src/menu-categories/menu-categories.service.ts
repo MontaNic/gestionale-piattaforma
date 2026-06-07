@@ -6,7 +6,7 @@ import { ConflictException, Inject, Injectable, Logger, NotFoundException } from
 import { id, type MenuCategory, withTenantContextAtomicTx } from '@gestionale/db';
 
 import { catchUniqueViolation } from '@gestionale/platform';
-import { DbService } from '../db/db.service';
+import { DbService } from '@gestionale/db/nest';
 import type { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import type { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
 

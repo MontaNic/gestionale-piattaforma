@@ -2,6 +2,12 @@
   "$schema": "https://json.schemastore.org/tsconfig.json",
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // Sub-entry ./nest (DbService/DbModule) usa decorator NestJS (@Injectable,
+    // @Module): servono experimentalDecorators + emitDecoratorMetadata per
+    // emettere design:paramtypes. Pattern allineato a packages/platform.
+    // Innocui sul core non-decorato (index/rls/soft-delete).
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "noEmit": true
   },
   "include": ["src/**/*.ts", "prisma/seed.ts", "scripts/**/*.ts", "tsup.config.ts"],

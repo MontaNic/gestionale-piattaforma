@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { withSystemContext } from '@gestionale/db';
 
-import { DbService } from '../db/db.service';
+import { DbService } from '@gestionale/db/nest';
 import type { HealthDto } from './health.dto';
 
 @Injectable()

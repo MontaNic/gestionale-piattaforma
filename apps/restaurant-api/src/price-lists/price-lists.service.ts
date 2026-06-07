@@ -6,7 +6,7 @@ import { ConflictException, Inject, Injectable, Logger, NotFoundException } from
 import { id, type PriceList, withTenantContextAtomicTx } from '@gestionale/db';
 
 import { catchUniqueViolation } from '@gestionale/platform';
-import { DbService } from '../db/db.service';
+import { DbService } from '@gestionale/db/nest';
 import type { CreatePriceListDto } from './dto/create-price-list.dto';
 import type { UpdatePriceListDto } from './dto/update-price-list.dto';
 
