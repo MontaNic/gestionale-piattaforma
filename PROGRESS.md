@@ -417,6 +417,39 @@ Avvio backend del 2° verticale (commercialisti). Nuovo workspace `apps/accounta
 
 ---
 
+## [2026-06-07] STOP-b2 — walking skeleton `accountant-web` (ADR-0030) — chiude STOP-b
+
+**Branch**: `feat/accountant-web-skeleton` · **Tipo**: 1 PR feature (nuovo workspace FE, scaffold) · **ADR**: [ADR-0030](docs/architecture/ADR-0030-accountant-web-skeleton.md)
+
+Frontend del 2° verticale (commercialisti) — chiude lo **skeleton** (STOP-b: BE ADR-0029 + FE ADR-0030). Nuovo workspace `apps/accountant-web` (`@gestionale/accountant-web`), Next.js 15, **replica shell/auth** di `restaurant-web` con **ZERO dominio menu**; consuma `accountant-api` `:3002`, gira su `:3003`.
+
+**Decisioni** (dettaglio [ADR-0030](docs/architecture/ADR-0030-accountant-web-skeleton.md)):
+
+- 11 file shell/auth copiati byte-identici (ThemeProvider/`AuthProvider`/`AuthGate`/`MainLayout`/`Topbar`/login/dashboard/`api/set-locale`/`i18n/request`/`not-found`/`globals.css`).
+- `middleware.ts` copia identica; unico delta = redirect root → `/t/studio-demo/login`.
+- **Sidebar ridotta (scelta b)**: `dashboard` + `clienti`/`fatture` (stub via `PlaceholderPage`, "in arrivo") → predispone gli slot nav per STOP-c, zero dominio reale. Omesse route `menu/*` + 6 placeholder ristorazione.
+- `error-codes.ts` potato (solo auth/common; rimossi `E_MENU_*`/`E_ARTICLE_*`/`E_PRICE_LIST_*` + `messageForError`).
+- i18n riscritto: `shell.nav` 3 voci + `placeholder.{clienti,fatture}` + `dashboard`/`shell.topbar` generici; omessi `menu.*` + placeholder ristorazione.
+- API env-driven `NEXT_PUBLIC_API_URL=http://localhost:3002/api/v1` (`.env.local` gitignored + `.env.local.example`); base include `/api/v1`. **`@gestionale/db` non in deps** (dead-dep FE, ADR-0028).
+
+**Gate (typecheck/lint/`next build` + boot dev + smoke SSR, no e2e):**
+
+- `typecheck` **16/16** (+`@gestionale/accountant-web`) ✅ · `lint` + `next lint` + `format:check` clean ✅
+- `next build` OK — 7 route, zero dominio ✅
+- Boot dev `:3003` + SSR: `/` 307 → `/t/studio-demo/login`; login/dashboard/clienti/fatture 200; slug riservato 307 → `/not-found` ✅
+- Conferme: zero residui dominio, `@gestionale/db` assente, Sidebar 3 voci, i18n senza `menu.*`, `error-codes` potato, middleware diff = solo tenant ✅
+
+**Tech debt:** nessuno nuovo. DevDeps solo-test (Playwright) omesse → rientrano a STOP-c con la e2e. Flusso login interattivo coperto per derivazione (byte-identico a `restaurant-web` + Playwright lì); verifica browser di Nicolò opzionale pre-merge (port-forward VS Code, `:3002`+`:3003` up).
+
+**File:** nuovo workspace `apps/accountant-web/` (28 file: 10 config/root + 18 `src/` — 11 copiati byte-identici + 7 adattati/nuovi: `middleware`, `page` root, `Sidebar` ridotta, `error-codes` potato, `i18n` it/en, 2 route stub `clienti`/`fatture`) + `docs/architecture/ADR-0030-accountant-web-skeleton.md` + `PROGRESS.md` (questa entry). Nessuna modifica a file shared esistenti (solo `pnpm-lock`).
+
+**Foundation status post-merge:**
+
+- **Skeleton 2° verticale (commercialisti) COMPLETO ✅**: backend `accountant-api` (ADR-0029) + frontend `accountant-web` (ADR-0030) — boot + auth/login + `me`, zero dominio.
+- Next: **STOP-c** — prima slice dominio = anagrafica `aziende` (da StudioDesk): DDL (FK posticipate, soft-delete, unicità naturale → partial-unique-index Pattern 42, policy RLS), modulo NestJS + DTO, UI lista/form, e2e isolamento tenant. STOP 0 dedicato sul DDL. Qui nasce anche la e2e Testcontainers di `accountant-api` e i 2 slot nav (`clienti`/`fatture`) iniziano a riempirsi.
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

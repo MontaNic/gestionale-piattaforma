@@ -1,0 +1,44 @@
+{
+  "shell": {
+    "nav": {
+      "dashboard": "Dashboard",
+      "clienti": "Clients",
+      "fatture": "Invoices"
+    },
+    "topbar": {
+      "openMenu": "Open menu",
+      "userMenu": "User menu",
+      "logout": "Log out",
+      "theme": {
+        "label": "Theme",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "language": {
+        "label": "Language",
+        "it": "Italian",
+        "en": "English"
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Welcome {firstName} {lastName}",
+    "roles": "Roles",
+    "permissionsCount": "Permissions ({count})",
+    "profileUnavailable": "Profile unavailable",
+    "logoutButton": "Esci",
+    "loggingOut": "Uscita..."
+  },
+  "placeholder": {
+    "comingSoon": "Coming soon",
+    "clienti": {
+      "title": "Clients",
+      "desc": "Studio client registry — available in upcoming sessions."
+    },
+    "fatture": {
+      "title": "Invoices",
+      "desc": "Invoice and document management — available in upcoming sessions."
+    }
+  }
+}
