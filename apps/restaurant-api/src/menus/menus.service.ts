@@ -13,7 +13,7 @@ import { ConflictException, Inject, Injectable, Logger, NotFoundException } from
 import { id, type Menu, withTenantContextAtomicTx } from '@gestionale/db';
 
 import { catchUniqueViolation } from '@gestionale/platform';
-import { DbService } from '../db/db.service';
+import { DbService } from '@gestionale/db/nest';
 import type { CreateMenuDto } from './dto/create-menu.dto';
 import type { UpdateMenuDto } from './dto/update-menu.dto';
 

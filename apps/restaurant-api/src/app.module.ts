@@ -22,7 +22,7 @@ import {
 
 import { AppController } from './app.controller';
 import { ArticlesModule } from './articles/articles.module';
-import { DbModule } from './db/db.module';
+import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { MenuCategoriesModule } from './menu-categories/menu-categories.module';

@@ -8,7 +8,7 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { type ArticlePrice, id, Prisma, withTenantContextAtomicTx } from '@gestionale/db';
 
-import { DbService } from '../db/db.service';
+import { DbService } from '@gestionale/db/nest';
 import type { SetArticlePriceDto, UpdateArticlePriceDto } from './dto/set-article-price.dto';
 
 @Injectable()

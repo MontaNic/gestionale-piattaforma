@@ -17,6 +17,23 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./nest": {
+      "import": {
+        "types": "./dist/nest/index.d.ts",
+        "default": "./dist/nest/index.mjs"
+      },
+      "require": {
+        "types": "./dist/nest/index.d.cts",
+        "default": "./dist/nest/index.cjs"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "nest": [
+        "./dist/nest/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -43,8 +60,10 @@
     "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@nestjs/common": "^11.0.0",
     "@types/node": "^20.17.0",
     "dotenv-cli": "^11.0.0",
+    "reflect-metadata": "^0.2.2",
     "tsup": "^8.5.0",
     "tsx": "^4.21.0",
     "vitest": "^3.2.4"
@@ -54,5 +73,17 @@
     "argon2": "^0.44.0",
     "prisma": "6",
     "uuidv7": "^1.2.1"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "reflect-metadata": {
+      "optional": true
+    }
   }
 }

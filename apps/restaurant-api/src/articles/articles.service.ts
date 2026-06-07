@@ -10,7 +10,7 @@ import { ConflictException, Inject, Injectable, Logger, NotFoundException } from
 import { type Article, id, Prisma, withTenantContextAtomicTx } from '@gestionale/db';
 
 import { catchUniqueViolation } from '@gestionale/platform';
-import { DbService } from '../db/db.service';
+import { DbService } from '@gestionale/db/nest';
 import type { CreateArticleDto } from './dto/create-article.dto';
 import type { UpdateArticleDto } from './dto/update-article.dto';
 

@@ -324,6 +324,55 @@ Ultimo passo dell'ordine §D5. Passo **atomico, documentale** (zero file di codi
 
 ---
 
+## [2026-06-07] STOP-a — estrazione `DbService` → `@gestionale/db/nest` (ADR-0028)
+
+**Branch**: `feat/db-nest-subentry` · **Tipo**: 1 PR refactor backend (sub-entry additivo) · **ADR**: [ADR-0028](docs/architecture/ADR-0028-dbservice-nest-subentry.md)
+
+Primo STOP dell'avvio 2° verticale (commercialisti) dopo il rename TD-CC. `DbService`/`DbModule` estratti da `apps/restaurant-api/src/db/` a **sub-entry NestJS additivo** `@gestionale/db/nest` (NON package nuovo), così lo skeleton `accountant-api` lo consumerà senza duplicarlo. Decisione **C** verificata empiricamente a STOP 0.
+
+**Decisioni** (dettaglio [ADR-0028](docs/architecture/ADR-0028-dbservice-nest-subentry.md)):
+
+- Sub-entry `./nest` additivo; entry `.` resta agnostico verso `@nestjs/*` (`DbService`/`DbModule` solo in `./nest`).
+- **Singolo pool**: `db.service.ts` importa `prisma` da `'@gestionale/db'` (self-reference, mai relativo) + `@gestionale/db` in `external` tsup → `require('@gestionale/db')` risolve all'entry `.` = una sola istanza. Probe STOP 0.5: `same prisma reference: true`.
+- Build NestJS-dual = pattern `platform` (decorator flags nel `tsconfig` di `db` — il base non li eredita, divergenza #7 — + runtime NestJS in `external`).
+- NestJS come **optional peer + devDep** (NON dep hard, divergenza motivata da `platform`): preserva `db` agnostico nel dependency graph; i consumer FE non ereditano NestJS né ricevono unmet-peer.
+- `typesVersions` bridge per il `moduleResolution: node` di `restaurant-api` (subpath `exports` risolti a runtime ma ignorati da TS node10 per i tipi).
+
+**Discoveries cumulative bump 56 → 57**:
+
+- **Discovery #57** — package multi-entry (`exports` subpath) consumato da app `moduleResolution: node`: subpath risolto a runtime ma ignorato da TS per i tipi → `typesVersions` necessario (TS2307); il DTS rollup di tsup richiede le dep dei tipi risolvibili nel workspace, ma una devDep basta (no dep hard). Generalizzabile a ogni futuro sub-entry su package del core consumato da app node10.
+
+**Tech debt:** nessuno nuovo. `health`/`me` restano app-level come da piano (ADR-0027 §D5 / ADR-0028): `health` consuma `db/nest` ma resta in-app (evita di accoppiare `db/nest` ad `auth`), `me` non tocca `db`.
+
+**Test (GATE shared-config — baseline → post-fix, invarianti):**
+
+- `typecheck`: **14/14** ✅ · unit: invariati ✅
+- e2e Testcontainers: **56 pass / 4 skip** ✅ (full `AppModule` bootstrap = gate DI reale; zero `Nest can't resolve dependencies`)
+- `smoke:rls-core`: **9/9** ✅
+- Probe STOP 0.5: `require("@gestionale/db")` presente nel bundle nest, singleton non inlinato, `same prisma reference: true` ✅; DTS sub-entry generati con NestJS in devDep (fallback opzione A non necessario).
+
+**File:**
+
+| File | Type |
+|---|---|
+| `apps/restaurant-api/src/db/db.service.ts` → `packages/db/src/nest/db.service.ts` | git mv (storia preservata) |
+| `apps/restaurant-api/src/db/db.module.ts` → `packages/db/src/nest/db.module.ts` | git mv (storia preservata) |
+| `packages/db/src/nest/index.ts` | new (barrel) |
+| `packages/db/package.json` | mod (`exports["./nest"]`, `typesVersions`, optional peer + devDep) |
+| `packages/db/tsup.config.ts` | mod (multi-entry + `external`) |
+| `packages/db/tsconfig.json` | mod (decorator flags) |
+| `apps/restaurant-api/src/{articles/articles,articles/article-prices,menu-categories/menu-categories,price-lists/price-lists,health/health,menus/menus}.service.ts` (6) | mod (import → `@gestionale/db/nest`) |
+| `apps/restaurant-api/src/app.module.ts` | mod (import `DbModule` → `@gestionale/db/nest`) |
+| `docs/architecture/ADR-0028-dbservice-nest-subentry.md` | new |
+| `PROGRESS.md` | mod (questa entry) |
+
+**Foundation status post-merge:**
+
+- **`DbService` condiviso via `@gestionale/db/nest`: 100% ✅** (singolo pool verificato)
+- Next: **STOP-b** — walking skeleton `accountant-api` + `accountant-web` (boot + auth/login + `me`, zero dominio). Preflight residuo: anatomia `restaurant-web` (shell/auth riusabile vs route dominio menu) da leggere a STOP 0 di `accountant-web`.
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

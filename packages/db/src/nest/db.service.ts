@@ -17,7 +17,8 @@
 // Vedi ADR-0007 decisione E per scelta composition vs inheritance.
 // =============================================================================
 
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { prisma, type ExtendedPrismaClient } from '@gestionale/db';
 
 @Injectable()
