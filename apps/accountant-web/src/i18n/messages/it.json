@@ -1,0 +1,44 @@
+{
+  "shell": {
+    "nav": {
+      "dashboard": "Dashboard",
+      "clienti": "Clienti",
+      "fatture": "Fatture"
+    },
+    "topbar": {
+      "openMenu": "Apri menu",
+      "userMenu": "Menu utente",
+      "logout": "Esci",
+      "theme": {
+        "label": "Tema",
+        "light": "Chiaro",
+        "dark": "Scuro",
+        "system": "Sistema"
+      },
+      "language": {
+        "label": "Lingua",
+        "it": "Italiano",
+        "en": "Inglese"
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Welcome {firstName} {lastName}",
+    "roles": "Ruoli",
+    "permissionsCount": "Permessi ({count})",
+    "profileUnavailable": "Profilo non disponibile",
+    "logoutButton": "Esci",
+    "loggingOut": "Uscita..."
+  },
+  "placeholder": {
+    "comingSoon": "Coming soon",
+    "clienti": {
+      "title": "Clienti",
+      "desc": "Anagrafica clienti dello studio — disponibile nelle prossime sessioni."
+    },
+    "fatture": {
+      "title": "Fatture",
+      "desc": "Gestione fatture e documenti — disponibile nelle prossime sessioni."
+    }
+  }
+}

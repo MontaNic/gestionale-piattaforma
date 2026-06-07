@@ -1,0 +1,44 @@
+{
+  "name": "@gestionale/accountant-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Next.js 15 App Router frontend per il verticale commercialisti (StudioDesk). Walking skeleton shell/auth; dominio in macro-task successivi.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3003",
+    "build": "next build",
+    "start": "next start -p 3003",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gestionale/api-client": "workspace:*",
+    "@gestionale/auth-web": "workspace:*",
+    "@gestionale/i18n": "workspace:*",
+    "@gestionale/shared": "workspace:*",
+    "@gestionale/ui": "workspace:*",
+    "@hookform/resolvers": "^5.2.2",
+    "clsx": "^2.1",
+    "lucide-react": "^0.460",
+    "next": "^15.0.0",
+    "next-intl": "4.12.0",
+    "next-themes": "0.4.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.75.0",
+    "tailwind-merge": "^2.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^18.3",
+    "@types/react-dom": "^18.3",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9",
+    "eslint-config-next": "^15",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4",
+    "tailwindcss-animate": "^1.0",
+    "typescript": "^5"
+  }
+}
