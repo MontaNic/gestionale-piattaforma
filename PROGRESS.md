@@ -373,6 +373,50 @@ Primo STOP dell'avvio 2° verticale (commercialisti) dopo il rename TD-CC. `DbSe
 
 ---
 
+## [2026-06-07] STOP-b1 — walking skeleton `accountant-api` (ADR-0029)
+
+**Branch**: `feat/accountant-api-skeleton` · **Tipo**: 1 PR feature (nuovo workspace, scaffold) · **ADR**: [ADR-0029](docs/architecture/ADR-0029-accountant-api-skeleton.md)
+
+Avvio backend del 2° verticale (commercialisti). Nuovo workspace `apps/accountant-api` (`@gestionale/accountant-api`) = **replica core-only** di `restaurant-api` (boot + auth/login + `me`, **ZERO dominio**). Consuma `DbService` dal sub-entry `@gestionale/db/nest` (ADR-0028). Split STOP-b confermato: **b1 `accountant-api`** (questo) → **b2 `accountant-web`** (prossimo, anatomia FE già letta a STOP 0).
+
+**Decisioni** (dettaglio [ADR-0029](docs/architecture/ADR-0029-accountant-api-skeleton.md)):
+
+- `app.module.ts`/`main.ts` derivati da `restaurant-api`; rimossi i 4 moduli dominio (`Menus`/`MenuCategories`/`Articles`/`PriceLists`) dagli `imports[]`. 4 APP_GUARD + `TenantContextInterceptor` + `TenantMiddleware.forRoutes` **byte-identici** (Discovery #36 / ADR-0017): unico delta in `app.module.ts` = riga di commento.
+- `health` + `me` + `app.controller` duplicati (thin, import `@gestionale/*` assoluti). `health` resta app-level (evita di accoppiare `db/nest` ad `auth`), `me` non tocca `db`.
+- Tenant dedicato `studio-demo` (`admin@studio.local`) via `seedDevTenant` esistente, **senza** `seedDevMenu` → skeleton isolato dalla ristorazione. Catalogo `PERMISSIONS` globale ereditato dal Super Admin (permessi del verticale a STOP-c).
+- Porte env-driven: `accountant-api` `:3002` (CORS `:3003` per `accountant-web`); script `dev` forza `PORT`/`CORS_ORIGIN` via `dotenv-cli -v` (no collisione col `.env` condiviso).
+- ESLint root glob → `apps/*-api/**/*.ts` (future-proof), `...base` preservato.
+
+**Gate (2a — build/typecheck/lint + boot DI + smoke HTTP locale, NO e2e):**
+
+- `typecheck` **15/15** (+`@gestionale/accountant-api`) ✅ · `lint`/`format:check` clean ✅
+- Boot DI pulito ✅ (zero `Nest can't resolve dependencies`; `DbService` da `@gestionale/db/nest`, Redis PONG, SMTP verificato, listening `:3002`)
+- Smoke HTTP `:3002`: root 200, health 200 `{status:"ok", db:"connected"}`, login (`studio-demo`) 200 + access/refresh, `me` 200 + `admin@studio.local` + Super Admin + 32 permessi ✅
+- Seed `studio-demo` idempotente (2° run 0 created) ✅
+- `app.module.ts` diff vs `restaurant-api` = solo riga di commento ✅
+
+**Tech debt:** nessuno nuovo. DevDeps solo-test omesse (no script `test` nello skeleton) → rientrano a STOP-c con la e2e. Permessi ristorazione su `studio-demo` = atteso (catalogo globale; permessi del verticale a STOP-c).
+
+**File:**
+
+| File | Type |
+|---|---|
+| `apps/accountant-api/package.json`, `tsconfig.json`, `nest-cli.json` (3) | new |
+| `apps/accountant-api/src/{main,app.module,app.controller}.ts` (3) | new (derivati core-only da restaurant-api) |
+| `apps/accountant-api/src/health/{health.module,health.controller,health.service,health.dto}.ts` (4) | new (duplicati) |
+| `apps/accountant-api/src/me/{me.module,me.controller}.ts` (2) | new (duplicati) |
+| `packages/db/prisma/seed.ts` | mod (+`seedDevTenant('studio-demo')`, no menu) |
+| `eslint.config.js` | mod (glob → `apps/*-api/**/*.ts`) |
+| `docs/architecture/ADR-0029-accountant-api-skeleton.md` | new |
+| `PROGRESS.md` | mod (questa entry) |
+
+**Foundation status post-merge:**
+
+- **Backend skeleton `accountant-api`: 100% ✅** (boot + auth/login + `me`, zero dominio, smoke verde)
+- Next: **STOP-b2** — walking skeleton `accountant-web` (shell/auth riusabile da `restaurant-web`; scarta dominio menu + 6 route placeholder ristorazione + Sidebar ridotta + messaggi i18n del verticale; `accountant-web` su `:3003`, consuma `accountant-api` `:3002`; **niente** `@gestionale/db` — dead-dep nel FE).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

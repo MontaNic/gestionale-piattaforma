@@ -728,6 +728,28 @@ async function main(): Promise<void> {
       tplPermissions,
     });
 
+    // Tenant dedicato al 2° verticale (commercialisti / StudioDesk, STOP-b).
+    // Isola lo skeleton accountant-api dalla ristorazione: NESSUN seedDevMenu
+    // (zero dominio). Idempotente come demo/acme.
+    await seedDevTenant({
+      tenant: { slug: 'studio-demo', name: 'Studio Demo Commercialisti' },
+      sede: {
+        name: 'Sede Studio',
+        address: 'Via Roma 1',
+        city: 'Milano',
+        postalCode: '20100',
+      },
+      user: {
+        email: 'admin@studio.local',
+        password: 'Studio123!',
+        firstName: 'Admin',
+        lastName: 'Studio',
+      },
+      superAdminTplId: superAdminTpl.id,
+      superAdminTplDescription: superAdminTpl.description,
+      tplPermissions,
+    });
+
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
     // passo 8b-1): estratta dal core del tenant e orchestrata qui al top-level.
@@ -755,6 +777,7 @@ async function main(): Promise<void> {
     console.log(`  Dev tenants:`);
     console.log(`    - demo  (admin@demo.local / Admin123!)`);
     console.log(`    - acme  (manager@acme.local / Manager123!)`);
+    console.log(`    - studio-demo  (admin@studio.local / Studio123!)`);
   }
   console.log('  ✅ Seed completato (idempotente).');
 }
