@@ -14,6 +14,7 @@
 // =============================================================================
 
 import { AuthErrorCode, CommonErrorCode } from '@gestionale/shared';
+import { ApiError } from '@gestionale/api-client';
 
 const FALLBACK_MESSAGE = 'Si è verificato un errore. Riprova.';
 
@@ -33,10 +34,26 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   // quando `message[0]` è un taxonomy code; se non lo è, resta questo messaggio.
   [CommonErrorCode.VALIDATION]: 'I dati inseriti non sono validi. Controlla i campi e riprova.',
   [CommonErrorCode.UNKNOWN]: FALLBACK_MESSAGE,
+
+  // Dominio aziende (STOP-c2 ADR-0032). Solo i codici che emergono a runtime:
+  // i validation backstop E_AZIENDA_*_INVALID/_TOO_LONG/_REQUIRED sono prevenuti
+  // dalla zod client-side → fallback generico accettato (vedi ADR-0032 §confine).
+  E_AZIENDA_NOT_FOUND: 'Cliente non trovato.',
+  E_AZIENDA_CODICE_EXISTS: 'Esiste già un cliente con questo codice.',
 };
 
 export function messageForErrorCode(code: string): string {
   // noUncheckedIndexedAccess (tsconfig web strict): Record lookup ritorna
   // `string | undefined` → fallback constant evita doppio coalesce.
   return ERROR_CODE_MESSAGES[code] ?? FALLBACK_MESSAGE;
+}
+
+/**
+ * Risolve un errore catturato (es. da una chiamata aziende-api) in un messaggio
+ * IT. `ApiError` (api-client) → messaggio per il suo `errorCode`; altrimenti
+ * fallback generico. Consumer: clienti/page.tsx + AziendaForm.
+ */
+export function messageForError(err: unknown): string {
+  if (err instanceof ApiError) return messageForErrorCode(err.errorCode);
+  return FALLBACK_MESSAGE;
 }

@@ -22,7 +22,7 @@
 
 import argon2 from 'argon2';
 
-import { id, prisma, withSystemContext } from '../src/index';
+import { id, prisma, TipoCliente, withSystemContext } from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Permission catalog (32 atomici)
@@ -569,6 +569,69 @@ async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> 
   console.log(`  ArticlePrices (${tenantSlug}): ${articlePriceCount}`);
 }
 
+// Aziende demo per il verticale commercialisti (STOP-c2 ADR-0032). Idempotente
+// via find-then-create sulla chiave naturale (tenantId+codice) — stesso pattern
+// del menu (§ 7.1). Gira nel system context ereditato da withSystemContext(main).
+async function seedDevAziende(tenantId: string): Promise<void> {
+  const demo: Array<{
+    codice: string;
+    nome: string;
+    tipoCliente: TipoCliente;
+    partitaIva?: string;
+    codiceFiscale?: string;
+    email?: string;
+    telefono?: string;
+    attivo?: boolean;
+  }> = [
+    {
+      codice: 'AZ001',
+      nome: 'Rossi Costruzioni S.r.l.',
+      tipoCliente: TipoCliente.azienda,
+      partitaIva: '01234567890',
+      email: 'info@rossicostruzioni.example.com',
+      telefono: '+39 02 1234567',
+    },
+    {
+      codice: 'AZ002',
+      nome: 'Bianchi & Figli S.n.c.',
+      tipoCliente: TipoCliente.azienda,
+      partitaIva: '09876543210',
+      email: 'amministrazione@bianchifigli.example.com',
+    },
+    {
+      codice: 'AZ003',
+      nome: 'Neri Trasporti S.p.A.',
+      tipoCliente: TipoCliente.azienda,
+      partitaIva: '05555555550',
+      attivo: false,
+    },
+    {
+      codice: 'PF001',
+      nome: 'Mario Verdi',
+      tipoCliente: TipoCliente.persona_fisica,
+      codiceFiscale: 'VRDMRA80A01H501Z',
+      email: 'mario.verdi@example.com',
+    },
+    {
+      codice: 'PF002',
+      nome: 'Anna Gialli',
+      tipoCliente: TipoCliente.persona_fisica,
+      codiceFiscale: 'GLLNNA85M41H501K',
+    },
+  ];
+
+  let created = 0;
+  for (const a of demo) {
+    const existing = await prisma.azienda.findFirst({
+      where: { tenantId, codice: a.codice },
+    });
+    if (existing) continue;
+    await prisma.azienda.create({ data: { id: id(), tenantId, ...a } });
+    created += 1;
+  }
+  console.log(`  ✓ aziende studio-demo: ${created} created (${demo.length} total)`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -737,7 +800,7 @@ async function main(): Promise<void> {
     // Tenant dedicato al 2° verticale (commercialisti / StudioDesk, STOP-b).
     // Isola lo skeleton accountant-api dalla ristorazione: NESSUN seedDevMenu
     // (zero dominio). Idempotente come demo/acme.
-    await seedDevTenant({
+    const studio = await seedDevTenant({
       tenant: { slug: 'studio-demo', name: 'Studio Demo Commercialisti' },
       sede: {
         name: 'Sede Studio',
@@ -755,6 +818,7 @@ async function main(): Promise<void> {
       superAdminTplDescription: superAdminTpl.description,
       tplPermissions,
     });
+    await seedDevAziende(studio.tenantId);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
