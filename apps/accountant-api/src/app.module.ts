@@ -21,6 +21,7 @@ import {
 } from '@gestionale/auth';
 
 import { AppController } from './app.controller';
+import { AziendeModule } from './aziende/aziende.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -43,6 +44,8 @@ import { MeModule } from './me/me.module';
     HealthModule,
     TenantsModule,
     RbacModule,
+    // Modulo dominio del verticale accountant (prima slice STOP-c1).
+    AziendeModule,
   ],
   controllers: [AppController],
   providers: [
