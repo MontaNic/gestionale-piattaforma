@@ -32,13 +32,61 @@
   },
   "placeholder": {
     "comingSoon": "Coming soon",
-    "clienti": {
-      "title": "Clients",
-      "desc": "Studio client registry — available in upcoming sessions."
-    },
     "fatture": {
       "title": "Invoices",
       "desc": "Invoice and document management — available in upcoming sessions."
+    }
+  },
+  "aziende": {
+    "listTitle": "Clients",
+    "listSubtitle": "Studio client registry.",
+    "listEmpty": "No clients yet. Create one to get started.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "newAzienda": "New client",
+    "active": "Active",
+    "inactive": "Inactive",
+    "create": "Create",
+    "creating": "Creating…",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "col": {
+      "nome": "Name",
+      "codice": "Code",
+      "tipo": "Type",
+      "contatti": "Contacts",
+      "stato": "Status",
+      "azioni": "Actions"
+    },
+    "tipo": {
+      "azienda": "Company",
+      "persona_fisica": "Individual"
+    },
+    "fields": {
+      "codice": "Code",
+      "nome": "Name / Legal name",
+      "tipoCliente": "Client type",
+      "partitaIva": "VAT number",
+      "codiceFiscale": "Tax code",
+      "codiceAteco": "ATECO code",
+      "email": "Email",
+      "emailOperativa": "Operational email",
+      "pec": "Certified email (PEC)",
+      "sitoWeb": "Website",
+      "telefono": "Phone",
+      "telefono2": "Phone 2",
+      "indirizzo": "Address",
+      "noteOperative": "Operational notes",
+      "attivo": "Active"
+    },
+    "confirm": {
+      "title": "Delete client",
+      "body": "Delete \"{name}\"? The client will be removed from the list.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
     }
   }
 }

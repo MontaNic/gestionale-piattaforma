@@ -32,13 +32,61 @@
   },
   "placeholder": {
     "comingSoon": "Coming soon",
-    "clienti": {
-      "title": "Clienti",
-      "desc": "Anagrafica clienti dello studio — disponibile nelle prossime sessioni."
-    },
     "fatture": {
       "title": "Fatture",
       "desc": "Gestione fatture e documenti — disponibile nelle prossime sessioni."
+    }
+  },
+  "aziende": {
+    "listTitle": "Clienti",
+    "listSubtitle": "Anagrafica clienti dello studio.",
+    "listEmpty": "Nessun cliente presente. Creane uno per iniziare.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "newAzienda": "Nuovo cliente",
+    "active": "Attivo",
+    "inactive": "Non attivo",
+    "create": "Crea",
+    "creating": "Creazione…",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "col": {
+      "nome": "Nome",
+      "codice": "Codice",
+      "tipo": "Tipo",
+      "contatti": "Contatti",
+      "stato": "Stato",
+      "azioni": "Azioni"
+    },
+    "tipo": {
+      "azienda": "Azienda",
+      "persona_fisica": "Persona fisica"
+    },
+    "fields": {
+      "codice": "Codice",
+      "nome": "Nome / Ragione sociale",
+      "tipoCliente": "Tipo cliente",
+      "partitaIva": "Partita IVA",
+      "codiceFiscale": "Codice fiscale",
+      "codiceAteco": "Codice ATECO",
+      "email": "Email",
+      "emailOperativa": "Email operativa",
+      "pec": "PEC",
+      "sitoWeb": "Sito web",
+      "telefono": "Telefono",
+      "telefono2": "Telefono 2",
+      "indirizzo": "Indirizzo",
+      "noteOperative": "Note operative",
+      "attivo": "Attivo"
+    },
+    "confirm": {
+      "title": "Elimina cliente",
+      "body": "Vuoi eliminare \"{name}\"? L'azienda verrà rimossa dall'elenco.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
     }
   }
 }

@@ -2228,6 +2228,42 @@ STOP 2B (Commit 2 TD-AW):
 
 **Foundation post-merge:** TD-CA RESOLVED. TD aperti residui: TD-BY (defer S23), TD-BV/TD-BW (S19), TD-BS Sub-2. Next: sessione 22.
 
+### [2026-06-08] STOP-c2 — UI `aziende` in `accountant-web` + seed demo (ADR-0032)
+
+**Branch**: `feat/aziende-ui` · **Tipo**: 1 PR feature FE (4 new + 5 mod, no schema/migration/backend) · **ADR**: [ADR-0032](docs/architecture/ADR-0032-aziende-ui.md)
+
+Prima UI di dominio del 2° verticale (commercialisti): anagrafica clienti `aziende` in `accountant-web`, consuma il CRUD `/api/v1/aziende` (accountant-api :3002, ADR-0031). Parte da STOP 0 sull'anatomia FE reale di `restaurant-web` (pagina lista menu + `ArticleForm` + `ConfirmDialog` + `menu-api`/`menu-types` + superficie `@gestionale/api-client`/`auth-web`) e sul contratto backend reale (`aziende.controller`/`.service` + 2 DTO + `model Azienda`/`enum TipoCliente`).
+
+**Decisioni** (dettaglio [ADR-0032](docs/architecture/ADR-0032-aziende-ui.md)):
+
+- **DP-nav** — route/label/cartella `clienti` **invariate**; `clienti/page.tsx` placeholder → anagrafica reale. Label utente "Clienti" disaccoppiata dall'entità tecnica `Azienda`. Churn zero (no rename Sidebar union/cartella/i18n nav).
+- **DP-form** — form 15 campi MVP **inline in Card** (pattern `MenuForm`/`ArticleForm`), no segmento `[id]` (evita active-state TD-BU). `ConfirmDialog` solo per soft-delete.
+- **Lista** = `<table>` tailwind (no `Table` nel barrel `@gestionale/ui`). Colonna **Stato** = flag `attivo`; soft-delete rimuove dalla lista (backend filtra `deletedAt IS NULL`), nessun cestino UI.
+- **Email opzionale** — zod `.refine(v => v === '' || EMAIL_RE.test(v))`, tipo string in/out (no preprocess). Opzionali stringa `'' → undefined` al submit.
+- **`messageForError(err)`** aggiunto a `error-codes.ts` (le pagine dominio risolvono l'errore catturato, non il code); `accountant-web` aveva solo `messageForErrorCode`.
+- **§confine error-codes** — mappati solo `E_AZIENDA_NOT_FOUND` + `E_AZIENDA_CODICE_EXISTS` (runtime); i backstop di validazione sono prevenuti dalla zod client-side → fallback generico accettato.
+- **`placeholder.clienti`** rimosso (dead-code, it+en) — convention "i18n keys solo quando usate" (ADR-0018 §TD-BF).
+- **Seed** — `seedDevAziende(studio-demo)`: 5 aziende demo (3 `azienda`, una `attivo=false`; 2 `persona_fisica`), idempotente find-then-create su `tenantId+codice`, PII-free.
+
+**Doc note**: ADR-0030 indicava `dialog.tsx`/`textarea.tsx` come file locali di `restaurant-web` e citava la rimozione di `messageForError`; allo stato attuale Dialog/Textarea sono in `@gestionale/ui` e il consumer FE è `messageForErrorCode`. Annotato in ADR-0032, non corretto retroattivamente (anchor stability).
+
+**Gate:**
+
+- typecheck **16/16** ✅ · lint + `next lint` (accountant-web) + format:check clean ✅
+- `next build` accountant-web OK (`/t/[slug]/clienti` pagina reale, ~3.66 kB) ✅
+- `db:seed` ×2 idempotente (run2 0 created) ✅
+- Conteggio DB `studio-demo`: 5 aziende attive + 1 `AZ001` soft-deleted residua dallo smoke STOP-c1 (non compare in lista, atteso) ✅
+- Smoke browser (Nicolò): login `studio-demo` → lista 5 righe (`AZ003` "Non attivo") + CRUD + dup codice 409 — **da verificare pre-merge**
+
+**Tech debt:** nessuno nuovo. `health`/`me` restano app-level (invariato).
+
+**File:** `apps/accountant-web` (`lib/aziende-{types,api}.ts` + `components/aziende/{ConfirmDialog,AziendaForm}.tsx` new; `lib/error-codes.ts` + `app/.../clienti/page.tsx` + `i18n/messages/{it,en}.json` mod) · `packages/db/prisma/seed.ts` mod · `docs/architecture/ADR-0032-aziende-ui.md` new · `PROGRESS.md`.
+
+**Foundation status post-merge:**
+
+- 2° verticale: skeleton (ADR-0029/0030) + slice backend `aziende` (ADR-0031) + **UI `aziende` (lista + form + seed demo)** (ADR-0032) ✅
+- Next: **STOP-c3** (eventuale) — entità satellite di `aziende` (referenti, log modifiche) o riaggancio RFM/arricchimento; in alternativa slot nav `fatture` o pulizia TD backend.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
