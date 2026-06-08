@@ -101,6 +101,7 @@ export {
   PrintDepartment,
   ArticleAvailability,
   Channel,
+  TipoCliente,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -127,6 +128,7 @@ export type {
   ArticlePrice,
   Recipe,
   PricingRule,
+  Azienda,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------

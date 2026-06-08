@@ -3,7 +3,7 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (32 permessi atomici namespaced)
+//   1. permissions          (33 permessi atomici namespaced)
 //   2. system_role_templates (6 template predefiniti F1, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //
@@ -68,7 +68,7 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'sistema',
   },
 
-  // anagrafica.* (4)
+  // anagrafica.* (5)
   {
     code: 'anagrafica.cliente.crea',
     description: 'Creazione anagrafica clienti',
@@ -82,6 +82,11 @@ const PERMISSIONS: PermissionSeed[] = [
   {
     code: 'anagrafica.cliente.visualizza',
     description: 'Visualizzazione clienti',
+    category: 'anagrafica',
+  },
+  {
+    code: 'anagrafica.cliente.elimina',
+    description: 'Eliminazione anagrafica clienti',
     category: 'anagrafica',
   },
   {
@@ -165,7 +170,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   {
     name: 'Super Admin',
     description: 'Accesso completo a tutte le funzioni della piattaforma.',
-    // Tutti i 32 permessi.
+    // Tutti i 33 permessi.
     permissionCodes: ALL_PERMISSION_CODES,
   },
   {
@@ -182,6 +187,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'anagrafica.cliente.crea',
       'anagrafica.cliente.modifica',
       'anagrafica.cliente.visualizza',
+      'anagrafica.cliente.elimina',
       'anagrafica.fornitore.gestisci',
       'menu.categoria.gestisci',
       'menu.piatto.crea',

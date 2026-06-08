@@ -450,6 +450,40 @@ Frontend del 2° verticale (commercialisti) — chiude lo **skeleton** (STOP-b: 
 
 ---
 
+## [2026-06-08] STOP-c1 — prima slice dominio `aziende` (ADR-0031)
+
+**Branch**: `feat/aziende-backend` · **Tipo**: 1 PR feature (schema + backend + e2e) · **ADR**: [ADR-0031](docs/architecture/ADR-0031-aziende-domain-slice.md)
+
+Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `aziende` (da StudioDesk `01_studio_template.sql`), in `accountant-api`. Eseguita in due passi (c1 backend smoke-HTTP + c1b e2e) su un unico branch, **una PR**.
+
+**Decisioni** (dettaglio [ADR-0031](docs/architecture/ADR-0031-aziende-domain-slice.md)):
+
+- Modello `Azienda` MVP 15 campi + standard (UUID v7, `tenantId`+FK Cascade, `deletedAt`, timestamps). RFM `operatore_riferimento_id` + arricchimento `32_*` **deferiti** (circolare users / YAGNI).
+- Unicità naturale `codice` per-tenant → partial-unique `aziende_tenant_codice_active_uq … WHERE deleted_at IS NULL` (Pattern 42, no `@@unique`). P.IVA/CF non-unique.
+- RLS `aziende_tenant_isolation` USING-only + FORCE (forma identica a menu, ADR-0009); GRANT ereditato (no esplicito).
+- Soft-delete via `update({deletedAt})` esplicito (ADR-0021); conflict = pre-check `findFirst` + `catchUniqueViolation` (`@gestionale/platform`, ADR-0024).
+- Modulo `aziende` (controller/service/2 DTO/unit) `@Inject` esplicito; rotte `/api/v1/aziende` con `anagrafica.cliente.{visualizza,crea,modifica,elimina}`. DELETE → `200 {id,deleted:true}`.
+- **Permesso `anagrafica.cliente.elimina` aggiunto** (catalogo 32→33; Super Admin + Admin sede + Direzione).
+- **Nasce la suite e2e Testcontainers di `accountant-api`** (infra da restaurant-api: `.swcrc`, project e2e, helper + fixture); e2e api solo locale (TD-CB).
+
+**Gate:**
+
+- DB: partial-unique + policy `aziende_tenant_isolation` + FORCE ✅
+- typecheck 16/16 · lint · format · 12 unit DTO ✅
+- Smoke HTTP `:3002`: create 201 / dup 409 / update 200 / soft-delete 200 / ricrea-201 / isolamento `[]` ✅
+- E2E `aziende-crud` **11/11** (CRUD, 409, ricrea-201, 404, RBAC-403 viewer, isolamento applicativo), DI pulito ✅
+
+**Tech debt:** **TD-RLS-aziende** — RLS DB-level di `aziende` non esercitata da e2e (suite superuser, TD-BV) né da `smoke:rls-core` (solo core); isolamento verificato applicativamente + policy presente in DB. Estensione futura. | TD-CB (e2e api non in CI), TD-BS Sub-2 (ValidationPipe e2e) invariati.
+
+**File:** `packages/db` (schema +enum/+model `Azienda`, migration `add_aziende`, seed +`.elimina`, barrel +re-export) · `apps/accountant-api` (modulo `src/aziende/` + `app.module` + suite e2e `test/e2e/` + `.swcrc` + `vitest.config.mts` + devDeps) · `docs/architecture/ADR-0031-*.md` + `PROGRESS.md`.
+
+**Foundation status post-merge:**
+
+- 2° verticale: skeleton (ADR-0029/0030) + **prima slice dominio `aziende`** (ADR-0031) ✅
+- Next: **STOP-c2** — UI lista/form `aziende` in `accountant-web` (slot nav `clienti`/`aziende`) + seed demo aziende per `studio-demo`. Eventuale STOP-c3 per le entità satellite (referenti, log) o per riagganciare RFM/arricchimento.
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

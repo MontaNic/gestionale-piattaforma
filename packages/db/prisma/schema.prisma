@@ -56,6 +56,7 @@ model Tenant {
   articlePrices  ArticlePrice[]
   recipes        Recipe[]
   pricingRules   PricingRule[]
+  aziende        Azienda[]
 
   @@map("tenants")
 }
@@ -550,4 +551,49 @@ model PricingRule {
 
   @@index([tenantId])
   @@map("pricing_rules")
+}
+
+// =============================================================================
+// Dominio commercialisti (verticale accountant) — prima slice STOP-c1
+// =============================================================================
+// Anagrafica clienti dello studio (origine StudioDesk `aziende`, DB-per-tenant
+// MySQL → qui tenant-scoped RLS single-DB, STOP-c). MVP 15 campi: RFM
+// (operatore_riferimento_id → users) e blocco arricchimento deferiti.
+// Unicità naturale `codice` per-tenant via partial-unique-index soft-delete-aware
+// `(tenant_id, codice) WHERE deleted_at IS NULL` (Pattern 42 — vedi migration,
+// NO @@unique nello schema). `eliminato`+`eliminata_il` StudioDesk collassano in
+// `deletedAt`; `attivo` resta campo distinto (cliente sospeso ≠ cancellato).
+
+enum TipoCliente {
+  azienda
+  persona_fisica
+}
+
+model Azienda {
+  id             String      @id
+  tenantId       String      @map("tenant_id")
+  codice         String      @db.VarChar(20)
+  nome           String      @db.VarChar(200)
+  tipoCliente    TipoCliente @default(azienda) @map("tipo_cliente")
+  partitaIva     String?     @map("partita_iva") @db.VarChar(20)
+  codiceFiscale  String?     @map("codice_fiscale") @db.VarChar(20)
+  codiceAteco    String?     @map("codice_ateco") @db.VarChar(20)
+  email          String?     @db.VarChar(255)
+  emailOperativa String?     @map("email_operativa") @db.VarChar(255)
+  pec            String?     @db.VarChar(255)
+  sitoWeb        String?     @map("sito_web") @db.VarChar(255)
+  telefono       String?     @db.VarChar(40)
+  telefono2      String?     @map("telefono_2") @db.VarChar(40)
+  indirizzo      String?     @db.VarChar(255)
+  noteOperative  String?     @map("note_operative")
+  attivo         Boolean     @default(true)
+  deletedAt      DateTime?   @map("deleted_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, nome])
+  @@map("aziende")
 }

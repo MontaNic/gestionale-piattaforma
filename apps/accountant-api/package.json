@@ -8,7 +8,11 @@
     "build": "nest build",
     "start:prod": "dotenv -e ../../.env -- node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run --project=unit --passWithNoTests",
+    "test:watch": "vitest --project=unit",
+    "test:e2e": "vitest run --project=e2e",
+    "test:e2e:watch": "vitest --project=e2e"
   },
   "dependencies": {
     "@gestionale/auth": "workspace:*",
@@ -36,13 +40,24 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.1.19",
+    "@swc/core": "^1.15.33",
+    "@testcontainers/postgresql": "^11.14.0",
+    "@testcontainers/redis": "^11.14.0",
     "@types/express": "^5.0.0",
     "@types/node": "^20.17.0",
     "@types/nodemailer": "^8.0.0",
     "@types/passport-jwt": "^4.0.1",
+    "@types/pg": "^8.20.0",
+    "@types/supertest": "^7.2.0",
     "dotenv-cli": "^11.0.0",
+    "pg": "^8.20.0",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "unplugin-swc": "^1.5.9",
+    "uuidv7": "^1.2.1",
+    "vitest": "^3.2.4"
   }
 }
