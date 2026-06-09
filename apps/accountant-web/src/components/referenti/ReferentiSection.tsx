@@ -1,45 +1,49 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 
-import { AziendaForm } from '@/components/aziende/AziendaForm';
-import { ConfirmDialog } from '@/components/aziende/ConfirmDialog';
 import { Alert, AlertDescription, Button, Card, CardContent, cn } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
+import { ConfirmDialog } from '@/components/aziende/ConfirmDialog';
+import { ReferenteForm } from '@/components/referenti/ReferenteForm';
 import { messageForError } from '@/lib/error-codes';
-import { createAzienda, deleteAzienda, listAziende, updateAzienda } from '@/lib/aziende-api';
-import type { Azienda, AziendaFormPayload } from '@/lib/aziende-types';
+import {
+  createReferente,
+  deleteReferente,
+  listReferenti,
+  updateReferente,
+} from '@/lib/referenti-api';
+import type { Referente, ReferenteFormPayload } from '@/lib/referenti-types';
 
 // =============================================================================
-// clienti/page.tsx — Anagrafica clienti (STOP-c2 ADR-0032)
+// ReferentiSection.tsx — Sezione referenti nella detail cliente (STOP-c3b ADR-0034)
 // =============================================================================
-// Route/label `clienti` invariate (DP-nav); la pagina consuma /api/v1/aziende.
-// Client component: fetch via aziende-api, stato React locale, refetch on
-// mutation (no react-query). Create/edit form inline in Card (DP-form, no
-// segmento [id]). Soft-delete con ConfirmDialog → l'azienda sparisce dalla
-// lista (backend filtra deletedAt IS NULL). Bottoni gated su permission
-// anagrafica.cliente.{crea,modifica,elimina}.
+// Embedded nella detail page clienti/[id]. Consuma /aziende/:aziendaId/referenti.
+// Stato React locale + refetch on mutation (no react-query). Create/edit form
+// inline in Card (pattern lista clienti). Soft-delete con ConfirmDialog (generico,
+// riusato da aziende) → il referente sparisce dalla lista. Bottoni gated su
+// permission anagrafica.cliente.{crea,modifica,elimina}.
 // =============================================================================
 
-export default function ClientiPage(): JSX.Element {
-  const t = useTranslations('aziende');
-  const params = useParams<{ slug: string }>();
-  const slug = params.slug;
+interface ReferentiSectionProps {
+  aziendaId: string;
+}
+
+export function ReferentiSection({ aziendaId }: ReferentiSectionProps): JSX.Element {
+  const t = useTranslations('referenti');
   const { permissions } = useAuth();
   const canCreate = permissions.includes('anagrafica.cliente.crea');
   const canEdit = permissions.includes('anagrafica.cliente.modifica');
   const canDelete = permissions.includes('anagrafica.cliente.elimina');
 
-  const [aziende, setAziende] = useState<Azienda[]>([]);
+  const [referenti, setReferenti] = useState<Referente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<Azienda | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Azienda | null>(null);
+  const [editing, setEditing] = useState<Referente | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Referente | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -47,27 +51,27 @@ export default function ClientiPage(): JSX.Element {
     setIsLoading(true);
     setLoadError(null);
     try {
-      setAziende(await listAziende());
+      setReferenti(await listReferenti(aziendaId));
     } catch (err) {
       setLoadError(messageForError(err));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [aziendaId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function handleCreate(input: AziendaFormPayload): Promise<void> {
-    await createAzienda(input);
+  async function handleCreate(input: ReferenteFormPayload): Promise<void> {
+    await createReferente(aziendaId, input);
     await load();
     setCreating(false);
   }
 
-  async function handleUpdate(input: AziendaFormPayload): Promise<void> {
+  async function handleUpdate(input: ReferenteFormPayload): Promise<void> {
     if (!editing) return;
-    await updateAzienda(editing.id, input);
+    await updateReferente(aziendaId, editing.id, input);
     await load();
     setEditing(null);
   }
@@ -77,7 +81,7 @@ export default function ClientiPage(): JSX.Element {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await deleteAzienda(pendingDelete.id);
+      await deleteReferente(aziendaId, pendingDelete.id);
     } catch (err) {
       setDeleteError(messageForError(err));
       setPendingDelete(null);
@@ -90,16 +94,16 @@ export default function ClientiPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <section className="space-y-4">
       <header className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">{t('listTitle')}</h1>
-          <p className="text-sm text-muted-foreground">{t('listSubtitle')}</p>
+          <h2 className="text-lg font-semibold">{t('sectionTitle')}</h2>
+          <p className="text-sm text-muted-foreground">{t('sectionSubtitle')}</p>
         </div>
         {canCreate && !creating && !editing && (
-          <Button onClick={() => setCreating(true)}>
+          <Button size="sm" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
-            {t('newAzienda')}
+            {t('newReferente')}
           </Button>
         )}
       </header>
@@ -123,16 +127,16 @@ export default function ClientiPage(): JSX.Element {
       {creating && (
         <Card>
           <CardContent className="pt-6">
-            <AziendaForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />
+            <ReferenteForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />
           </CardContent>
         </Card>
       )}
       {editing && (
         <Card>
           <CardContent className="pt-6">
-            <AziendaForm
+            <ReferenteForm
               key={editing.id}
-              azienda={editing}
+              referente={editing}
               onSubmit={handleUpdate}
               onCancel={() => setEditing(null)}
             />
@@ -142,7 +146,7 @@ export default function ClientiPage(): JSX.Element {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">{t('loading')}</p>
-      ) : aziende.length === 0 && !loadError ? (
+      ) : referenti.length === 0 && !loadError ? (
         <p className="text-sm text-muted-foreground">{t('listEmpty')}</p>
       ) : (
         <div className="overflow-x-auto rounded-md border">
@@ -150,39 +154,30 @@ export default function ClientiPage(): JSX.Element {
             <thead>
               <tr className="border-b bg-muted/40 text-left text-muted-foreground">
                 <th className="px-3 py-2 font-medium">{t('col.nome')}</th>
-                <th className="px-3 py-2 font-medium">{t('col.codice')}</th>
-                <th className="px-3 py-2 font-medium">{t('col.tipo')}</th>
+                <th className="px-3 py-2 font-medium">{t('col.ruolo')}</th>
                 <th className="px-3 py-2 font-medium">{t('col.contatti')}</th>
                 <th className="px-3 py-2 font-medium">{t('col.stato')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('col.azioni')}</th>
               </tr>
             </thead>
             <tbody>
-              {aziende.map((a) => (
-                <tr key={a.id} className="border-b last:border-0">
-                  <td className="px-3 py-2 font-medium">
-                    <Link
-                      href={`/t/${slug}/clienti/${a.id}`}
-                      className="text-primary hover:underline"
-                    >
-                      {a.nome}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2">{a.codice}</td>
-                  <td className="px-3 py-2">{t(`tipo.${a.tipoCliente}`)}</td>
+              {referenti.map((r) => (
+                <tr key={r.id} className="border-b last:border-0">
+                  <td className="px-3 py-2 font-medium">{r.nome}</td>
+                  <td className="px-3 py-2">{t(`ruolo.${r.ruolo}`)}</td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {a.email ?? a.telefono ?? '—'}
+                    {r.email ?? r.telefono ?? '—'}
                   </td>
                   <td className="px-3 py-2">
                     <span
                       className={cn(
                         'rounded-full px-2 py-0.5 text-xs font-medium',
-                        a.attivo
+                        r.attivo
                           ? 'bg-secondary text-secondary-foreground'
                           : 'bg-muted text-muted-foreground',
                       )}
                     >
-                      {a.attivo ? t('active') : t('inactive')}
+                      {r.attivo ? t('active') : t('inactive')}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -193,7 +188,7 @@ export default function ClientiPage(): JSX.Element {
                         aria-label={t('edit')}
                         onClick={() => {
                           setCreating(false);
-                          setEditing(a);
+                          setEditing(r);
                         }}
                       >
                         <Pencil className="h-4 w-4" />
@@ -204,7 +199,7 @@ export default function ClientiPage(): JSX.Element {
                         variant="ghost"
                         size="sm"
                         aria-label={t('delete')}
-                        onClick={() => setPendingDelete(a)}
+                        onClick={() => setPendingDelete(r)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -229,6 +224,6 @@ export default function ClientiPage(): JSX.Element {
         onConfirm={() => void handleConfirmDelete()}
         isPending={isDeleting}
       />
-    </div>
+    </section>
   );
 }

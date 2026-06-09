@@ -53,7 +53,10 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
       <ul className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {NAV_ITEMS.map((item) => {
           const href = `/t/${slug}/${item.key}`;
-          const isActive = pathname === href;
+          // Prefix match: la voce resta attiva anche sui segmenti dinamici
+          // figli (es. /clienti/[id] tiene "Clienti" attivo). Match esatto sul
+          // top-level + startsWith su `${href}/` per le sub-route.
+          const isActive = pathname === href || pathname.startsWith(`${href}/`);
           const Icon = item.icon;
           return (
             <li key={item.key}>

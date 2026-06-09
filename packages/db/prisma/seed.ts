@@ -22,7 +22,7 @@
 
 import argon2 from 'argon2';
 
-import { id, prisma, TipoCliente, withSystemContext } from '../src/index';
+import { id, prisma, RuoloReferente, TipoCliente, withSystemContext } from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Permission catalog (32 atomici)
@@ -632,6 +632,61 @@ async function seedDevAziende(tenantId: string): Promise<void> {
   console.log(`  ✓ aziende studio-demo: ${created} created (${demo.length} total)`);
 }
 
+// Referenti demo per studio-demo (STOP-c3b ADR-0034). Agganciati per `codice`
+// dell'azienda parent (lookup naturale stabile → niente refactor del return di
+// seedDevAziende). Idempotente: find-then-create su (tenantId, aziendaId, nome).
+async function seedDevReferenti(tenantId: string): Promise<void> {
+  const demo: Array<{
+    aziendaCodice: string;
+    nome: string;
+    ruolo: RuoloReferente;
+    email?: string;
+    telefono?: string;
+    attivo?: boolean;
+  }> = [
+    {
+      aziendaCodice: 'AZ001',
+      nome: 'Giulia Rossi',
+      ruolo: RuoloReferente.legale_rappresentante,
+      email: 'giulia.rossi@rossicostruzioni.example.com',
+      telefono: '+39 02 1234568',
+    },
+    {
+      aziendaCodice: 'AZ001',
+      nome: 'Marco Ferri',
+      ruolo: RuoloReferente.amministrativo,
+      email: 'amministrazione@rossicostruzioni.example.com',
+    },
+    {
+      aziendaCodice: 'AZ002',
+      nome: 'Laura Bianchi',
+      ruolo: RuoloReferente.tecnico,
+      telefono: '+39 06 9876543',
+      attivo: false,
+    },
+  ];
+
+  let created = 0;
+  for (const r of demo) {
+    const azienda = await prisma.azienda.findFirst({
+      where: { tenantId, codice: r.aziendaCodice },
+      select: { id: true },
+    });
+    if (!azienda) continue; // azienda parent assente (non dovrebbe, seedDevAziende gira prima)
+
+    const { aziendaCodice: _aziendaCodice, ...data } = r;
+    const existing = await prisma.referente.findFirst({
+      where: { tenantId, aziendaId: azienda.id, nome: r.nome },
+    });
+    if (existing) continue;
+    await prisma.referente.create({
+      data: { id: id(), tenantId, aziendaId: azienda.id, ...data },
+    });
+    created += 1;
+  }
+  console.log(`  ✓ referenti studio-demo: ${created} created (${demo.length} total)`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -819,6 +874,7 @@ async function main(): Promise<void> {
       tplPermissions,
     });
     await seedDevAziende(studio.tenantId);
+    await seedDevReferenti(studio.tenantId);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5

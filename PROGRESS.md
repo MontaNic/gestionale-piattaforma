@@ -2294,6 +2294,38 @@ Primo satellite di dominio del 2° verticale: `referenti` 1:N sotto `aziende` (o
 - 2° verticale: skeleton (ADR-0029/0030) + `aziende` backend+UI (ADR-0031/0032) + **`referenti` backend** (ADR-0033) ✅
 - Next: **STOP-c3b** — UI referenti: detail page `clienti/[id]` (header azienda read-only + sezione referenti CRUD inline con `ReferenteForm`) + entry-point dalla lista clienti + active-state Sidebar sub-route. Primo segmento dinamico del verticale accountant.
 
+### [2026-06-09] STOP-c3b — UI `referenti`: detail `clienti/[id]` + sezione referenti (ADR-0034)
+
+**Branch**: `feat/referenti-ui` · **Tipo**: 1 PR feature FE · **ADR**: [ADR-0034](docs/architecture/ADR-0034-referenti-ui.md)
+
+UI del satellite referenti (consuma il CRUD nested di ADR-0033). Introduce il **primo segmento dinamico del verticale accountant** (`clienti/[id]`) — il salto rimandato a STOP-c2. STOP 0 su anatomia FE reale (`menu/[menuId]`, `ArticlePricesSection`/`CategorySection`, stato `clienti`/`Sidebar`).
+
+**Decisioni** (dettaglio [ADR-0034](docs/architecture/ADR-0034-referenti-ui.md)):
+
+- **Detail `clienti/[id]`**: header azienda read-only (scheda) + `ReferentiSection`. `getAzienda` riaggiunto ad `aziende-api` (era dead-code rimosso a STOP-c2).
+- **`ReferentiSection`** self-loading (perms via `useAuth`, fetch on-mount, refetch on mutation), render referenti a **tabella**, CRUD via `ReferenteForm` (form-in-Card, 6 campi) + `ConfirmDialog`.
+- **Sidebar** active-state a **match per prefisso** (`pathname === href || startsWith(href + '/')`) → "Clienti" attivo sul detail; chiude il TD-BU per accountant.
+- **Entry-point** lista clienti: nome → `<Link>` al detail, Modifica/Elimina inline mantenuti (coesistenza).
+- **Seed** `seedDevReferenti`: 3 referenti demo su `studio-demo` (2 AZ001, 1 AZ002 non-attivo), lookup per codice, idempotente.
+
+**Scelte implementative (verbale STOP 2)** — tutte accettate (migliorie/semplificazioni): componenti in `components/referenti/` (no duplicati, `ConfirmDialog` riusato), perms in `ReferentiSection` via `useAuth`, render tabella, header detail read-only (edit azienda resta in lista — coesistenza), 404 unificato con loadError, i18n naming esplicito, slug da `useParams`.
+
+**Gate:**
+
+- typecheck **16/16** ✅ · lint · next lint no warnings · format clean ✅
+- build accountant-web ✅ — route `/t/[slug]/clienti/[id]` presente
+- db:seed ×2 idempotente ✅ · verifica DB: 3 referenti su `studio-demo` ✅
+- Smoke browser (Nicolò, pre-merge) ✅ — vedi PR.
+
+**Tech debt:** nessuno nuovo. **TD-RLS-aziende+referenti** invariato (backend).
+
+**File:** `apps/accountant-web` (new: `referenti-types`/`referenti-api`/`components/referenti/{ReferenteForm,ReferentiSection}`/`clienti/[id]/page`; mod: `aziende-api +getAzienda`, `error-codes`, `Sidebar`, `clienti/page`, i18n it/en) · `packages/db/prisma/seed.ts` (`seedDevReferenti`) · `docs/architecture/ADR-0034-referenti-ui.md` + `PROGRESS.md`.
+
+**Foundation status post-merge:**
+
+- 2° verticale: skeleton (ADR-0029/0030) + `aziende` backend+UI (ADR-0031/0032) + `referenti` **backend + UI** (ADR-0033/0034) ✅ — prima entità + primo satellite completi end-to-end, primo segmento dinamico del verticale.
+- Next: STOP-c3c (eventuali altre entità satellite) **oppure** slot nav `fatture` (entità grossa, multi-STOP) **oppure** pulizia TD backend (TD-RLS-anagrafica, TD-BV, TD-BS Sub-2).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**

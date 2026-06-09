@@ -40,6 +40,11 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   // dalla zod client-side → fallback generico accettato (vedi ADR-0032 §confine).
   E_AZIENDA_NOT_FOUND: 'Cliente non trovato.',
   E_AZIENDA_CODICE_EXISTS: 'Esiste già un cliente con questo codice.',
+
+  // Dominio referenti (STOP-c3b ADR-0034). Solo il codice runtime: i validation
+  // backstop E_REFERENTE_*_INVALID/_TOO_LONG/_REQUIRED sono prevenuti dalla zod
+  // client-side → fallback generico (vedi ADR-0033 §confine, ereditato).
+  E_REFERENTE_NOT_FOUND: 'Referente non trovato.',
 };
 
 export function messageForErrorCode(code: string): string {

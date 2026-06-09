@@ -41,6 +41,8 @@
     "listTitle": "Clients",
     "listSubtitle": "Studio client registry.",
     "listEmpty": "No clients yet. Create one to get started.",
+    "backToList": "Back to clients",
+    "notFound": "Client not found.",
     "loading": "Loading…",
     "retry": "Retry",
     "newAzienda": "New client",
@@ -85,6 +87,50 @@
     "confirm": {
       "title": "Delete client",
       "body": "Delete \"{name}\"? The client will be removed from the list.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
+    }
+  },
+  "referenti": {
+    "sectionTitle": "Contacts",
+    "sectionSubtitle": "Client contacts and representatives.",
+    "newReferente": "New contact",
+    "listEmpty": "No contacts yet.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "active": "Active",
+    "inactive": "Inactive",
+    "create": "Create",
+    "creating": "Creating…",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "col": {
+      "nome": "Name",
+      "ruolo": "Role",
+      "contatti": "Contacts",
+      "stato": "Status",
+      "azioni": "Actions"
+    },
+    "ruolo": {
+      "legale_rappresentante": "Legal representative",
+      "amministrativo": "Administrative",
+      "tecnico": "Technical",
+      "altro": "Other"
+    },
+    "fields": {
+      "nome": "Name",
+      "ruolo": "Role",
+      "email": "Email",
+      "telefono": "Phone",
+      "note": "Notes",
+      "attivo": "Active"
+    },
+    "confirm": {
+      "title": "Delete contact",
+      "body": "Delete \"{name}\"? The contact will be removed from the list.",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
     }
