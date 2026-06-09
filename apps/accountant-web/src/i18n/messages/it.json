@@ -41,6 +41,8 @@
     "listTitle": "Clienti",
     "listSubtitle": "Anagrafica clienti dello studio.",
     "listEmpty": "Nessun cliente presente. Creane uno per iniziare.",
+    "backToList": "Torna ai clienti",
+    "notFound": "Cliente non trovato.",
     "loading": "Caricamento…",
     "retry": "Riprova",
     "newAzienda": "Nuovo cliente",
@@ -85,6 +87,50 @@
     "confirm": {
       "title": "Elimina cliente",
       "body": "Vuoi eliminare \"{name}\"? L'azienda verrà rimossa dall'elenco.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
+    }
+  },
+  "referenti": {
+    "sectionTitle": "Referenti",
+    "sectionSubtitle": "Contatti e referenti del cliente.",
+    "newReferente": "Nuovo referente",
+    "listEmpty": "Nessun referente presente.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "active": "Attivo",
+    "inactive": "Non attivo",
+    "create": "Crea",
+    "creating": "Creazione…",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "col": {
+      "nome": "Nome",
+      "ruolo": "Ruolo",
+      "contatti": "Contatti",
+      "stato": "Stato",
+      "azioni": "Azioni"
+    },
+    "ruolo": {
+      "legale_rappresentante": "Legale rappresentante",
+      "amministrativo": "Amministrativo",
+      "tecnico": "Tecnico",
+      "altro": "Altro"
+    },
+    "fields": {
+      "nome": "Nome",
+      "ruolo": "Ruolo",
+      "email": "Email",
+      "telefono": "Telefono",
+      "note": "Note",
+      "attivo": "Attivo"
+    },
+    "confirm": {
+      "title": "Elimina referente",
+      "body": "Vuoi eliminare \"{name}\"? Il referente verrà rimosso dall'elenco.",
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
     }

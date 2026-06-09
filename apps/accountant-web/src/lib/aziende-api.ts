@@ -25,6 +25,11 @@ export async function listAziende(): Promise<Azienda[]> {
   return res.data;
 }
 
+export async function getAzienda(id: string): Promise<Azienda> {
+  const res = await apiGet<Wrapped<Azienda>>(`/aziende/${id}`, authOptions());
+  return res.data;
+}
+
 export async function createAzienda(input: CreateAziendaInput): Promise<Azienda> {
   const res = await apiPost<Wrapped<Azienda>>('/aziende', input, authOptions());
   return res.data;
