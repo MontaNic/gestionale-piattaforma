@@ -2439,6 +2439,49 @@ Tracking accentrato delle course corrections. Dettagli in [ADR-0007](docs/archit
 
 ---
 
+## 🎚️ Convenzione — Gate a due corsie (dal 2026-06-09)
+
+**Principio guida del progetto:** test-bed ora, opzione di prodotto in futuro (far provare a studi amici → valutare vendita). Conseguenza: si investe in **fondamenta ready/scalabili di default** (multi-tenancy, RLS, auth, architettura, test), NON in profondità di dominio o feature di prodotto premature (auto-numbering, portali cliente, AI, integrazioni esterne) finché uno studio reale non le richiede. Barra di scope: "lo costruirei comunque per il test-bed?" non "servirà a un cliente ipotetico?".
+
+Lo STOP-gate (STOP 0→1→2→3) si applica con **cerimonia calibrata al rischio**, deciso a STOP 0:
+
+**Corsia FULL** — quando la slice tocca ≥1 di:
+- schema / migration / RLS
+- transazioni atomiche o business logic con invarianti (es. ricalcolo totali)
+- shared config (vitest/turbo/tsconfig/build) o interop CJS/ESM
+- auth / permessi / catalogo RBAC
+- primo uso di un pattern non ancora in nessun ADR
+
+→ trattamento pieno: STOP 0 empirico, STOP 1 spec con DP esplicite, STOP 2 spot-check sul diff (anche multi-blocco se serve), STOP 3 commit + PR + **ADR dedicato** + PROGRESS.
+
+**Corsia LEAN** — CRUD puro che replica un pattern già in ADR, **zero decisioni nuove**:
+- STOP 0 solo se serve un preflight (spesso skippabile)
+- STOP 1 spec
+- STOP 2 **un solo spot-check** (no multi-blocco) — basato sul self-check report di Claude Code
+- STOP 3 commit + PR + **entry PROGRESS che linka l'ADR-pattern esistente** ("segue ADR-NNNN, nessuna decisione nuova"), **niente ADR dedicato**
+- niente `ask_user_input` se non emergono DP reali
+
+**Criterio di routing (regola pratica):** se a STOP 0 **non emerge alcuna DP sostanziale** una volta scelto il pattern → è LEAN. Se emerge anche una sola DP di prodotto/architettura → FULL. In dubbio: FULL.
+
+Esempi retroattivi: `aziende` backend = FULL (schema+RLS+migration). `referenti` backend = sarebbe stato LEAN (CRUD che replica aziende, nessuna DP vera) — trattato FULL, overhead evitabile. `preventivi` = FULL (tx atomica + totali + nuovo enum + permessi).
+
+## 🔁 Convenzione — Self-check report (dal 2026-06-09)
+
+A STOP 2, Claude Code produce un **self-check report**: esegue lui le verifiche meccaniche e incolla l'esito già valutato. Claude strategico reviewa il *giudizio*, non rifà la verifica meccanica. Riduce i round-trip diff.
+
+Checklist standard del report (Code la esegue e riporta PASS/FAIL per ciascuna):
+1. `git status --short` → nessun `.lock` / file spurio in stage
+2. header commit ≤ 100 char
+3. (se schema) partial-unique presente dove atteso · RLS policy creata · FORCE attivo
+4. `git add` selettivo (lista file attesa vs staged, combaciano)
+5. typecheck / lint / format / build → esiti
+6. e2e → conteggio scenari verdi (+ regression invariati)
+7. divergenze dallo spec auto-segnalate da Code (con Accept/Reject proposto)
+
+Claude strategico riceve **il report + il diff** (un blocco unico per slice LEAN; multi-blocco solo se FULL e il diff è grosso/rischioso). Verdetto a STOP 2 sul giudizio, non sulla rilettura meccanica.
+
+---
+
 ## 🔄 Workflow operativo correnti
 
 ### Esecuzione comandi
