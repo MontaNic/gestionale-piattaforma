@@ -57,6 +57,7 @@ model Tenant {
   recipes        Recipe[]
   pricingRules   PricingRule[]
   aziende        Azienda[]
+  referenti      Referente[]
 
   @@map("tenants")
 }
@@ -569,6 +570,13 @@ enum TipoCliente {
   persona_fisica
 }
 
+enum RuoloReferente {
+  legale_rappresentante
+  amministrativo
+  tecnico
+  altro
+}
+
 model Azienda {
   id             String      @id
   tenantId       String      @map("tenant_id")
@@ -591,9 +599,36 @@ model Azienda {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  referenti Referente[]
 
   @@index([tenantId])
   @@index([tenantId, nome])
   @@map("aziende")
+}
+
+// Referente/contatto di un'azienda cliente (origine StudioDesk `aziende_referenti`,
+// STOP-c3a ADR-0033). Satellite 1:N: FK azienda CASCADE (un referente non esiste
+// senza la sua azienda). MVP 7 campi — `user_id` deferito (circolarità RFM, ADR-0031).
+// Nessuna unicità naturale nel DDL → niente partial-unique.
+model Referente {
+  id        String         @id
+  tenantId  String         @map("tenant_id")
+  aziendaId String         @map("azienda_id")
+  nome      String         @db.VarChar(150)
+  ruolo     RuoloReferente @default(altro)
+  email     String?        @db.VarChar(255)
+  telefono  String?        @db.VarChar(40)
+  note      String?        @db.VarChar(255)
+  attivo    Boolean        @default(true)
+  deletedAt DateTime?      @map("deleted_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  azienda Azienda @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([aziendaId])
+  @@map("referenti")
 }
