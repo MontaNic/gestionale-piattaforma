@@ -2348,6 +2348,29 @@ Chiude il blind-spot RLS sul dominio anagrafica. Le policy `aziende_tenant_isola
 - 2° verticale: skeleton + `aziende` (backend+UI) + `referenti` (backend+UI) + **RLS isolation anagrafica esercitata DB-level** ✅
 - Next: `fatture` (slot grosso, multi-STOP) · STOP-c3c (altra entità satellite) · TD-BV pieno (post-fatture).
 
+### [2026-06-09] STOP-e1 — backend `preventivi` MVP (testata + voci, tx atomica + totali, ADR-0036)
+
+**Branch**: `feat/preventivi-backend` · **Tipo**: 1 PR feature (FULL) · **ADR**: [ADR-0036](docs/architecture/ADR-0036-preventivi-backend.md)
+
+Prima entità con **business logic** del verticale: `preventivi` (testata) + `preventivi_voci` (righe), figli di `aziende`, con ricalcolo totali server-side in **transazione atomica**. Da StudioDesk `62_preventivi.sql` (catalogo `servizi_*` e versioning/workflow fuori MVP). STOP 0 ha accertato che `fatture` non esiste come tabella StudioDesk (c'è `preventivi` dominio + `fic_billing` integrazione) → scelta di prodotto: preventivi ora, FIC dopo.
+
+**Decisioni** (dettaglio [ADR-0036](docs/architecture/ADR-0036-preventivi-backend.md)):
+
+- Modello `Preventivo` (codice partial-unique, enum `StatoPreventivo`, 3 totali Decimal, soft-delete) + `PreventivoVoce` (snapshot custom, `tenantId` proprio + RLS dedicata, no soft-delete) + enum `UnitaMisura`. FK azienda+tenant Cascade.
+- **DP-prev-1** catalogo fuori MVP (voci custom). **DP-prev-2** stato base 4 valori, no versioning/workflow. **DP-e1-1** voci nel payload + **tx atomica** (replace integrale voci + ricalcolo totali in `withTenantContextAtomicTx` — invariante totali ≡ Σ voci). **DP-e1-2** codice manuale partial-unique. **DP-e1-3** stato libero via PATCH. **DP-e1-4** +2 permessi `preventivi.{visualizza,gestisci}` (33→35).
+- **Pattern NUOVO**: replace-collezione-in-tx (deleteMany+createMany figli + ricalcolo aggregati padre) — prima business logic + prima tx atomica del verticale accountant, riusabile per fatture.
+
+**Gate:** typecheck 16/16 · lint · format clean ✅ · migration + verifica DB (2 policy + FORCE + partial-unique + FK cascade) ✅ · e2e **39/39** (preventivi-crud 12 NEW con totali verificati sui numeri + replace-in-tx + RBAC + isolamento + 404; aziende 11 + referenti 11 + rls-isolation 5 regression). Solo locale (TD-CB).
+
+**Tech debt:** TD candidate — estendere `rls-isolation.e2e-spec.ts` ai preventivi (policy installata ma non esercitata DB-level, coerente con TD-RLS anagrafica). TD-BV + TD-BS Sub-2 invariati.
+
+**File:** `packages/db` (schema +2 enum/+2 model/+relazioni, barrel, migration `add_preventivi`, seed +2 permessi) · `apps/accountant-api` (modulo `src/preventivi/` + registrazione + e2e `preventivi-crud` + fixtures) · `docs/architecture/ADR-0036-preventivi-backend.md` + `PROGRESS.md`.
+
+**Foundation status post-merge:**
+
+- 2° verticale: skeleton + `aziende` (BE+UI) + `referenti` (BE+UI) + RLS anagrafica testata + **`preventivi` backend** (prima business logic + tx atomica) ✅
+- Next: **STOP-e2** — UI preventivi (lista/detail/editor voci con totali live, sotto `clienti/[id]` o nav dedicata) · poi catalogo servizi / FIC / PDF (slice future).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**

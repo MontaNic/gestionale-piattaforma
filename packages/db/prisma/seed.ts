@@ -3,7 +3,7 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (33 permessi atomici namespaced)
+//   1. permissions          (35 permessi atomici namespaced)
 //   2. system_role_templates (6 template predefiniti F1, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //
@@ -25,7 +25,7 @@ import argon2 from 'argon2';
 import { id, prisma, RuoloReferente, TipoCliente, withSystemContext } from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Permission catalog (32 atomici)
+// 1. Permission catalog (35 atomici)
 // ─────────────────────────────────────────────────────────────────────────────
 // Categoria = primo segmento prima del primo punto.
 // isPreF2 = true per feature [PRE F2] ancora non attive (magazzino.*, ai.*).
@@ -102,6 +102,18 @@ const PERMISSIONS: PermissionSeed[] = [
   { code: 'menu.prezzo.modifica', description: 'Modifica prezzi e listini', category: 'menu' },
   { code: 'menu.visualizza', description: 'Visualizzazione menu', category: 'menu' },
 
+  // preventivi.* (2) — verticale accountant (STOP-e1)
+  {
+    code: 'preventivi.visualizza',
+    description: 'Visualizzazione preventivi',
+    category: 'preventivi',
+  },
+  {
+    code: 'preventivi.gestisci',
+    description: 'Crea/modifica/elimina preventivi',
+    category: 'preventivi',
+  },
+
   // comande.* (5)
   { code: 'comande.crea', description: 'Creazione comande', category: 'comande' },
   {
@@ -170,7 +182,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   {
     name: 'Super Admin',
     description: 'Accesso completo a tutte le funzioni della piattaforma.',
-    // Tutti i 33 permessi.
+    // Tutti i 35 permessi.
     permissionCodes: ALL_PERMISSION_CODES,
   },
   {
@@ -194,6 +206,8 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'menu.piatto.modifica',
       'menu.prezzo.modifica',
       'menu.visualizza',
+      'preventivi.visualizza',
+      'preventivi.gestisci',
       'comande.crea',
       'comande.modifica',
       'comande.elimina',

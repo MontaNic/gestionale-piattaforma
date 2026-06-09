@@ -103,6 +103,8 @@ export {
   Channel,
   TipoCliente,
   RuoloReferente,
+  StatoPreventivo,
+  UnitaMisura,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -131,6 +133,8 @@ export type {
   PricingRule,
   Azienda,
   Referente,
+  Preventivo,
+  PreventivoVoce,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
