@@ -22,6 +22,7 @@ import {
 
 import { AppController } from './app.controller';
 import { AziendeModule } from './aziende/aziende.module';
+import { ReferentiModule } from './referenti/referenti.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -46,6 +47,8 @@ import { MeModule } from './me/me.module';
     RbacModule,
     // Modulo dominio del verticale accountant (prima slice STOP-c1).
     AziendeModule,
+    // Satellite 1:N di aziende (referenti, STOP-c3a).
+    ReferentiModule,
   ],
   controllers: [AppController],
   providers: [

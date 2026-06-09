@@ -2264,6 +2264,36 @@ Prima UI di dominio del 2° verticale (commercialisti): anagrafica clienti `azie
 - 2° verticale: skeleton (ADR-0029/0030) + slice backend `aziende` (ADR-0031) + **UI `aziende` (lista + form + seed demo)** (ADR-0032) ✅
 - Next: **STOP-c3** (eventuale) — entità satellite di `aziende` (referenti, log modifiche) o riaggancio RFM/arricchimento; in alternativa slot nav `fatture` o pulizia TD backend.
 
+### [2026-06-09] STOP-c3a — backend `referenti` (satellite di `aziende`, ADR-0033)
+
+**Branch**: `feat/referenti-backend` · **Tipo**: 1 PR feature (schema + migration + backend + e2e) · **ADR**: [ADR-0033](docs/architecture/ADR-0033-referenti-backend.md)
+
+Primo satellite di dominio del 2° verticale: `referenti` 1:N sotto `aziende` (origine StudioDesk `aziende_referenti`, DDL `01_studio_template.sql:1309` ≡ `52_pannello_azienda.sql:76` byte-identici). Modulo nested `/api/v1/aziende/:aziendaId/referenti` in `accountant-api`. STOP 0 su DDL + pattern `menu-categories`/`aziende.service`. Split STOP-c3: **c3a backend** (questo) → **c3b UI** (detail `clienti/[id]` + sezione referenti).
+
+**Decisioni** (dettaglio [ADR-0033](docs/architecture/ADR-0033-referenti-backend.md)):
+
+- Modello `Referente`: 6 campi dominio (nome 150, `ruolo` enum, email/telefono/note opt, attivo) + std (id, tenantId, aziendaId, soft-delete, timestamps). FK azienda+tenant **Cascade**, 2 index. Relazioni inverse su `Tenant`+`Azienda`.
+- **DP-ruolo** = enum `RuoloReferente` (`legale_rappresentante`/`amministrativo`/`tecnico`/`altro`, default `altro`), replica DDL.
+- **Pattern LEAN** ereditato da `aziende.service` (NON `menu-categories`): single-op `this.db.prisma`, no atomic tx, no audit, no `catchUniqueViolation` (referenti non ha unicità naturale → no partial-unique). Parent-check `assertAziendaExists` (404 + isolamento). Divergenza consapevole: introdurre audit nel verticale accountant è uno STOP a sé.
+- **Permessi riusati** `anagrafica.cliente.{visualizza,crea,modifica,elimina}` (referente = attributo del cliente) → catalogo invariato.
+- **`user_id` deferito** (circolarità RFM→users, ADR-0031); **log modifiche scartato** (`aziende_modifiche_log` "decisione aperta"; c'è già audit_logs core).
+- Migration `add_referenti`: forma `add_aziende` (RLS `referenti_tenant_isolation` USING-only + FORCE, FK cascade), **no partial-unique**.
+
+**Gate:**
+
+- typecheck **16/16** ✅ · lint · format clean ✅
+- migration + verifica DB: policy `referenti_tenant_isolation`, RLS enabled+forced, 3 index (pkey+tenant+azienda), 2 FK cascade ✅
+- e2e **22/22** ✅ (11 `referenti-crud` new — CRUD, parent-404, self-404, scoping nested, isolamento cross-tenant, RBAC-403 + 11 `aziende-crud` regression). Solo locale (TD-CB).
+
+**Tech debt:** nessuno nuovo a sé. **TD-RLS-aziende esteso a referenti** — policy DB-level presente ma non esercitata da e2e (superuser, TD-BV) né da `smoke:rls-core` (solo core); isolamento verificato applicativamente (scenario 10). Stessa voce di `aziende` (accorpabile → `TD-RLS-anagrafica`).
+
+**File:** `packages/db` (schema +enum/+model `Referente`/+2 relazioni inverse, barrel +re-export, migration `add_referenti`) · `apps/accountant-api` (modulo `src/referenti/` + registrazione `app.module` + e2e `referenti-crud` + fixtures) · `docs/architecture/ADR-0033-referenti-backend.md` + `PROGRESS.md`.
+
+**Foundation status post-merge:**
+
+- 2° verticale: skeleton (ADR-0029/0030) + `aziende` backend+UI (ADR-0031/0032) + **`referenti` backend** (ADR-0033) ✅
+- Next: **STOP-c3b** — UI referenti: detail page `clienti/[id]` (header azienda read-only + sezione referenti CRUD inline con `ReferenteForm`) + entry-point dalla lista clienti + active-state Sidebar sub-route. Primo segmento dinamico del verticale accountant.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
