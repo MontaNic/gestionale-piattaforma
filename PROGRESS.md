@@ -2326,6 +2326,28 @@ UI del satellite referenti (consuma il CRUD nested di ADR-0033). Introduce il **
 - 2° verticale: skeleton (ADR-0029/0030) + `aziende` backend+UI (ADR-0031/0032) + `referenti` **backend + UI** (ADR-0033/0034) ✅ — prima entità + primo satellite completi end-to-end, primo segmento dinamico del verticale.
 - Next: STOP-c3c (eventuali altre entità satellite) **oppure** slot nav `fatture` (entità grossa, multi-STOP) **oppure** pulizia TD backend (TD-RLS-anagrafica, TD-BV, TD-BS Sub-2).
 
+### [2026-06-09] STOP-d1 — Test RLS-isolation come `gestionale_app` (anagrafica, ADR-0035)
+
+**Branch**: `test/rls-isolation-anagrafica` · **Tipo**: 1 PR test-only (1 file, 0 prod) · **ADR**: [ADR-0035](docs/architecture/ADR-0035-rls-isolation-test-anagrafica.md)
+
+Chiude il blind-spot RLS sul dominio anagrafica. Le policy `aziende_tenant_isolation` + `referenti_tenant_isolation` (FORCE) non erano mai esercitate: la suite e2e gira come `postgres` superuser (TD-BV) che bypassa la RLS; l'isolamento era verificato solo applicativamente. Nuovo spec `rls-isolation.e2e-spec.ts` boota l'app come `gestionale_app` (NOSUPERUSER NOBYPASSRLS), replica del pattern `soft-delete-rls.e2e-spec.ts` (ADR-0021).
+
+**Decisione (dettaglio [ADR-0035](docs/architecture/ADR-0035-rls-isolation-test-anagrafica.md)):**
+
+- **Sub-1 (questo STOP)**: spec mirato — 5 scenari (S0 guard + aziende list/getById + referenti list/create), isolamento tenant esercitato a livello DB. Riuso totale infra e2e (`toAppRoleUrl` + override `databaseUrl`; setup via URL superuser). Nessuna modifica a file prod o altri spec.
+- **Sub-2 (deferita, TD-BV)**: conversione intera suite a non-superuser, fuori scope — da valutare dopo `fatture`.
+
+**Gate:** lint · format clean ✅ · e2e **27/27** (rls-isolation 5/5 NEW come `gestionale_app` + aziende-crud 11 + referenti-crud 11 regression) ✅. Solo locale (TD-CB).
+
+**Tech debt:** TD-RLS-aziende+referenti → risolto per "policy esercitata DB-level" (dominio anagrafica). TD-BV deferito (Sub-2). TD-BS Sub-2 (ValidationPipe e2e) invariato.
+
+**File:** `apps/accountant-api/test/e2e/rls-isolation.e2e-spec.ts` (new) · `docs/architecture/ADR-0035-rls-isolation-test-anagrafica.md` + `PROGRESS.md`.
+
+**Foundation status post-merge:**
+
+- 2° verticale: skeleton + `aziende` (backend+UI) + `referenti` (backend+UI) + **RLS isolation anagrafica esercitata DB-level** ✅
+- Next: `fatture` (slot grosso, multi-STOP) · STOP-c3c (altra entità satellite) · TD-BV pieno (post-fatture).
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
