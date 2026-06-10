@@ -105,6 +105,7 @@ export {
   RuoloReferente,
   StatoPreventivo,
   UnitaMisura,
+  VisibilitaScadenza,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -135,6 +136,8 @@ export type {
   Referente,
   Preventivo,
   PreventivoVoce,
+  Scadenza,
+  ScadenzaCategoria,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
