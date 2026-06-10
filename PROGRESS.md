@@ -2419,6 +2419,33 @@ Solo locale (TD-CB).
 **TD residui verticale**: TD-BV (suite intera superuser, Sub-2 post-fatture) ·
 seed utente non-superuser studio-demo (gating runtime) · TD-BS Sub-2.
 
+### [2026-06-10] STOP-dash1 — Dashboard operatore-studio (KPI + ultimi preventivi, ADR-0038)
+
+**Branch**: `feat/dashboard-stats` · **Tipo**: 1 PR feature (FULL) · **ADR**: [ADR-0038](docs/architecture/ADR-0038-dashboard-stats.md)
+
+Prima dashboard del verticale commercialisti, livello operatore-studio. Endpoint
+aggregazione `GET /api/v1/dashboard/stats` (prime query count/groupBy/aggregate del
+progetto, RLS-filtered automaticamente via $allOperations) + card-grid FE
+(KPI clienti+preventivi + lista 5 ultimi preventivi).
+
+**Decisioni**: scope operatore-studio (NO portale-cliente, NO super-admin, NO FIC) ·
+permessi riuso `anagrafica.cliente.visualizza` (no nuovo permesso) · card Clienti
+Opzione 2 (totale + tagli ortogonali stato/tipo) · aggregate sotto RLS senza wrap
+(verificato $allOperations + softDelete su aggregate). Vedi [ADR-0038](docs/architecture/ADR-0038-dashboard-stats.md) + §roadmap
+(visione tre livelli StudioDesk).
+
+**Verifica runtime non-superuser**: numeri a schermo == DB (soft-deleted esclusi
+dagli aggregati — PREV-TEST-UI di STOP-e2 correttamente non contato).
+
+**Gate**: typecheck ✓ · lint ✓ · build ✓ · e2e 48/48 (4 nuovi dashboard-stats con
+invariante attivi+nonAttivi==totale). Solo locale (TD-CB).
+
+**Tech debt**: TD-RLS-dashboard candidate (endpoint non in rls-isolation; isolamento
+applicativo + runtime). TD residui invariati.
+
+**Foundation status post-merge**: 2° verticale — skeleton + aziende (BE+UI) +
+referenti (BE+UI) + RLS anagrafica + preventivi (BE+UI) + **dashboard operatore-studio** ✅
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
