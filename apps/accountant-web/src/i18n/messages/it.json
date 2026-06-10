@@ -3,6 +3,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "clienti": "Clienti",
+      "scadenze": "Scadenze",
       "fatture": "Fatture"
     },
     "topbar": {
@@ -233,6 +234,68 @@
     "confirm": {
       "title": "Elimina preventivo",
       "body": "Vuoi eliminare il preventivo \"{codice}\"? Verrà rimosso dall'elenco.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
+    }
+  },
+  "scadenze": {
+    "listTitle": "Scadenze",
+    "listSubtitle": "Calendario fiscale dello studio.",
+    "listEmpty": "Nessuna scadenza trovata.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "newScadenza": "Nuova scadenza",
+    "inactive": "Non attiva",
+    "create": "Crea",
+    "creating": "Creazione…",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "filters": {
+      "categoria": "Categoria",
+      "stato": "Stato",
+      "visibilita": "Visibilità",
+      "da": "Da",
+      "a": "A",
+      "all": "Tutte"
+    },
+    "filterStato": {
+      "tutte": "Tutte",
+      "attive": "Attive",
+      "scadute": "Scadute",
+      "future": "Future"
+    },
+    "filterVisibilita": {
+      "tutte": "Tutte",
+      "globali": "Globali",
+      "azienda": "Per azienda"
+    },
+    "visibilita": {
+      "tutti": "Globale",
+      "azienda": "Per azienda",
+      "utente": "Personale"
+    },
+    "badge": {
+      "scaduta": "Scaduta",
+      "oggi": "Oggi",
+      "futura": "Futura"
+    },
+    "fields": {
+      "titolo": "Titolo",
+      "descrizione": "Descrizione",
+      "dataScadenza": "Data scadenza",
+      "categoria": "Categoria",
+      "categoriaNone": "— Nessuna —",
+      "visibilita": "Visibilità",
+      "azienda": "Azienda",
+      "aziendaPlaceholder": "— Seleziona azienda —",
+      "attivo": "Attiva"
+    },
+    "confirm": {
+      "title": "Elimina scadenza",
+      "body": "Vuoi eliminare «{titolo}»? La scadenza verrà rimossa dall'elenco.",
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
     }

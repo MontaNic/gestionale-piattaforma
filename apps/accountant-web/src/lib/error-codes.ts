@@ -51,6 +51,14 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   // client-side → fallback generico (vedi ADR-0036 §confine, ereditato).
   E_PREVENTIVO_NOT_FOUND: 'Preventivo non trovato.',
   E_PREVENTIVO_CODICE_EXISTS: 'Esiste già un preventivo con questo codice.',
+
+  // Dominio scadenze (STOP-scad2 ADR-0040). Codici runtime: not-found + le FK
+  // business (azienda/categoria non accessibili) emerse dal service (ADR-0039).
+  // I validation backstop E_SCADENZA_*_INVALID/_REQUIRED/_TOO_LONG sono prevenuti
+  // dalla zod client-side → fallback generico (vedi ADR-0039 §confine, ereditato).
+  E_SCADENZA_NOT_FOUND: 'Scadenza non trovata.',
+  E_SCADENZA_AZIENDA_NOT_FOUND: 'Azienda non trovata o non accessibile.',
+  E_SCADENZA_CATEGORIA_NOT_FOUND: 'Categoria non trovata o non accessibile.',
 };
 
 export function messageForErrorCode(code: string): string {
