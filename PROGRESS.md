@@ -2371,6 +2371,33 @@ Prima entità con **business logic** del verticale: `preventivi` (testata) + `pr
 - 2° verticale: skeleton + `aziende` (BE+UI) + `referenti` (BE+UI) + RLS anagrafica testata + **`preventivi` backend** (prima business logic + tx atomica) ✅
 - Next: **STOP-e2** — UI preventivi (lista/detail/editor voci con totali live, sotto `clienti/[id]` o nav dedicata) · poi catalogo servizi / FIC / PDF (slice future).
 
+### [2026-06-10] STOP-e2 — UI preventivi (lista detail + editor voci, totali mirror, ADR-0037)
+
+**Branch**: `feat/preventivi-ui` · **Tipo**: 1 PR feature FE (FULL) · **ADR**: [ADR-0037](docs/architecture/ADR-0037-preventivi-ui.md)
+
+Prima UI con business logic visibile a schermo nel verticale commercialisti:
+lista preventivi come sezione in `clienti/[id]` + editor voci con totali live
+mirror della formula server.
+
+**Decisioni**: DP-aggancio=C (lista in sezione detail, editor in route annidata
+`clienti/[id]/preventivi/[id]`), DP-editor=ibrido (testata RHF+zod, voci
+useState+useMemo). Vedi [ADR-0037](docs/architecture/ADR-0037-preventivi-ui.md).
+
+**Mirror totali**: `lib/preventivi-totali.ts` formula byte-esatta del service.
+7 test unit, 3 casi divergenti cross-checkati a mano contro server.
+
+**Bug trovato da runtime**: Prisma serializza Decimal→stringa, validoFino→datetime
+completo. Fix in `preventivi-api.ts` (normalizzazione wire→domain).
+
+**Gate**: typecheck 16/16 ✓ · lint ✓ · build ✓ · test 7/7 (accountant-web) ·
+seed idempotente · runtime Playwright headless PASS (lista/editor/totali/delete/409).
+
+**Tech debt**: TD candidate seed utente non-superuser studio-demo (~20min) ·
+TD-RLS-preventivi candidate (policy installata, non esercitata DB-level).
+
+**Foundation status post-merge**: 2° verticale — skeleton + aziende (BE+UI) +
+referenti (BE+UI) + RLS anagrafica + preventivi backend + **preventivi UI** ✅
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**

@@ -134,5 +134,84 @@
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
     }
+  },
+  "preventivi": {
+    "sectionTitle": "Preventivi",
+    "sectionSubtitle": "Preventivi emessi per il cliente.",
+    "newPreventivo": "Nuovo preventivo",
+    "backToCliente": "Torna al cliente",
+    "listEmpty": "Nessun preventivo presente.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "notFound": "Preventivo non trovato.",
+    "create": "Crea",
+    "creating": "Creazione…",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "editTitle": "Preventivo {codice}",
+    "col": {
+      "codice": "Codice",
+      "oggetto": "Oggetto",
+      "stato": "Stato",
+      "totale": "Totale",
+      "validoFino": "Valido fino",
+      "azioni": "Azioni"
+    },
+    "fields": {
+      "codice": "Codice",
+      "oggetto": "Oggetto",
+      "stato": "Stato",
+      "validoFino": "Valido fino",
+      "coverLetter": "Lettera di accompagnamento",
+      "noteInterne": "Note interne"
+    },
+    "stato": {
+      "bozza": "Bozza",
+      "inviato": "Inviato",
+      "accettato": "Accettato",
+      "rifiutato": "Rifiutato"
+    },
+    "um": {
+      "forfait": "Forfait",
+      "ora": "Ora",
+      "mese": "Mese",
+      "anno": "Anno",
+      "documento": "Documento",
+      "dipendente": "Dipendente",
+      "pezzo": "Pezzo"
+    },
+    "voci": {
+      "title": "Voci",
+      "add": "Aggiungi voce",
+      "remove": "Rimuovi voce",
+      "empty": "Nessuna voce. Aggiungine almeno una.",
+      "nome": "Nome",
+      "descrizione": "Descrizione",
+      "unitaMisura": "Unità",
+      "quantita": "Quantità",
+      "prezzoUnitario": "Prezzo unitario",
+      "scontoPct": "Sconto %",
+      "ivaAliquota": "IVA %",
+      "note": "Note",
+      "rigaImponibile": "Imponibile riga",
+      "rigaIva": "IVA riga",
+      "errorEmpty": "Aggiungi almeno una voce.",
+      "errorNome": "Ogni voce deve avere un nome.",
+      "errorAmount": "Quantità e prezzo devono essere numeri validi (≥ 0)."
+    },
+    "totali": {
+      "imponibile": "Imponibile",
+      "iva": "IVA",
+      "totale": "Totale"
+    },
+    "confirm": {
+      "title": "Elimina preventivo",
+      "body": "Vuoi eliminare il preventivo \"{codice}\"? Verrà rimosso dall'elenco.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
+    }
   }
 }

@@ -134,5 +134,84 @@
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
     }
+  },
+  "preventivi": {
+    "sectionTitle": "Quotes",
+    "sectionSubtitle": "Quotes issued for the client.",
+    "newPreventivo": "New quote",
+    "backToCliente": "Back to client",
+    "listEmpty": "No quotes yet.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "notFound": "Quote not found.",
+    "create": "Create",
+    "creating": "Creating…",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "editTitle": "Quote {codice}",
+    "col": {
+      "codice": "Code",
+      "oggetto": "Subject",
+      "stato": "Status",
+      "totale": "Total",
+      "validoFino": "Valid until",
+      "azioni": "Actions"
+    },
+    "fields": {
+      "codice": "Code",
+      "oggetto": "Subject",
+      "stato": "Status",
+      "validoFino": "Valid until",
+      "coverLetter": "Cover letter",
+      "noteInterne": "Internal notes"
+    },
+    "stato": {
+      "bozza": "Draft",
+      "inviato": "Sent",
+      "accettato": "Accepted",
+      "rifiutato": "Rejected"
+    },
+    "um": {
+      "forfait": "Flat rate",
+      "ora": "Hour",
+      "mese": "Month",
+      "anno": "Year",
+      "documento": "Document",
+      "dipendente": "Employee",
+      "pezzo": "Unit"
+    },
+    "voci": {
+      "title": "Line items",
+      "add": "Add item",
+      "remove": "Remove item",
+      "empty": "No items yet. Add at least one.",
+      "nome": "Name",
+      "descrizione": "Description",
+      "unitaMisura": "Unit",
+      "quantita": "Quantity",
+      "prezzoUnitario": "Unit price",
+      "scontoPct": "Discount %",
+      "ivaAliquota": "VAT %",
+      "note": "Notes",
+      "rigaImponibile": "Line net",
+      "rigaIva": "Line VAT",
+      "errorEmpty": "Add at least one line item.",
+      "errorNome": "Each line item must have a name.",
+      "errorAmount": "Quantity and price must be valid numbers (≥ 0)."
+    },
+    "totali": {
+      "imponibile": "Net",
+      "iva": "VAT",
+      "totale": "Total"
+    },
+    "confirm": {
+      "title": "Delete quote",
+      "body": "Delete quote \"{codice}\"? It will be removed from the list.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
+    }
   }
 }

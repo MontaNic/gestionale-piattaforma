@@ -22,7 +22,15 @@
 
 import argon2 from 'argon2';
 
-import { id, prisma, RuoloReferente, TipoCliente, withSystemContext } from '../src/index';
+import {
+  id,
+  prisma,
+  RuoloReferente,
+  StatoPreventivo,
+  TipoCliente,
+  UnitaMisura,
+  withSystemContext,
+} from '../src/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Permission catalog (35 atomici)
@@ -701,6 +709,158 @@ async function seedDevReferenti(tenantId: string): Promise<void> {
   console.log(`  ✓ referenti studio-demo: ${created} created (${demo.length} total)`);
 }
 
+// Preventivi demo per studio-demo (STOP-e2 ADR-0037). Agganciati ad AZ001 per
+// `codice` (lookup naturale stabile, come seedDevReferenti). Idempotente:
+// find-then-create su (tenantId, codice). Il seed scrive direttamente via prisma
+// (bypassa il service) → i 3 totali si calcolano qui REPLICANDO la formula
+// server (preventivi.service computeVoce/computeTotali): arrotonda la riga prima
+// dell'IVA, IVA per-voce, somma, poi arrotonda gli aggregati. Aliquote miste
+// (22% e 10%) per esercitare la formula. PII-free.
+async function seedDevPreventivi(tenantId: string): Promise<void> {
+  const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+  type VoceSeed = {
+    nome: string;
+    descrizione?: string;
+    unitaMisura: UnitaMisura;
+    quantita: number;
+    prezzoUnitario: number;
+    scontoPct: number;
+    ivaAliquota: number;
+  };
+
+  const demo: Array<{
+    aziendaCodice: string;
+    codice: string;
+    oggetto: string;
+    stato: StatoPreventivo;
+    validoFino?: string; // YYYY-MM-DD
+    coverLetter?: string;
+    voci: VoceSeed[];
+  }> = [
+    {
+      aziendaCodice: 'AZ001',
+      codice: 'PREV-2025-001',
+      oggetto: 'Consulenza fiscale e contabile annuale',
+      stato: StatoPreventivo.bozza,
+      coverLetter: 'Proposta per la gestione contabile e fiscale dell’esercizio 2025.',
+      voci: [
+        {
+          nome: 'Tenuta contabilità ordinaria',
+          descrizione: 'Registrazioni mensili e adempimenti IVA',
+          unitaMisura: UnitaMisura.mese,
+          quantita: 12,
+          prezzoUnitario: 80,
+          scontoPct: 0,
+          ivaAliquota: 22,
+        },
+        {
+          nome: 'Dichiarazione dei redditi',
+          unitaMisura: UnitaMisura.documento,
+          quantita: 1,
+          prezzoUnitario: 350,
+          scontoPct: 10,
+          ivaAliquota: 22,
+        },
+        {
+          nome: 'Diritti camerali e bolli',
+          unitaMisura: UnitaMisura.pezzo,
+          quantita: 2,
+          prezzoUnitario: 16,
+          scontoPct: 0,
+          ivaAliquota: 10,
+        },
+      ],
+    },
+    {
+      aziendaCodice: 'AZ001',
+      codice: 'PREV-2025-002',
+      oggetto: 'Avvio nuova attività e formazione',
+      stato: StatoPreventivo.inviato,
+      validoFino: '2025-12-31',
+      voci: [
+        {
+          nome: 'Apertura partita IVA',
+          unitaMisura: UnitaMisura.forfait,
+          quantita: 1,
+          prezzoUnitario: 200,
+          scontoPct: 0,
+          ivaAliquota: 22,
+        },
+        {
+          nome: 'Formazione fatturazione elettronica',
+          unitaMisura: UnitaMisura.ora,
+          quantita: 3,
+          prezzoUnitario: 60,
+          scontoPct: 5,
+          ivaAliquota: 10,
+        },
+      ],
+    },
+  ];
+
+  let created = 0;
+  for (const p of demo) {
+    const azienda = await prisma.azienda.findFirst({
+      where: { tenantId, codice: p.aziendaCodice },
+      select: { id: true },
+    });
+    if (!azienda) continue; // azienda parent assente (seedDevAziende gira prima)
+
+    const existing = await prisma.preventivo.findFirst({
+      where: { tenantId, codice: p.codice },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    // Totali mirror-server: arrotonda riga prima dell'IVA, IVA per-voce.
+    let totaleImponibile = 0;
+    let totaleIva = 0;
+    const vociData = p.voci.map((v, i) => {
+      const scontato = v.quantita * v.prezzoUnitario * (1 - v.scontoPct / 100);
+      const totaleRiga = round2(scontato);
+      const iva = round2(totaleRiga * (v.ivaAliquota / 100));
+      totaleImponibile += totaleRiga;
+      totaleIva += iva;
+      return {
+        id: id(),
+        tenantId,
+        nome: v.nome,
+        descrizione: v.descrizione,
+        unitaMisura: v.unitaMisura,
+        quantita: v.quantita,
+        prezzoUnitario: v.prezzoUnitario,
+        scontoPct: v.scontoPct,
+        ivaAliquota: v.ivaAliquota,
+        totaleRiga,
+        ordine: i,
+      };
+    });
+    totaleImponibile = round2(totaleImponibile);
+    totaleIva = round2(totaleIva);
+    const totale = round2(totaleImponibile + totaleIva);
+
+    await prisma.preventivo.create({
+      data: {
+        id: id(),
+        tenantId,
+        aziendaId: azienda.id,
+        codice: p.codice,
+        oggetto: p.oggetto,
+        coverLetter: p.coverLetter,
+        stato: p.stato,
+        validoFino: p.validoFino ? new Date(p.validoFino) : null,
+        totaleImponibile,
+        totaleIva,
+        totale,
+        voci: { create: vociData },
+      },
+    });
+    created += 1;
+  }
+  console.log(`  ✓ preventivi studio-demo: ${created} created (${demo.length} total)`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -889,6 +1049,7 @@ async function main(): Promise<void> {
     });
     await seedDevAziende(studio.tenantId);
     await seedDevReferenti(studio.tenantId);
+    await seedDevPreventivi(studio.tenantId);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5

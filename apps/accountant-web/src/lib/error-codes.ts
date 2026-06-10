@@ -45,6 +45,12 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   // backstop E_REFERENTE_*_INVALID/_TOO_LONG/_REQUIRED sono prevenuti dalla zod
   // client-side → fallback generico (vedi ADR-0033 §confine, ereditato).
   E_REFERENTE_NOT_FOUND: 'Referente non trovato.',
+
+  // Dominio preventivi (STOP-e2 ADR-0037). Solo i codici runtime: i validation
+  // backstop E_PREVENTIVO_*_INVALID/_TOO_LONG/_REQUIRED sono prevenuti dalla zod
+  // client-side → fallback generico (vedi ADR-0036 §confine, ereditato).
+  E_PREVENTIVO_NOT_FOUND: 'Preventivo non trovato.',
+  E_PREVENTIVO_CODICE_EXISTS: 'Esiste già un preventivo con questo codice.',
 };
 
 export function messageForErrorCode(code: string): string {

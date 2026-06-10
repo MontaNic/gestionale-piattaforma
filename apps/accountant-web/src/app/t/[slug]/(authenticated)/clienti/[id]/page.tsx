@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 
 import { Alert, AlertDescription, Button, Card, CardContent, cn } from '@gestionale/ui';
+import { PreventiviSection } from '@/components/preventivi/PreventiviSection';
 import { ReferentiSection } from '@/components/referenti/ReferentiSection';
 import { getAzienda } from '@/lib/aziende-api';
 import { messageForError } from '@/lib/error-codes';
@@ -103,6 +104,8 @@ export default function ClienteDetailPage(): JSX.Element {
           </Card>
 
           <ReferentiSection aziendaId={azienda.id} />
+
+          <PreventiviSection aziendaId={azienda.id} />
         </>
       )}
     </div>
