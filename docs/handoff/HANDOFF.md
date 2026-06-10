@@ -1,7 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ ffc4b95 (UI scadenze, PR #90 squash-merged).
+> **Snapshot:** Main @ e5ea9df (UI categorie scadenze custom, PR #92 squash-merged).
 > **Data:** 2026-06-11.
 
 ---
@@ -24,6 +24,7 @@ Monorepo pnpm + Turbo, 2 verticali sulla base condivisa `packages/` (`@gestional
   - **dashboard operatore-studio** (ADR-0038): endpoint `/dashboard/stats` (prime query aggregate del progetto) + card-grid (KPI clienti+preventivi + ultimi 5 preventivi)
   - **`scadenze`** calendario fiscale — backend (ADR-0039): primo modulo con **pattern nuovo** (categorie con seed di piattaforma `tenant_id NULL` + custom per tenant). `Scadenza` tenant-level (RLS+FORCE) + `ScadenzaCategoria` (NO RLS, scoping applicativo nel service). Validazioni business nel service (`visibilita='azienda' ⇒ aziendaId`, FK accessibili al tenant).
   - **`scadenze` UI** (ADR-0040): route top-level `/t/[slug]/scadenze` (tenant-level, NON nested) + voce di sidebar dedicata. Lista raggruppata per mese + barra filtri (categoria/stato/visibilità/da-a, partizione backend vs client) + form CRUD inline (RHF+zod, regola visibilità=azienda mirror service) + ConfirmDialog soft-delete. Normalizzazione `dataScadenza` `@db.Date`→YYYY-MM-DD nel layer api. Lista senza relazioni embedded → lookup categoria/azienda client-side.
+  - **`scadenze` categorie custom UI** (LEAN, segue ADR-0040, PR #92): sezione "Categorie personalizzate" in fondo a `/scadenze` — lista categorie piattaforma (`tenant_id NULL`, badge "Predefinita") + custom del tenant + form inline `nome`+`colore` (`CategoriaForm`/`CategorieSection`, pattern `ReferentiSection`). Solo create (backend non espone update/delete categorie). `onCreated` refetcha la page → la nuova categoria appare anche nel picker del `ScadenzaForm`. Nessun ADR dedicato.
 
 Catalogo permessi: **37** (`scadenze.{visualizza,gestisci}` da STOP-scad1; `preventivi.{visualizza,gestisci}` da STOP-e1; dashboard riusa `anagrafica.cliente.visualizza`, nessun permesso nuovo).
 
@@ -41,7 +42,6 @@ Moduli di dominio StudioDesk ancora mancanti nel TS: Comunicazioni, Documenti & 
 
 Candidate (priorità da validare con Nicolò):
 
-- **Gestione categorie scadenze custom (UI)** (segue ADR-0040) — schermata per creare/gestire categorie custom per tenant. `createScadenzaCategoria` già esposta in `scadenze-api.ts` ma senza UI: il form scadenze sceglie solo tra le categorie esistenti. LEAN, ~slice piccola.
 - **Catalogo servizi / fatture FIC** — decisione di prodotto grossa, multi-STOP, FULL. Nota: `fatture` non esiste come tabella StudioDesk diretta (c'è `preventivi` dominio + `fic_billing` integrazione 4 tabelle). FIC = livello 3 (super-admin), decisione di prodotto separata.
 - **Altri moduli operatore-studio** (Documenti/Comunicazioni) — verso il completamento del livello 1.
 - **Portale cliente-dello-studio** (livello 2) — nuovo frontend, slice grossa.
@@ -83,9 +83,9 @@ Candidate (priorità da validare con Nicolò):
 
 ### Git
 
-- **Main @ ffc4b95** — `feat(accountant): UI scadenze — lista filtri raggruppamento mese + form CRUD (#90)`
-- Working tree pulito, branch unico `main` allineato a `origin/main`. Nessun branch feature pendente (feature/scadenze-ui eliminata post-merge).
-- PR mergiate nella sessione 2026-06-10/11: #83 (preventivi UI, ADR-0037), #84 (RLS isolation e2e preventivi, LEAN), #85 (dashboard, ADR-0038), #86/#87 (docs/seed), #88 (backend scadenze, ADR-0039), #89 (docs/handoff), **#90 (UI scadenze, ADR-0040)** — CI verde (Lint·Typecheck·Format·Test + Playwright; E2E #90 re-run dopo timeout transitorio Docker Hub).
+- **Main @ e5ea9df** — `feat(accountant): UI gestione categorie scadenze custom (segue ADR-0040) (#92)`
+- Working tree pulito, branch unico `main` allineato a `origin/main`. Nessun branch feature pendente (feat/scadenze-categorie-ui eliminata post-merge).
+- PR mergiate nella sessione 2026-06-10/11: #83 (preventivi UI, ADR-0037), #84 (RLS isolation e2e preventivi, LEAN), #85 (dashboard, ADR-0038), #86/#87 (docs/seed), #88 (backend scadenze, ADR-0039), #89 (docs/handoff), #90 (UI scadenze, ADR-0040), #91 (docs/handoff), **#92 (UI categorie scadenze custom, LEAN segue ADR-0040)** — CI verde (Lint·Typecheck·Format·Test + Playwright).
 
 ### ADR
 
