@@ -525,6 +525,25 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-11] UI gestione categorie scadenze custom (LEAN, segue ADR-0040) — PR #92
+
+**Cosa:** completa la coda di STOP-scad2 — UI per creare/gestire le categorie custom delle scadenze (`createScadenzaCategoria` era esposta in `scadenze-api.ts` ma senza schermata). Nuova sezione **"Categorie personalizzate"** in fondo a `/t/[slug]/scadenze`: lista categorie piattaforma (`tenantId NULL`, badge "Predefinita") + custom del tenant (dot colore + nome) + form inline di creazione. **Corsia LEAN** (replica pattern `ReferentiSection`/`ReferenteForm`, zero schema/migration/RLS, nessuna DP nuova) → **nessun ADR dedicato, segue ADR-0040**.
+
+**Scelte (nessuna nuova decisione di prodotto):**
+- Solo **create**: il backend non espone update/delete categorie → la lista è read-only, label "Predefinita" sulle piattaforma è puramente visiva.
+- `CategorieSection` **non possiede stato categorie**: lo riceve via prop dalla page (fetch unico in `loadReference`); `onCreated` → refetch della page, così la nuova categoria appare anche nel **picker del `ScadenzaForm`** (no doppio fetch).
+- `CategoriaForm`: 2 campi — `nome` (required, max 100, mirror del DTO) + `colore` (`input type="color"`, default `#3b82f6`), zod+RHF; riuso chiavi i18n `create/creating/cancel`.
+- `E_SCADENZA_CATEGORIA_NOME_EXISTS` mappato in `error-codes.ts` (conflitto runtime uniqueness per-tenant, non preventibile dalla zod client).
+- Bottone "Aggiungi categoria" gated su `scadenze.gestisci`.
+
+**GATE:** typecheck ✅ · lint ✅ · next build ✅ (route `/t/[slug]/scadenze` 5.23 kB) · JSON i18n valido ✅ · **smoke runtime non-superuser** (`collaboratore@studio.local`, ha `scadenze.gestisci`): sezione visibile, 7 badge "Predefinita", create categoria custom → appare in lista **e** nel picker del form scadenza. PASS ✅ · CI verde (Lint·Typecheck·Format·Test + Playwright). Squash-merge **e5ea9df**.
+
+**File:** `apps/accountant-web` — nuovi `components/scadenze/{CategoriaForm,CategorieSection}.tsx`; modificati `scadenze/page.tsx` (+import +1 riga render) + `lib/error-codes.ts` (+1 codice) + `i18n/{it,en}.json` (+namespace `scadenze.categorie`). Nessun ADR.
+
+**Tech debt:** invariati. Chiude la coda "gestione categorie custom non ancora in UI" di STOP-scad2. TD-PATCH-null-FK resta aperto (bassa priorità).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].
