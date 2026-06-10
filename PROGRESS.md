@@ -484,6 +484,27 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-10] STOP-scad1 — backend scadenze (calendario fiscale) (ADR-0039)
+
+> Le slice intermedie del verticale (referenti ADR-0033/34, RLS isolation ADR-0035, preventivi ADR-0036/37, dashboard ADR-0038) sono tracciate nel running-snapshot `docs/handoff/HANDOFF.md`. Questa entry riprende il log narrativo per il primo modulo che introduce un **pattern nuovo** (categorie piattaforma+custom), corsia FULL.
+
+**Cosa:** primo modulo del livello operatore-studio oltre anagrafica/preventivi/dashboard. `scadenze` (calendario fiscale) tenant-level + `scadenze_categorie` con seed di piattaforma (`tenant_id NULL`, immutabili) + custom per tenant. Pattern di riferimento: aziende (ADR-0031, CRUD tenant-level + soft-delete + partial-unique + RLS) + preventivi (ADR-0036).
+
+**Decisioni chiave (dettaglio in ADR-0039):**
+- `Scadenza` tenant-level (NON nested sotto azienda); `aziendaId` opzionale, obbligatorio solo se `visibilita='azienda'` (validato nel service, non nei DTO — la ValidationPipe non gira in e2e, TD-BS).
+- `scadenze_categorie` **NON ha RLS** (le righe piattaforma sono `tenant_id NULL` → una policy per-tenant le filtrerebbe via): scoping **applicativo** nel service (read `OR[null, tenant]`, write `tenant`, ogni `categoriaId` validato accessibile). `scadenze` ha RLS+FORCE standard.
+- Partial-unique `scadenze_categorie (tenant_id, nome) WHERE tenant_id IS NOT NULL` → unicità nome solo sulle custom; piattaforma senza vincolo (idempotenza seed applicativa). Partial-unique predisposto `scadenze (tenant_id, codice_import) WHERE deleted_at IS NULL`.
+- Categorie piattaforma seedate **incondizionatamente** (reference data come i permessi), non dev-only. Ruoli studio estesi con `scadenze.*` (mirror preventivi). Catalogo permessi **35→37**.
+- Gotcha routing: `GET/POST /scadenze/categorie` dichiarate **prima** di `:id` (Express match per ordine di dichiarazione).
+
+**GATE:** typecheck 16/16 · lint/format clean · e2e accountant **61/61** (48 regression invariati + 13 scadenze). Seed idempotente (37 permessi, 7 categorie: re-run 0 created / 7 re-affirmed).
+
+**File:** `packages/db` (schema +enum `VisibilitaScadenza` /+model `Scadenza`+`ScadenzaCategoria`, migration `add_scadenze`, seed +2 permessi/+ruoli/+`seedScadenzeCategorie`, barrel re-export) · `apps/accountant-api` (modulo `src/scadenze/` + `app.module` + e2e `scadenze-crud` + helper `scadenze-test-fixtures` + `test-app` TRUNCATE) · `docs/architecture/ADR-0039-*.md` + `PROGRESS.md`.
+
+**Tech debt:** TD-RLS-scadenze candidate (non esercitata da `rls-isolation` e2e — suite superuser TD-BV; isolamento applicativo scenario #11). `scadenze_categorie` senza RLS → protezione interamente applicativa (ogni accesso DEVE passare dallo scoping del service). `visibilita='utente'` + `codiceImport` predisposti ma inerti (YAGNI).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

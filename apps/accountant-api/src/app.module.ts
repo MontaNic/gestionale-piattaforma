@@ -24,6 +24,7 @@ import { AppController } from './app.controller';
 import { AziendeModule } from './aziende/aziende.module';
 import { ReferentiModule } from './referenti/referenti.module';
 import { PreventiviModule } from './preventivi/preventivi.module';
+import { ScadenzeModule } from './scadenze/scadenze.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -53,6 +54,8 @@ import { MeModule } from './me/me.module';
     ReferentiModule,
     // Preventivi (testata + voci, business logic + tx atomica, STOP-e1).
     PreventiviModule,
+    // Scadenze (calendario fiscale) + categorie piattaforma/custom (STOP-scad1).
+    ScadenzeModule,
     // Dashboard KPI aggregati tenant-level (read-only, STOP-dash1).
     DashboardModule,
   ],

@@ -45,21 +45,23 @@ model Tenant {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  sedi           Sede[]
-  users          User[]
-  roles          Role[]
-  auditLogs      AuditLog[]
-  menus          Menu[]
-  menuCategories MenuCategory[]
-  articles       Article[]
-  priceLists     PriceList[]
-  articlePrices  ArticlePrice[]
-  recipes        Recipe[]
-  pricingRules   PricingRule[]
-  aziende        Azienda[]
-  referenti      Referente[]
-  preventivi     Preventivo[]
-  preventiviVoci PreventivoVoce[]
+  sedi              Sede[]
+  users             User[]
+  roles             Role[]
+  auditLogs         AuditLog[]
+  menus             Menu[]
+  menuCategories    MenuCategory[]
+  articles          Article[]
+  priceLists        PriceList[]
+  articlePrices     ArticlePrice[]
+  recipes           Recipe[]
+  pricingRules      PricingRule[]
+  aziende           Azienda[]
+  referenti         Referente[]
+  preventivi        Preventivo[]
+  preventiviVoci    PreventivoVoce[]
+  scadenze          Scadenza[]
+  scadenzeCategorie ScadenzaCategoria[]
 
   @@map("tenants")
 }
@@ -604,6 +606,7 @@ model Azienda {
   tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   referenti  Referente[]
   preventivi Preventivo[]
+  scadenze   Scadenza[]
 
   @@index([tenantId])
   @@index([tenantId, nome])
@@ -708,4 +711,70 @@ model PreventivoVoce {
   @@index([tenantId])
   @@index([preventivoId, ordine])
   @@map("preventivi_voci")
+}
+
+// Visibilita' di una scadenza nel calendario fiscale (STOP-scad1, primo modulo
+// del livello "operatore-studio" oltre anagrafica/preventivi/dashboard).
+// `utente` predisposto: nessun campo userId su Scadenza nell'MVP (filtro
+// per-utente non ancora cablato).
+enum VisibilitaScadenza {
+  tutti
+  azienda
+  utente
+
+  @@map("visibilita_scadenza")
+}
+
+// Categorie scadenze (calendario fiscale). Pattern NUOVO: seed piattaforma
+// (tenant_id NULL, immutabili) + custom per tenant. NON soft-delete. NON RLS:
+// le righe piattaforma sono tenant_id NULL e una policy per-tenant ne romperebbe
+// la lettura globale → le custom (tenant_id non-NULL) sono protette
+// applicativamente nel service. Partial-unique nome-per-tenant SOLO sulle righe
+// custom (WHERE tenant_id IS NOT NULL): le righe piattaforma non hanno vincolo
+// di unicita' tra loro (design intenzionale). Prisma 6 non esprime i partial
+// index nel DSL → niente @@unique qui, l'indice e' nella migration a mano.
+model ScadenzaCategoria {
+  id       String  @id
+  tenantId String? @map("tenant_id")
+  nome     String  @db.VarChar(100)
+  colore   String  @default("#3b82f6") @db.VarChar(7)
+  ordine   Int     @default(0)
+  attivo   Boolean @default(true)
+
+  tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scadenze Scadenza[]
+
+  @@index([tenantId])
+  @@map("scadenze_categorie")
+}
+
+// Scadenza del calendario fiscale (STOP-scad1). Tenant-level (NON nested sotto
+// azienda come preventivi): `aziendaId` opzionale, obbligatorio solo se
+// visibilita='azienda' (validato nel service). Soft-delete + RLS tenant-isolation
+// come aziende. `codiceImport` predisposto (import esterni futuri), partial-unique
+// per-tenant sulle righe attive.
+model Scadenza {
+  id           String             @id
+  tenantId     String             @map("tenant_id")
+  titolo       String             @db.VarChar(255)
+  descrizione  String?
+  dataScadenza DateTime           @map("data_scadenza") @db.Date
+  categoriaId  String?            @map("categoria_id")
+  visibilita   VisibilitaScadenza @default(tutti)
+  aziendaId    String?            @map("azienda_id")
+  attivo       Boolean            @default(true)
+  codiceImport String?            @map("codice_import") @db.VarChar(80)
+  deletedAt    DateTime?          @map("deleted_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria ScadenzaCategoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  azienda   Azienda?           @relation(fields: [aziendaId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, dataScadenza])
+  @@index([aziendaId])
+  @@index([categoriaId])
+  @@map("scadenze")
 }

@@ -3,9 +3,10 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (35 permessi atomici namespaced)
+//   1. permissions          (37 permessi atomici namespaced)
 //   2. system_role_templates (10 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
+//   3. scadenze_categorie    (7 categorie piattaforma, tenant_id NULL)
 //
 // Pattern bootstrap nuovi tenant (vedi ADR-0005): quando nasce un tenant,
 // l'app NestJS clonera' i system_role_templates con isDefault=true nei
@@ -120,6 +121,18 @@ const PERMISSIONS: PermissionSeed[] = [
     code: 'preventivi.gestisci',
     description: 'Crea/modifica/elimina preventivi',
     category: 'preventivi',
+  },
+
+  // scadenze.* (2) — verticale accountant (STOP-scad1)
+  {
+    code: 'scadenze.visualizza',
+    description: 'Visualizzazione scadenze (calendario fiscale)',
+    category: 'scadenze',
+  },
+  {
+    code: 'scadenze.gestisci',
+    description: 'Crea/modifica/elimina scadenze e categorie custom',
+    category: 'scadenze',
   },
 
   // comande.* (5)
@@ -272,24 +285,35 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   },
   {
     name: 'Collaboratore',
-    description: 'Operativo: gestione clienti e preventivi. Nessuna eliminazione, nessun sistema.',
+    description:
+      'Operativo: gestione clienti, preventivi e scadenze. Nessuna eliminazione, nessun sistema.',
     permissionCodes: [
       'anagrafica.cliente.visualizza',
       'anagrafica.cliente.crea',
       'anagrafica.cliente.modifica',
       'preventivi.visualizza',
       'preventivi.gestisci',
+      'scadenze.visualizza',
+      'scadenze.gestisci',
     ],
   },
   {
     name: 'Segreteria',
-    description: 'Consultazione clienti e preventivi (sola lettura).',
-    permissionCodes: ['anagrafica.cliente.visualizza', 'preventivi.visualizza'],
+    description: 'Consultazione clienti, preventivi e scadenze (sola lettura).',
+    permissionCodes: [
+      'anagrafica.cliente.visualizza',
+      'preventivi.visualizza',
+      'scadenze.visualizza',
+    ],
   },
   {
     name: 'Praticante',
-    description: 'Sola visualizzazione clienti e preventivi.',
-    permissionCodes: ['anagrafica.cliente.visualizza', 'preventivi.visualizza'],
+    description: 'Sola visualizzazione clienti, preventivi e scadenze.',
+    permissionCodes: [
+      'anagrafica.cliente.visualizza',
+      'preventivi.visualizza',
+      'scadenze.visualizza',
+    ],
   },
 ];
 
@@ -975,6 +999,50 @@ async function seedDevCollaboratore(tenantId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Categorie scadenze piattaforma (STOP-scad1) — tenant_id NULL, immutabili.
+// Reference data globale (come permissions): seedate sempre, non dev-only.
+// Idempotente: find-then-create su `nome` WHERE tenant_id IS NULL (la
+// scadenze_categorie NON ha RLS → niente system-context speciale necessario, ma
+// l'intero seed gira comunque in withSystemContext).
+// ─────────────────────────────────────────────────────────────────────────────
+interface ScadenzaCategoriaSeed {
+  nome: string;
+  colore: string;
+}
+
+const SCADENZE_CATEGORIE_PIATTAFORMA: ScadenzaCategoriaSeed[] = [
+  { nome: 'Dichiarativi', colore: '#7c3aed' },
+  { nome: 'Versamenti', colore: '#dc2626' },
+  { nome: 'Adempimenti', colore: '#0e7490' },
+  { nome: 'Bilancio', colore: '#b45309' },
+  { nome: 'Lavoro e Paghe', colore: '#15803d' },
+  { nome: 'Scadenze CIE/Documenti', colore: '#64748b' },
+  { nome: 'Altro', colore: '#94a3b8' },
+];
+
+async function seedScadenzeCategorie(): Promise<void> {
+  console.log(`Scadenze categorie (piattaforma): ${SCADENZE_CATEGORIE_PIATTAFORMA.length} attese`);
+  let created = 0;
+  let skipped = 0;
+  for (const [i, cat] of SCADENZE_CATEGORIE_PIATTAFORMA.entries()) {
+    // find-then-create su (nome, tenant_id IS NULL): il partial-unique copre solo
+    // le custom (tenant_id NOT NULL) → l'idempotenza piattaforma e' applicativa.
+    const existing = await prisma.scadenzaCategoria.findFirst({
+      where: { nome: cat.nome, tenantId: null },
+    });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    await prisma.scadenzaCategoria.create({
+      data: { id: id(), tenantId: null, nome: cat.nome, colore: cat.colore, ordine: i },
+    });
+    created++;
+  }
+  console.log(`  -> ${created} created, ${skipped} re-affirmed\n`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
@@ -1076,6 +1144,12 @@ async function main(): Promise<void> {
     console.log(`  '${t.name}': ${perRole} permissions`);
   }
   console.log(`  -> ${mapCreated} created, ${mapUpdated} re-affirmed, ${mapTotal} total\n`);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Categorie scadenze piattaforma (tenant_id NULL) — reference data globale,
+  // come permessi/template: seedate SEMPRE (anche in production), non dev-only.
+  // ───────────────────────────────────────────────────────────────────────────
+  await seedScadenzeCategorie();
 
   // ───────────────────────────────────────────────────────────────────────────
   // Dev tenants + admin (opt-out via NODE_ENV=production)

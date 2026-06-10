@@ -86,6 +86,8 @@ export async function truncateDatabase(databaseUrl: string): Promise<void> {
   // incluso (FK → tenants): truncato tra ogni test.
   await client.query(`
     TRUNCATE TABLE
+      scadenze,
+      scadenze_categorie,
       aziende,
       audit_logs,
       sessions,
