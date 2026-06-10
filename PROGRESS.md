@@ -505,6 +505,26 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-11] STOP-scad2 — UI scadenze (calendario fiscale) (ADR-0040)
+
+**Cosa:** UI scadenze in `accountant-web`, segue il backend ADR-0039. Route top-level `/t/[slug]/scadenze` (tenant-level, NON nested sotto cliente come preventivi) + voce di sidebar dedicata. Lista raggruppata per mese + barra filtri + form create/edit inline + ConfirmDialog soft-delete. Corsia FULL → ADR-0040 dedicato (scelte filtro client/server + limite PATCH-null FK), pur replicando i pattern UI di aziende/preventivi.
+
+**Decisioni chiave (dettaglio in ADR-0040):**
+- Normalizzazione `dataScadenza` (@db.Date → ISO datetime) a YYYY-MM-DD `.slice(0,10)` nel layer `scadenze-api.ts` (ADR-0037 Gotcha, come `validoFino`).
+- Lista senza relazioni embedded → colore categoria (dot) + nome azienda risolti client-side con `Map` da `getScadenzeCategorie()` + `listAziende()` (riuso aziende-api); le stesse liste popolano i `<select>` del form.
+- Partizione filtri: backend = categoria + range date (refetch su cambio); client-side = stato (attive/scadute/future, date-derived) + visibilità (`visibilita` non è filtro backend).
+- Form: `superRefine` zod `visibilita='azienda' ⇒ aziendaId` (mirror service), select azienda visibile solo in quel caso, azzeramento `aziendaId` cambiando visibilità.
+- Sidebar: pattern reale `{ key, icon }` (non `{ href, label }` del prompt) → union esteso con `'scadenze'`, icona `CalendarDays`.
+- Gating azioni gestione su `scadenze.gestisci` (Nuova/Modifica/Elimina).
+
+**GATE:** typecheck 16/16 · lint + next build OK (route `/t/[slug]/scadenze` generata, 4.69 kB) · nessun test mirror (nessuna formula client-side, pattern ADR-0032/0034). Smoke browser non-superuser a cura di Nicolò pre-merge.
+
+**File:** `apps/accountant-web` — nuovi `lib/scadenze-{types,api}.ts` + `components/scadenze/ScadenzaForm.tsx` + route `scadenze/page.tsx`; modificati `components/shell/Sidebar.tsx` + `lib/error-codes.ts` (+3 codici E_SCADENZA_*) + `i18n/{it,en}.json` (+`shell.nav.scadenze`, +namespace `scadenze`). `docs/architecture/ADR-0040-*.md` + `PROGRESS.md`.
+
+**Tech debt:** TD-PATCH-null-FK (il `UpdateScadenzaDto` non azzera `categoriaId`/`aziendaId` — `@IsUUID` opzionali senza `null`: in edit, cambiando visibilità via UI l'`aziendaId` resta in DB, semanticamente ignorato). Gestione categorie custom non ancora in UI (`createScadenzaCategoria` esposta in api ma senza schermata dedicata — il form sceglie solo tra categorie esistenti).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

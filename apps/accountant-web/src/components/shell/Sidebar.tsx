@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { LayoutDashboard, Receipt, Users, type LucideIcon } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Receipt, Users, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@gestionale/ui';
 
@@ -20,7 +20,7 @@ import { cn } from '@gestionale/ui';
 // =============================================================================
 
 interface NavItem {
-  key: 'dashboard' | 'clienti' | 'fatture';
+  key: 'dashboard' | 'clienti' | 'scadenze' | 'fatture';
   href: string;
   icon: LucideIcon;
 }
@@ -28,6 +28,7 @@ interface NavItem {
 const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'dashboard', icon: LayoutDashboard },
   { key: 'clienti', icon: Users },
+  { key: 'scadenze', icon: CalendarDays },
   { key: 'fatture', icon: Receipt },
 ] as const;
 

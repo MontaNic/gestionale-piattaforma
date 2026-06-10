@@ -3,6 +3,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "clienti": "Clients",
+      "scadenze": "Deadlines",
       "fatture": "Invoices"
     },
     "topbar": {
@@ -233,6 +234,68 @@
     "confirm": {
       "title": "Delete quote",
       "body": "Delete quote \"{codice}\"? It will be removed from the list.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
+    }
+  },
+  "scadenze": {
+    "listTitle": "Deadlines",
+    "listSubtitle": "Studio fiscal calendar.",
+    "listEmpty": "No deadlines found.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "newScadenza": "New deadline",
+    "inactive": "Inactive",
+    "create": "Create",
+    "creating": "Creating…",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "filters": {
+      "categoria": "Category",
+      "stato": "Status",
+      "visibilita": "Visibility",
+      "da": "From",
+      "a": "To",
+      "all": "All"
+    },
+    "filterStato": {
+      "tutte": "All",
+      "attive": "Active",
+      "scadute": "Overdue",
+      "future": "Upcoming"
+    },
+    "filterVisibilita": {
+      "tutte": "All",
+      "globali": "Global",
+      "azienda": "Per client"
+    },
+    "visibilita": {
+      "tutti": "Global",
+      "azienda": "Per client",
+      "utente": "Personal"
+    },
+    "badge": {
+      "scaduta": "Overdue",
+      "oggi": "Today",
+      "futura": "Upcoming"
+    },
+    "fields": {
+      "titolo": "Title",
+      "descrizione": "Description",
+      "dataScadenza": "Due date",
+      "categoria": "Category",
+      "categoriaNone": "— None —",
+      "visibilita": "Visibility",
+      "azienda": "Client",
+      "aziendaPlaceholder": "— Select client —",
+      "attivo": "Active"
+    },
+    "confirm": {
+      "title": "Delete deadline",
+      "body": "Delete “{titolo}”? The deadline will be removed from the list.",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
     }
