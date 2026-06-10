@@ -24,11 +24,34 @@
   },
   "dashboard": {
     "welcome": "Welcome {firstName} {lastName}",
-    "roles": "Roles",
-    "permissionsCount": "Permissions ({count})",
-    "profileUnavailable": "Profile unavailable",
-    "logoutButton": "Esci",
-    "loggingOut": "Uscita..."
+    "subtitle": "Studio overview",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "loadError": "Unable to load the dashboard.",
+    "insufficientPermissions": "You don't have permission to view the dashboard.",
+    "clienti": {
+      "title": "Clients",
+      "attivi": "active",
+      "nonAttivi": "inactive",
+      "aziende": "companies",
+      "personeFisiche": "individuals",
+      "vediTutti": "View all clients"
+    },
+    "preventivi": {
+      "title": "Quotes",
+      "valoreTotale": "Total value"
+    },
+    "ultimi": {
+      "title": "Latest quotes",
+      "empty": "No quotes.",
+      "col": {
+        "codice": "Code",
+        "oggetto": "Subject",
+        "cliente": "Client",
+        "stato": "Status",
+        "totale": "Total"
+      }
+    }
   },
   "placeholder": {
     "comingSoon": "Coming soon",

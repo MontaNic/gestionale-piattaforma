@@ -24,11 +24,34 @@
   },
   "dashboard": {
     "welcome": "Welcome {firstName} {lastName}",
-    "roles": "Ruoli",
-    "permissionsCount": "Permessi ({count})",
-    "profileUnavailable": "Profilo non disponibile",
-    "logoutButton": "Esci",
-    "loggingOut": "Uscita..."
+    "subtitle": "Panoramica dello studio",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "loadError": "Impossibile caricare la dashboard.",
+    "insufficientPermissions": "Non hai i permessi per visualizzare la dashboard.",
+    "clienti": {
+      "title": "Clienti",
+      "attivi": "attivi",
+      "nonAttivi": "non attivi",
+      "aziende": "aziende",
+      "personeFisiche": "persone fisiche",
+      "vediTutti": "Vedi tutti i clienti"
+    },
+    "preventivi": {
+      "title": "Preventivi",
+      "valoreTotale": "Valore totale"
+    },
+    "ultimi": {
+      "title": "Ultimi preventivi",
+      "empty": "Nessun preventivo.",
+      "col": {
+        "codice": "Codice",
+        "oggetto": "Oggetto",
+        "cliente": "Cliente",
+        "stato": "Stato",
+        "totale": "Totale"
+      }
+    }
   },
   "placeholder": {
     "comingSoon": "Coming soon",
