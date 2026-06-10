@@ -59,6 +59,8 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_SCADENZA_NOT_FOUND: 'Scadenza non trovata.',
   E_SCADENZA_AZIENDA_NOT_FOUND: 'Azienda non trovata o non accessibile.',
   E_SCADENZA_CATEGORIA_NOT_FOUND: 'Categoria non trovata o non accessibile.',
+  // Conflitto runtime (uniqueness per-tenant): non preventibile dalla zod client.
+  E_SCADENZA_CATEGORIA_NOME_EXISTS: 'Esiste già una categoria con questo nome.',
 };
 
 export function messageForErrorCode(code: string): string {

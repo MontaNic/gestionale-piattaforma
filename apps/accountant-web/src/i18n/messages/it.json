@@ -298,6 +298,17 @@
       "body": "Vuoi eliminare «{titolo}»? La scadenza verrà rimossa dall'elenco.",
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
+    },
+    "categorie": {
+      "titolo": "Categorie personalizzate",
+      "sottotitolo": "Categorie scadenze dello studio, oltre a quelle predefinite.",
+      "aggiungi": "Aggiungi categoria",
+      "empty": "Nessuna categoria personalizzata.",
+      "predefinita": "Predefinita",
+      "fields": {
+        "nome": "Nome",
+        "colore": "Colore"
+      }
     }
   }
 }

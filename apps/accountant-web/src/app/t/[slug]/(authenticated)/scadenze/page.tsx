@@ -7,6 +7,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, Button, Card, CardContent, cn } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 import { ConfirmDialog } from '@/components/aziende/ConfirmDialog';
+import { CategorieSection } from '@/components/scadenze/CategorieSection';
 import { ScadenzaForm } from '@/components/scadenze/ScadenzaForm';
 import { messageForError } from '@/lib/error-codes';
 import { listAziende } from '@/lib/aziende-api';
@@ -401,6 +402,8 @@ export default function ScadenzePage(): JSX.Element {
           ))}
         </div>
       )}
+
+      <CategorieSection categorie={categorie} canManage={canManage} onCreated={loadReference} />
 
       <ConfirmDialog
         open={pendingDelete !== null}
