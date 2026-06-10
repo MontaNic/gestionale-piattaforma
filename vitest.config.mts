@@ -21,6 +21,7 @@ export default defineConfig({
       'packages/i18n/vitest.config.ts',
       'packages/api-client/vitest.config.ts',
       'packages/auth-web/vitest.config.ts',
+      'apps/accountant-web/vitest.config.ts',
     ],
   },
 });
