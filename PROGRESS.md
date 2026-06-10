@@ -2398,6 +2398,27 @@ TD-RLS-preventivi candidate (policy installata, non esercitata DB-level).
 **Foundation status post-merge**: 2° verticale — skeleton + aziende (BE+UI) +
 referenti (BE+UI) + RLS anagrafica + preventivi backend + **preventivi UI** ✅
 
+### [2026-06-10] TD-RLS-preventivi — RLS isolation e2e (LEAN, segue ADR-0035)
+
+**Branch**: `test/rls-isolation-preventivi` · **Tipo**: 1 PR test-only (1 file) ·
+**Pattern**: ADR-0035 (nessuna decisione nuova, nessun ADR dedicato).
+
+Chiude il TD candidate RLS-preventivi aperto da ADR-0036/STOP-e2. Estende
+`rls-isolation.e2e-spec.ts` con 5 scenari per `preventivi`/`preventivi_voci`
+bootando come `gestionale_app` (NOSUPERUSER NOBYPASSRLS), replica del pattern
+anagrafica (ADR-0035). Le policy `preventivi_tenant_isolation` +
+`preventivi_voci_tenant_isolation` (ADR-0036) ora esercitate DB-level —
+S-prev-4: ogni tenant vede 2 voci (non 4) sotto RLS reale.
+
+Helper locale `queryAsAppRole` (raw-pg + SET app.tenant_id) per esercitare
+`preventivi_voci` a livello DB (figlio del preventivo, no endpoint API proprio).
+
+**Gate**: e2e 44/44 (39 + 5 nuovi; rls-isolation 5→10) · typecheck ✓ · lint ✓.
+Solo locale (TD-CB).
+
+**TD residui verticale**: TD-BV (suite intera superuser, Sub-2 post-fatture) ·
+seed utente non-superuser studio-demo (gating runtime) · TD-BS Sub-2.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**
