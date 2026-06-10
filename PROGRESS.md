@@ -2446,6 +2446,33 @@ applicativo + runtime). TD residui invariati.
 **Foundation status post-merge**: 2° verticale — skeleton + aziende (BE+UI) +
 referenti (BE+UI) + RLS anagrafica + preventivi (BE+UI) + **dashboard operatore-studio** ✅
 
+### [2026-06-10] Seed ruoli commercialisti + utente Collaboratore (LEAN)
+
+Slice **LEAN** (nessun ADR, solo `packages/db/prisma/seed.ts`; zero schema/migration —
+i `system_role_templates` sono cataloghi globali, no tenant_id). Chiude il **TD candidate
+"seed utente non-superuser studio-demo"** (da ADR-0037 / HANDOFF): finora il gating
+runtime di `preventivi.*` / `anagrafica.cliente.*` era verificabile solo a livello codice,
+perché `admin@studio.local` è Super Admin (35 permessi, non esercita mai i deny).
+
+**Cosa fatto:**
+- **+4 `system_role_templates`** per il verticale commercialisti accanto ai 6 della
+  ristorazione (catalogo ora 10, mappings 156): **Socio** (34 = tutti tranne
+  `sistema.tenant.gestisci`), **Collaboratore** (5: `anagrafica.cliente.{visualizza,crea,
+  modifica}` + `preventivi.{visualizza,gestisci}`), **Segreteria** (2: `cliente.visualizza`
+  + `preventivi.visualizza`), **Praticante** (2, idem). Skip dei permessi
+  `anagrafica.referente.*` (non esistono nel catalogo — i referenti riusano `cliente.*`
+  come la UI). Stesso pattern upsert-su-`name` dei 6 esistenti.
+- **`seedDevCollaboratore(tenantId)`** — analogo a `seedDevTenant` (vedi pattern §
+  [STOP-c2 ADR-0032] e core seed sessione D2a/D3b): clona il template Collaboratore in un
+  ruolo tenant-wide di studio-demo + crea `collaboratore@studio.local / Collaboratore123!`
+  + assignment tenant-wide (sedeId NULL). Idempotente: find-then-create su email+tenantId,
+  ruolo (tenantId+name), mapping, assignment.
+
+**Gate**: typecheck ✓ · lint ✓ · `db:seed` ×2 idempotente (2ª run: templates 0 created,
+mappings 0 re-affirmed su 156, collaboratore role_permissions 0 created/5 re-affirmed,
+assignment already-exists) ✓. Verifica DB: 4 template presenti + `collaboratore@studio.local`
+con ruolo Collaboratore (5 permessi). Zero file di produzione toccati, zero migration.
+
 ## 🚧 In corso / Prossimo task
 
 **Macro-task: TBD — candidate prossima sessione (da validare con Nicolò).**

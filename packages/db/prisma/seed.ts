@@ -4,7 +4,7 @@
 // Popola due cataloghi globali (no tenant_id):
 //
 //   1. permissions          (35 permessi atomici namespaced)
-//   2. system_role_templates (6 template predefiniti F1, isDefault: true)
+//   2. system_role_templates (10 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //
 // Pattern bootstrap nuovi tenant (vedi ADR-0005): quando nasce un tenant,
@@ -175,7 +175,7 @@ const PERMISSIONS: PermissionSeed[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. System role templates (6 ruoli predefiniti F1, isDefault: true)
+// 2. System role templates (10 ruoli: 6 ristorazione F1 + 4 commercialisti)
 // ─────────────────────────────────────────────────────────────────────────────
 interface RoleTemplateSeed {
   name: string;
@@ -257,6 +257,39 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
     name: 'Cucina/Bar',
     description: 'KDS read-only + cambio stato comande. Nessuna altra azione.',
     permissionCodes: ['menu.visualizza', 'comande.visualizza', 'comande.stato.cambia'],
+  },
+
+  // ── Verticale commercialisti / StudioDesk (4 ruoli) ──────────────────────
+  // Template globali aggiunti accanto ai 6 della ristorazione. Il catalogo
+  // anagrafica non ha (ancora) permessi `anagrafica.referente.*`: il satellite
+  // referenti riusa `anagrafica.cliente.*` come la UI → nessun codice referente
+  // qui (skip da spec, "se esistono altrimenti skip").
+  {
+    name: 'Socio',
+    description: 'Socio di studio: accesso ampio. No config tenant globale.',
+    // Tutti tranne sistema.tenant.gestisci (riservato al Super Admin).
+    permissionCodes: ALL_PERMISSION_CODES.filter((c) => c !== 'sistema.tenant.gestisci'),
+  },
+  {
+    name: 'Collaboratore',
+    description: 'Operativo: gestione clienti e preventivi. Nessuna eliminazione, nessun sistema.',
+    permissionCodes: [
+      'anagrafica.cliente.visualizza',
+      'anagrafica.cliente.crea',
+      'anagrafica.cliente.modifica',
+      'preventivi.visualizza',
+      'preventivi.gestisci',
+    ],
+  },
+  {
+    name: 'Segreteria',
+    description: 'Consultazione clienti e preventivi (sola lettura).',
+    permissionCodes: ['anagrafica.cliente.visualizza', 'preventivi.visualizza'],
+  },
+  {
+    name: 'Praticante',
+    description: 'Sola visualizzazione clienti e preventivi.',
+    permissionCodes: ['anagrafica.cliente.visualizza', 'preventivi.visualizza'],
   },
 ];
 
@@ -861,6 +894,86 @@ async function seedDevPreventivi(tenantId: string): Promise<void> {
   console.log(`  ✓ preventivi studio-demo: ${created} created (${demo.length} total)`);
 }
 
+// Utente non-superuser per studio-demo (chiude il TD candidate di ADR-0037):
+// sblocca i test di gating runtime di `preventivi.*` / `anagrafica.cliente.*`,
+// che `admin@studio.local` (Super Admin, 35 permessi) non esercita mai. Clona il
+// template "Collaboratore" (operativo) in un ruolo tenant-wide e assegna l'utente.
+// Stesso impianto core di seedDevTenant (user + role clone + role_permissions +
+// assignment tenant-wide). Idempotente: find-then-create su email+tenantId, ruolo
+// (tenantId+name), mapping (roleId+permissionId), assignment tenant-wide (sedeId NULL).
+async function seedDevCollaboratore(tenantId: string): Promise<void> {
+  const ROLE_NAME = 'Collaboratore';
+  const EMAIL = 'collaboratore@studio.local';
+
+  // 1. Template "Collaboratore" + i suoi permessi (seedati a monte in main()).
+  const tpl = await prisma.systemRoleTemplate.findUnique({ where: { name: ROLE_NAME } });
+  if (!tpl) throw new Error(`System template '${ROLE_NAME}' missing`);
+  const tplPermissions = await prisma.systemRoleTemplatePermission.findMany({
+    where: { templateId: tpl.id },
+  });
+
+  // 2. User con password argon2id (find-then-create su tenantId+email).
+  const passwordHash = await argon2.hash('Collaboratore123!', { type: argon2.argon2id });
+  const user = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId, email: EMAIL } },
+    create: {
+      id: id(),
+      tenantId,
+      email: EMAIL,
+      passwordHash,
+      firstName: 'Collaboratore',
+      lastName: 'Studio',
+      isActive: true,
+    },
+    update: { passwordHash, isActive: true },
+  });
+  console.log(`  User '${EMAIL}': ${user.id}`);
+
+  // 3. Role "Collaboratore" tenant-scoped (clone dal template). TD-BZ (ADR-0023):
+  // find-then-create/update sulla chiave naturale (tenantId+name), come Super Admin.
+  const roleData = { description: tpl.description, isSystem: true };
+  const existingRole = await prisma.role.findFirst({ where: { tenantId, name: ROLE_NAME } });
+  const role = existingRole
+    ? await prisma.role.update({ where: { id: existingRole.id }, data: roleData })
+    : await prisma.role.create({
+        data: { id: id(), tenantId, name: ROLE_NAME, ...roleData },
+      });
+  console.log(`  Role '${ROLE_NAME}' (studio-demo): ${role.id}`);
+
+  // 4. Copia mappings template -> role_permissions.
+  let rolePermCreated = 0;
+  let rolePermSkipped = 0;
+  for (const tp of tplPermissions) {
+    const existing = await prisma.rolePermission.findUnique({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: tp.permissionId } },
+    });
+    if (existing) {
+      rolePermSkipped++;
+    } else {
+      await prisma.rolePermission.create({
+        data: { roleId: role.id, permissionId: tp.permissionId },
+      });
+      rolePermCreated++;
+    }
+  }
+  console.log(
+    `  role_permissions (${ROLE_NAME} studio-demo): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
+  );
+
+  // 5. Assignment user -> Collaboratore tenant-wide (sede_id NULL).
+  const existingAssignment = await prisma.userRole.findFirst({
+    where: { userId: user.id, roleId: role.id, sedeId: null },
+  });
+  if (!existingAssignment) {
+    await prisma.userRole.create({
+      data: { id: id(), userId: user.id, roleId: role.id, sedeId: null },
+    });
+    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) created`);
+  } else {
+    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) already exists`);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1050,6 +1163,7 @@ async function main(): Promise<void> {
     await seedDevAziende(studio.tenantId);
     await seedDevReferenti(studio.tenantId);
     await seedDevPreventivi(studio.tenantId);
+    await seedDevCollaboratore(studio.tenantId);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
@@ -1079,6 +1193,7 @@ async function main(): Promise<void> {
     console.log(`    - demo  (admin@demo.local / Admin123!)`);
     console.log(`    - acme  (manager@acme.local / Manager123!)`);
     console.log(`    - studio-demo  (admin@studio.local / Studio123!)`);
+    console.log(`        + collaboratore@studio.local / Collaboratore123! (ruolo Collaboratore)`);
   }
   console.log('  ✅ Seed completato (idempotente).');
 }
