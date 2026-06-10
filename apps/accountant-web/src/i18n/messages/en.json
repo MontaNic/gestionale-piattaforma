@@ -298,6 +298,17 @@
       "body": "Delete “{titolo}”? The deadline will be removed from the list.",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
+    },
+    "categorie": {
+      "titolo": "Custom categories",
+      "sottotitolo": "Studio deadline categories, in addition to the default ones.",
+      "aggiungi": "Add category",
+      "empty": "No custom categories yet.",
+      "predefinita": "Default",
+      "fields": {
+        "nome": "Name",
+        "colore": "Color"
+      }
     }
   }
 }
