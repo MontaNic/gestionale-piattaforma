@@ -1,8 +1,8 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ 9c65196 (backend scadenze, PR #88 squash-merged).
-> **Data:** 2026-06-10.
+> **Snapshot:** Main @ ffc4b95 (UI scadenze, PR #90 squash-merged).
+> **Data:** 2026-06-11.
 
 ---
 
@@ -22,7 +22,8 @@ Monorepo pnpm + Turbo, 2 verticali sulla base condivisa `packages/` (`@gestional
   - **`preventivi` UI** (ADR-0037): lista in sezione `clienti/[id]` + editor voci con totali live mirror della formula server. Primo editor multi-riga del verticale.
   - **RLS isolation preventivi testata DB-level** (LEAN, segue ADR-0035): `preventivi_tenant_isolation` + `preventivi_voci_tenant_isolation` esercitate come `gestionale_app`
   - **dashboard operatore-studio** (ADR-0038): endpoint `/dashboard/stats` (prime query aggregate del progetto) + card-grid (KPI clienti+preventivi + ultimi 5 preventivi)
-  - **`scadenze`** calendario fiscale — backend (ADR-0039): primo modulo con **pattern nuovo** (categorie con seed di piattaforma `tenant_id NULL` + custom per tenant). `Scadenza` tenant-level (RLS+FORCE) + `ScadenzaCategoria` (NO RLS, scoping applicativo nel service). Validazioni business nel service (`visibilita='azienda' ⇒ aziendaId`, FK accessibili al tenant). UI non ancora costruita.
+  - **`scadenze`** calendario fiscale — backend (ADR-0039): primo modulo con **pattern nuovo** (categorie con seed di piattaforma `tenant_id NULL` + custom per tenant). `Scadenza` tenant-level (RLS+FORCE) + `ScadenzaCategoria` (NO RLS, scoping applicativo nel service). Validazioni business nel service (`visibilita='azienda' ⇒ aziendaId`, FK accessibili al tenant).
+  - **`scadenze` UI** (ADR-0040): route top-level `/t/[slug]/scadenze` (tenant-level, NON nested) + voce di sidebar dedicata. Lista raggruppata per mese + barra filtri (categoria/stato/visibilità/da-a, partizione backend vs client) + form CRUD inline (RHF+zod, regola visibilità=azienda mirror service) + ConfirmDialog soft-delete. Normalizzazione `dataScadenza` `@db.Date`→YYYY-MM-DD nel layer api. Lista senza relazioni embedded → lookup categoria/azienda client-side.
 
 Catalogo permessi: **37** (`scadenze.{visualizza,gestisci}` da STOP-scad1; `preventivi.{visualizza,gestisci}` da STOP-e1; dashboard riusa `anagrafica.cliente.visualizza`, nessun permesso nuovo).
 
@@ -34,13 +35,13 @@ Emersa dal confronto con StudioDesk PHP (host SSH `portal`, produzione legacy, m
 2. **Cliente-dello-studio** — l'azienda-cliente che entra a vedere le sue comunicazioni/documenti/scadenze/preventivi. Menu tradizionale a sidebar. **Secondo frontend, non esiste ancora.**
 3. **Super-admin-piattaforma** — amministrazione studi (tenant) + server + fatturazione verso gli studi (FIC era questo: la fatturazione di Nicolò _verso_ gli studi, non degli studi verso i loro clienti). Parzialmente coperto dal modulo `tenants`/bootstrap core; sarebbe app/area a sé.
 
-Moduli di dominio StudioDesk ancora mancanti nel TS: Comunicazioni, Documenti & Circolari, Knowledge Base, Questionari, Agevolazioni, Team. **Scadenze** ha ora il backend (ADR-0039) ma non la UI. La card-grid della dashboard (ADR-0038) è predisposta ad accoglierli come card man mano che nascono. **Nessuna card-placeholder per moduli non costruiti** (YAGNI/Pattern 43).
+Moduli di dominio StudioDesk ancora mancanti nel TS: Comunicazioni, Documenti & Circolari, Knowledge Base, Questionari, Agevolazioni, Team. **Scadenze** ha ora backend (ADR-0039) + UI (ADR-0040), primo modulo operatore-studio completo end-to-end oltre ad anagrafica/preventivi. La card-grid della dashboard (ADR-0038) è predisposta ad accoglierli come card man mano che nascono. **Nessuna card-placeholder per moduli non costruiti** (YAGNI/Pattern 43).
 
 ### Prossimo task — da concordare a STOP 0
 
 Candidate (priorità da validare con Nicolò):
 
-- **`scadenze` UI** (segue ADR-0039) — lista/calendario + form scadenze in `accountant-web`, picker categorie (piattaforma+custom), gestione categorie custom. Probabile LEAN/FULL leggera (replica pattern aziende/preventivi UI). Candidata naturale post-merge backend.
+- **Gestione categorie scadenze custom (UI)** (segue ADR-0040) — schermata per creare/gestire categorie custom per tenant. `createScadenzaCategoria` già esposta in `scadenze-api.ts` ma senza UI: il form scadenze sceglie solo tra le categorie esistenti. LEAN, ~slice piccola.
 - **Catalogo servizi / fatture FIC** — decisione di prodotto grossa, multi-STOP, FULL. Nota: `fatture` non esiste come tabella StudioDesk diretta (c'è `preventivi` dominio + `fic_billing` integrazione 4 tabelle). FIC = livello 3 (super-admin), decisione di prodotto separata.
 - **Altri moduli operatore-studio** (Documenti/Comunicazioni) — verso il completamento del livello 1.
 - **Portale cliente-dello-studio** (livello 2) — nuovo frontend, slice grossa.
@@ -52,6 +53,7 @@ Candidate (priorità da validare con Nicolò):
 - **TD-RLS-dashboard candidate** (ADR-0038) — endpoint `/dashboard/stats` non esercitato da `rls-isolation` e2e; isolamento verificato applicativamente (scenario A/B di `dashboard-stats`) + a runtime non-superuser. Bassa priorità: gli aggregati riusano le stesse policy delle CRUD già esercitate.
 - **TD-RLS-scadenze candidate** (nuovo, ADR-0039) — tabella `scadenze` non esercitata da `rls-isolation` e2e (suite superuser TD-BV); isolamento verificato applicativamente (scenario #11 di `scadenze-crud`). La policy è la stessa forma già esercitata da aziende/preventivi. Bassa priorità, coerente con TD-BV.
 - **`scadenze_categorie` senza RLS** (per design, ADR-0039) — le righe piattaforma sono `tenant_id NULL` → una policy per-tenant le filtrerebbe via. Protezione **interamente applicativa**: ogni accesso alle categorie DEVE passare dallo scoping del service (read `OR[null,tenant]`, write `tenant`, `categoriaId` validato accessibile). Mai query dirette non scopate.
+- **TD-PATCH-null-FK** (nuovo, ADR-0040) — `UpdateScadenzaDto` espone `categoriaId`/`aziendaId` come `@IsUUID` opzionali senza supporto `null` → via PATCH non si può **azzerare** una FK già impostata. In edit, cambiando visibilità da `azienda` ad altro, l'`aziendaId` resta in DB (semanticamente ignorato quando `visibilita≠azienda`, e la UI lista mostra il nome azienda solo se `aziendaId` valorizzato). Fix: accettare `null` esplicito nel DTO+service. Bassa priorità.
 - **TD candidate — seed utente non-superuser studio-demo** (da ADR-0037) — **risolto in #87**: seedato `collaboratore@studio.local` (ruolo Collaboratore, non-superuser, ora con `scadenze.*` da STOP-scad1). Sblocca il test di gating runtime di `preventivi.*`/`anagrafica.cliente.*`/`scadenze.*` con un utente reale a permessi limitati (`admin@studio.local` resta Super Admin a 37 permessi).
 - **TD-BS Sub-2** — copertura e2e `ValidationPipe→400` bloccata dal harness (vitest 3.x non eredita i plugin SWC nei `test.projects`). Validation 400 coperta da unit DTO; integrazione garantita in prod da `tsc`. Valore incrementale basso.
 - **TD-CB** — la suite e2e backend (accountant + restaurant) è **solo-locale**, non gira in CI. Su CI: unit + Playwright FE. Le garanzie "N/N e2e" sono locali.
@@ -81,13 +83,13 @@ Candidate (priorità da validare con Nicolò):
 
 ### Git
 
-- **Main @ 9c65196** — `feat(accountant): backend scadenze (calendario fiscale) + categorie piattaforma/custom (#88)`
-- Working tree pulito, branch unico `main` allineato a `origin/main`. Nessun branch feature pendente (feature/scadenze eliminata post-merge).
-- PR mergiate nella sessione 2026-06-10: #83 (preventivi UI, ADR-0037), #84 (RLS isolation e2e preventivi, LEAN), #85 (dashboard, ADR-0038), #86/#87 (docs/seed), **#88 (backend scadenze, ADR-0039)** — CI verde (Lint·Typecheck·Format·Test + Playwright).
+- **Main @ ffc4b95** — `feat(accountant): UI scadenze — lista filtri raggruppamento mese + form CRUD (#90)`
+- Working tree pulito, branch unico `main` allineato a `origin/main`. Nessun branch feature pendente (feature/scadenze-ui eliminata post-merge).
+- PR mergiate nella sessione 2026-06-10/11: #83 (preventivi UI, ADR-0037), #84 (RLS isolation e2e preventivi, LEAN), #85 (dashboard, ADR-0038), #86/#87 (docs/seed), #88 (backend scadenze, ADR-0039), #89 (docs/handoff), **#90 (UI scadenze, ADR-0040)** — CI verde (Lint·Typecheck·Format·Test + Playwright; E2E #90 re-run dopo timeout transitorio Docker Hub).
 
 ### ADR
 
-Fino a **ADR-0039**. Ultimi del 2° verticale: 0029/0030 (skeleton), 0031/0032 (aziende BE/UI), 0033/0034 (referenti BE/UI), 0035 (RLS isolation anagrafica), 0036 (preventivi backend), 0037 (preventivi UI), 0038 (dashboard operatore-studio), 0039 (scadenze backend — pattern categorie piattaforma/custom).
+Fino a **ADR-0040**. Ultimi del 2° verticale: 0029/0030 (skeleton), 0031/0032 (aziende BE/UI), 0033/0034 (referenti BE/UI), 0035 (RLS isolation anagrafica), 0036 (preventivi backend), 0037 (preventivi UI), 0038 (dashboard operatore-studio), 0039 (scadenze backend — pattern categorie piattaforma/custom), 0040 (scadenze UI — lista/filtri/form CRUD).
 
 ### Schema dominio accountant (su `aziende`)
 
