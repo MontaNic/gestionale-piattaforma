@@ -559,7 +559,7 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 **GATE:** build immagine ✅ (`caddy version` 2.11.4, `list-modules` include `dns.providers.cloudflare`) · `caddy validate` config ✅ · merge compose ✅ (8080 sostituita da 80/443) · emissione **LE staging** ✅ (~13s, de-risk rate-limit) → switch **LE prod** ✅. Validazione esterna: `https://studiodesk.cloud` **200** + cert prod valido · wildcard `<sub>.studiodesk.cloud` **200** trusted · `http://`→**308** https · HSTS presente · posta `mx`/Brevo intatta. Pre-commit security check (.env.example): .env ignorato ✅ / nessun token reale versionato ✅ / solo placeholder ✅.
 
-**File:** nuovi `infra/caddy/Dockerfile` + `infra/caddy/conf/Caddyfile` + `docker-compose.prod.yml` + `docs/architecture/ADR-0041-*.md`; modificato `.env.example` (+`CF_API_TOKEN`/`ACME_EMAIL` placeholder). Branch `feature/caddy-https-wildcard-cloudflare`.
+**File:** nuovi `infra/caddy/Dockerfile` + `infra/caddy/conf/Caddyfile` + `docker-compose.prod.yml` + `docs/architecture/ADR-0041-*.md`; modificato `.env.example` (+`CF_API_TOKEN`/`ACME_EMAIL` placeholder). **PR #94, squash-merge 0463533.**
 
 **Tech debt / follow-up aperti:**
 - **TD-backup-caddy_data** — il volume `caddy_data` contiene ora certificati *veri*: perderlo = riemissione + consumo rate-limit LE. Va incluso nello script di backup F1 (già previsto da ADR-0001/0041).

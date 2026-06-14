@@ -1,8 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ e5ea9df (UI categorie scadenze custom, PR #92 squash-merged).
-> **In volo (non ancora merged):** branch `feature/caddy-https-wildcard-cloudflare` — HTTPS + dominio reale su `gestionale-test` (ADR-0041). **Già live in produzione** sul server (PR da aprire/mergiare).
+> **Snapshot:** Main @ 0463533 (HTTPS + dominio reale su `gestionale-test`, ADR-0041, PR #94 squash-merged). **Live in produzione** sul server.
 > **Data:** 2026-06-14.
 
 ---
