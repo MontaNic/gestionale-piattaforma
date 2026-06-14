@@ -544,6 +544,30 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-14] Infra — HTTPS + dominio reale su `gestionale-test` (ADR-0041)
+
+**Cosa:** primo HTTPS di produzione del progetto. Caddy serve `studiodesk.cloud` + `*.studiodesk.cloud` con certificati Let's Encrypt reali (auto-rinnovo), challenge **DNS-01 Cloudflare** (obbligatorio per i wildcard). Il dominio (registrar Aruba, DNS Cloudflare) è stato **ripuntato dal vecchio server StudioDesk** (legacy dismesso) a questo host (`178.105.56.116`). Dietro il proxy per ora solo un **placeholder** (le app non sono ancora containerizzate). Corsia FULL → ADR-0041 (l'ADR "futuro" che ADR-0001 rimandava per la strategia ACME).
+
+**Decisioni chiave (dettaglio in ADR-0041):**
+- **Build Caddy custom** (`infra/caddy/Dockerfile`, xcaddy + `caddy-dns/cloudflare`, pin `2.11`): l'immagine `caddy:2-alpine` standard non ha il modulo DNS. NB 2.8.x ha un bug zapslog con xcaddy → 2.11.
+- **Override prod** (`docker-compose.prod.yml`): si applica *in aggiunta* al base dev, cambia solo `caddy` (build, porte `80/443`+`443/udp` con `!override`, dir-mount config). Comando: `docker compose -f docker-compose.dev.yml -f docker-compose.prod.yml up -d --build caddy`.
+- **HTTPS-only** (requisito Nicolò): redirect 308 `:80`→`https://` (default `auto_https`) + header **HSTS** `max-age=31536000; includeSubDomains`. Mai contenuto in chiaro.
+- **Segreti fuori dal repo**: `CF_API_TOKEN` (token Cloudflare scoped `Zone:DNS:Edit`+`Zone:Read` su `studiodesk.cloud`, riuso del token "Certbot wildcard" rollato) + `ACME_EMAIL` solo in `.env` (gitignored), referenziati `{env.*}`. Token creato/installato da Nicolò, mai transitato dall'AI.
+- **DNS-only (grey)** in avvio per validare il cert d'origine; proxy Cloudflare (orange + Full strict) deciso in seguito.
+
+**Gotcha risolto in corsa:** bind-mount di un **singolo file** lega l'inode → riscritture dell'editor non viste dal container (`caddy reload` → "config unchanged", continuava a servire lo staging). Risolto montando la **directory** `infra/caddy/conf/`.
+
+**GATE:** build immagine ✅ (`caddy version` 2.11.4, `list-modules` include `dns.providers.cloudflare`) · `caddy validate` config ✅ · merge compose ✅ (8080 sostituita da 80/443) · emissione **LE staging** ✅ (~13s, de-risk rate-limit) → switch **LE prod** ✅. Validazione esterna: `https://studiodesk.cloud` **200** + cert prod valido · wildcard `<sub>.studiodesk.cloud` **200** trusted · `http://`→**308** https · HSTS presente · posta `mx`/Brevo intatta. Pre-commit security check (.env.example): .env ignorato ✅ / nessun token reale versionato ✅ / solo placeholder ✅.
+
+**File:** nuovi `infra/caddy/Dockerfile` + `infra/caddy/conf/Caddyfile` + `docker-compose.prod.yml` + `docs/architecture/ADR-0041-*.md`; modificato `.env.example` (+`CF_API_TOKEN`/`ACME_EMAIL` placeholder). Branch `feature/caddy-https-wildcard-cloudflare`.
+
+**Tech debt / follow-up aperti:**
+- **TD-backup-caddy_data** — il volume `caddy_data` contiene ora certificati *veri*: perderlo = riemissione + consumo rate-limit LE. Va incluso nello script di backup F1 (già previsto da ADR-0001/0041).
+- **Cloudflare proxy** (orange + Full strict) — non attivato, da valutare.
+- **App dietro il proxy** — oggi solo placeholder; sostituire `respond` con `reverse_proxy` richiede containerizzare api/web (task separato).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

@@ -1,0 +1,40 @@
+# Override di produzione per il solo reverse proxy.
+#
+# Si applica IN AGGIUNTA al compose base, NON lo sostituisce:
+#   docker compose -f docker-compose.dev.yml -f docker-compose.prod.yml up -d --build caddy
+#
+# Cosa cambia rispetto al placeholder dev (docker-compose.dev.yml → caddy):
+#   - build custom (Dockerfile con modulo DNS Cloudflare) al posto di image: caddy:2-alpine
+#   - espone 80/443 (TCP) + 443/UDP (HTTP/3) sull'host, non più 8080:80
+#   - monta la dir infra/caddy/conf (wildcard) invece del placeholder ./Caddyfile
+#   - inietta CF_API_TOKEN + ACME_EMAIL dall'ambiente (file .env)
+#
+# I volumi caddy_data/caddy_config sono gli stessi del base: ci vivono i certificati
+# Let's Encrypt → DEVONO finire nel backup (vedi ADR-0001 "Negative" e ADR-0041).
+
+services:
+  caddy:
+    build:
+      context: ./infra/caddy
+      dockerfile: Dockerfile
+    image: gestionale/caddy-cloudflare:2.11
+    # !override: rimpiazza la lista ports del base invece di concatenarla
+    # (altrimenti resterebbe pubblicata anche la 8080:80 del dev). Richiede
+    # Compose >= 2.24; qui v5.x. Vedi ADR-0041.
+    ports: !override
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3 (QUIC)
+    # !override: il base dev monta il file ./Caddyfile su /etc/caddy/Caddyfile;
+    # qui montiamo la DIRECTORY infra/caddy/conf su /etc/caddy. Si rimpiazza la
+    # lista intera (mount di file e di dir sullo stesso path sono incompatibili).
+    # Montare la dir (non il singolo file) evita il gotcha del bind-mount per-inode:
+    # le modifiche al Caddyfile vengono viste dal container e `caddy reload` funziona.
+    volumes: !override
+      - ./infra/caddy/conf:/etc/caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      # Valorizzati dal file .env (gitignored). MAI committare i valori reali.
+      CF_API_TOKEN: ${CF_API_TOKEN:?CF_API_TOKEN mancante in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL mancante in .env}

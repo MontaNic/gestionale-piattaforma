@@ -1,0 +1,48 @@
+# Caddyfile di produzione — HTTPS wildcard via Let's Encrypt (DNS-01 Cloudflare).
+#
+# Stato attuale: serve SOLO un placeholder. Le app (api/web) non sono ancora
+# dietro questo proxy; quando lo saranno si sostituirà `respond` con `reverse_proxy`
+# verso i service name della gestionale_network (es. restaurant-web:3001, api:3000).
+#
+# Segreti: NESSUN valore in chiaro qui. Il token Cloudflare e l'email ACME arrivano
+# dall'ambiente (file .env, gitignored) e sono iniettati nel container dal compose:
+#   - CF_API_TOKEN  → token scoped Zone:DNS:Edit + Zone:Read su studiodesk.cloud
+#   - ACME_EMAIL    → email per notifiche scadenza/recovery Let's Encrypt
+# Vedi ADR-0041 e .env.example.
+{
+	email {env.ACME_EMAIL}
+
+	# CA ACME. Default = Let's Encrypt PRODUCTION.
+	# In fase di validazione si parte con lo STAGING per non bruciare i rate-limit
+	# LE di produzione (5 cert/settimana per dominio). Per attivare lo staging,
+	# decommentare la riga sotto, validare la catena, poi ricommentarla e ricaricare.
+	#acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# Apex + wildcard nello stesso blocco. NB: Caddy emette DUE certificati distinti
+# (uno per studiodesk.cloud, uno per *.studiodesk.cloud) e serve quello giusto in
+# base all'SNI — non un unico cert SAN combinato.
+studiodesk.cloud, *.studiodesk.cloud {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		# Risolutori pubblici per il propagation check del record _acme-challenge,
+		# indipendenti dal resolver locale dell'host.
+		resolvers 1.1.1.1 8.8.8.8
+	}
+
+	# HTTPS-only: Caddy apre la :80 SOLO per il redirect 308 → https:// (default
+	# auto_https). L'header HSTS rende la cosa permanente lato browser: dopo la
+	# prima visita non tentano nemmeno più l'HTTP. includeSubDomains copre tutti
+	# i tenant *.studiodesk.cloud (serviti tutti in HTTPS).
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# Placeholder: prova che TLS + dominio + rinnovo funzionano end-to-end.
+	# Sostituire con reverse_proxy quando le app saranno containerizzate.
+	respond "Gestionale — HTTPS it works! ({host})" 200
+
+	encode gzip zstd
+	log {
+		output stdout
+		format console
+	}
+}
