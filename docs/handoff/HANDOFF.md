@@ -2,7 +2,8 @@
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
 > **Snapshot:** Main @ e5ea9df (UI categorie scadenze custom, PR #92 squash-merged).
-> **Data:** 2026-06-11.
+> **In volo (non ancora merged):** branch `feature/caddy-https-wildcard-cloudflare` — HTTPS + dominio reale su `gestionale-test` (ADR-0041). **Già live in produzione** sul server (PR da aprire/mergiare).
+> **Data:** 2026-06-14.
 
 ---
 
@@ -89,7 +90,7 @@ Candidate (priorità da validare con Nicolò):
 
 ### ADR
 
-Fino a **ADR-0040**. Ultimi del 2° verticale: 0029/0030 (skeleton), 0031/0032 (aziende BE/UI), 0033/0034 (referenti BE/UI), 0035 (RLS isolation anagrafica), 0036 (preventivi backend), 0037 (preventivi UI), 0038 (dashboard operatore-studio), 0039 (scadenze backend — pattern categorie piattaforma/custom), 0040 (scadenze UI — lista/filtri/form CRUD).
+Fino a **ADR-0041**. Ultimi del 2° verticale: 0029/0030 (skeleton), 0031/0032 (aziende BE/UI), 0033/0034 (referenti BE/UI), 0035 (RLS isolation anagrafica), 0036 (preventivi backend), 0037 (preventivi UI), 0038 (dashboard operatore-studio), 0039 (scadenze backend — pattern categorie piattaforma/custom), 0040 (scadenze UI — lista/filtri/form CRUD). **0041 (infra)** — strategia ACME: wildcard `*.studiodesk.cloud` via DNS-01 Cloudflare, build Caddy custom, HTTPS-only+HSTS (l'ADR "futuro" che 0001 rimandava).
 
 ### Schema dominio accountant (su `aziende`)
 
@@ -102,6 +103,7 @@ Fino a **ADR-0040**. Ultimi del 2° verticale: 0029/0030 (skeleton), 0031/0032 (
 
 - NestJS 11, Next.js 15, Prisma 6.19.3, PostgreSQL 16 (RLS), Redis 7, Vitest 3.2.4, Testcontainers, Playwright, Tailwind 3.4, shadcn/ui, tsup/esbuild.
 - `accountant-web` ha vitest (project registrato in root `vitest.config.mts`, aggiunto in STOP-e2 per il test mirror totali).
-- Server Hetzner `gestionale-test` (Ubuntu 22.04), Docker Compose `docker-compose.dev.yml`. Ruolo runtime DB `gestionale_app` (NOSUPERUSER NOBYPASSRLS), migration via `postgres` superuser (DIRECT_URL).
+- Server Hetzner `gestionale-test` (Ubuntu 22.04, `178.105.56.116`), Docker Compose `docker-compose.dev.yml`. Ruolo runtime DB `gestionale_app` (NOSUPERUSER NOBYPASSRLS), migration via `postgres` superuser (DIRECT_URL).
+- **HTTPS live (ADR-0041, branch in volo):** Caddy custom (modulo DNS Cloudflare) serve `studiodesk.cloud` + `*.studiodesk.cloud` con cert Let's Encrypt reali (DNS-01, auto-rinnovo), HTTPS-only + HSTS. Override `docker-compose.prod.yml` (porte 80/443, dir-mount `infra/caddy/conf/`). Deploy: `docker compose -f docker-compose.dev.yml -f docker-compose.prod.yml up -d --build caddy`. Segreti (`CF_API_TOKEN`/`ACME_EMAIL`) solo in `.env`. Dietro il proxy ancora un placeholder (app non containerizzate). **TODO:** backup volume `caddy_data` (contiene i cert veri).
 - Tenant demo: `studio-demo` (`admin@studio.local` / `Studio123!`, Super Admin 37 permessi; + `collaboratore@studio.local` / `Collaboratore123!`, ruolo Collaboratore con `scadenze.*`), + `studio-acme` per test isolamento. Seed demo accountant: 5 aziende (AZ001-005, AZ003 attivo=false), 3 referenti, 2 preventivi (PREV-2025-001/002 su AZ001, aliquote miste 22%/10%). Reference data globale: **7 categorie scadenze piattaforma** (`tenant_id NULL`, seedate incondizionatamente).
 - Primitive UI nel barrel `@gestionale/ui`: alert, avatar, button, card, dialog, dropdown-menu, form, input, label, sheet, textarea, utils. **Nessuna** primitiva table/select/badge/skeleton/stat → `<table>` HTML grezzo, `<select>` nativo con `SELECT_CLASS` locale, KPI con `Card` + markup.
