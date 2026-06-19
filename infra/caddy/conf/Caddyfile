@@ -36,9 +36,21 @@ studiodesk.cloud, *.studiodesk.cloud {
 	# i tenant *.studiodesk.cloud (serviti tutti in HTTPS).
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
-	# Placeholder: prova che TLS + dominio + rinnovo funzionano end-to-end.
-	# Sostituire con reverse_proxy quando le app saranno containerizzate.
-	respond "Gestionale — HTTPS it works! ({host})" 200
+	# Host CO-LOCATI di terzi (verticale "game"/Lumimondo: adventure, superpang,
+	# music). NON fanno parte del prodotto gestionale → i loro vhost + credenziali
+	# vivono in uno snippet NON versionato, import-ato qui dentro il site block.
+	# Pattern e motivazione in ADR-0042. Il glob `colocated.*.caddy` è tollerante:
+	# su un host pulito senza lo snippet l'import è un no-op (non un errore) e
+	# Caddy parte servendo solo gestionale + fallback. Lo snippet va creato a mano
+	# sull'host (è gitignored), come la rete `web` external (vedi docker-compose.prod.yml).
+	import colocated.*.caddy
+
+	# Fallback: ogni altro host (apex + altri *.studiodesk.cloud). Placeholder
+	# finché le app del gestionale non saranno dietro il proxy. È comportamento
+	# del gateway gestionale, quindi resta versionato qui (non nello snippet).
+	handle {
+		respond "Gestionale — HTTPS it works! ({host})" 200
+	}
 
 	encode gzip zstd
 	log {

@@ -38,3 +38,16 @@ services:
       # Valorizzati dal file .env (gitignored). MAI committare i valori reali.
       CF_API_TOKEN: ${CF_API_TOKEN:?CF_API_TOKEN mancante in .env}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL mancante in .env}
+    # Reti: gestionale_network (servizi del gestionale, dal compose base) + web
+    # (rete esterna condivisa col container lumimondo-adventure per il
+    # reverse_proxy via DNS docker). Esplicite qui così il recreate del caddy le
+    # rende persistenti, senza dipendere da `docker network connect` a caldo.
+    networks:
+      - gestionale_network
+      - web
+
+# `web` è external: la sua vita non è legata a questo compose (la crea/possiede
+# l'operatore una tantum: `docker network create web`). Vedi ADR-0042.
+networks:
+  web:
+    external: true
