@@ -65,6 +65,12 @@ logs/
 *.seed
 *.pid.lock
 
+# --- Caddy: snippet host co-locati di terzi (NON di prodotto) ---
+# I vhost di app co-locate (verticale "game"/Lumimondo) + le loro credenziali
+# basic_auth vivono in uno snippet montato a runtime ma fuori dal git di
+# prodotto. Il Caddyfile committato li `import`-a via glob tollerante. Vedi ADR-0042.
+infra/caddy/conf/colocated.*.caddy
+
 # --- Misc ---
 .cache/
 .parcel-cache/

@@ -568,6 +568,26 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-19] Infra — formalizzazione domini + host co-locati fuori dal git (ADR-0042)
+
+**Cosa:** formalizza ciò che gira *dietro* il cert wildcard di ADR-0041 e toglie dal git di prodotto gli host **co-locati di terzi** (verticali "game"/Lumimondo: adventure, superpang, music) che nel frattempo erano finiti inline nel `Caddyfile` versionato (con credenziali `basic_auth` altrui). Principio: **repo == prodotto gestionale**. Corsia FULL → ADR-0042.
+
+**Decisioni chiave (dettaglio in ADR-0042):**
+- **Modello domini/resolver:** `studiodesk.cloud` + `*.studiodesk.cloud` su un solo site block; le superfici gestionale (tenant `<slug>`, api/web) passano dal resolver multi-tenant; gli host co-locati di terzi **fuori dal resolver** — reverse-proxy diretto via rete `web` + `basic_auth`, niente tenant/RLS (deciso 14/06).
+- **Pattern host co-locati → snippet gitignored:** i vhost di terzi vivono in `infra/caddy/conf/colocated.adventure.caddy` (gitignored, pattern `colocated.*.caddy`); il `Caddyfile` committato porta solo gestionale + `import colocated.*.caddy` + fallback. Il mount-dir di ADR-0041 carica lo snippet a runtime pur non essendo in git.
+- **DP2 — glob tollerante:** `import colocated.*.caddy` (non path letterale). Verificato su Caddy v2.11.4: import **letterale** di file assente = errore hard (Caddy non parte); **glob** senza match = no-op (`Valid configuration`). → host pulito senza snippet non rompe. Niente `.example` placeholder.
+- **DP1 — fallback `respond 200`:** resta versionato nel Caddyfile (comportamento gateway, non co-locato).
+- **DP4 — mount-stale:** runbook nell'ADR (`up -d --force-recreate caddy` se si sostituisce la dir `conf/`), no re-arch a named volume (YAGNI).
+- **Ops:** rete `web` external one-time su host pulito (`docker network create web`); TODO backup `caddy_data` ribadito.
+
+**GATE:** `caddy validate` config refactorata ✅ · test glob-vuoto (snippet rinominato → `Valid configuration`, fallback risponde) ✅ → ripristino ✅ · probe HTTP adventure/superpang/music invariati ✅. Pre-commit security: snippet con credenziali di terzi gitignored ✅ / nessuna credenziale di terzi nel Caddyfile committato ✅.
+
+**File committati:** `Caddyfile` (refactor), `docker-compose.prod.yml` (rete `web` external), `.gitignore` (+`colocated.*.caddy`), `docs/architecture/ADR-0042-*.md`, questa entry. **NON committato:** `infra/caddy/conf/colocated.adventure.caddy` (gitignored, vive su disco).
+
+**Drift segnalato:** tra preflight e refactor il blocco `@music` nel working-tree è passato utente `maurizio`→`pietro` (modifica non dell'AI); lo snippet estratto riflette lo stato on-disk attuale (`pietro`).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].
