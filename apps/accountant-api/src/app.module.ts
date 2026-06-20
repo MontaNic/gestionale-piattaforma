@@ -26,6 +26,7 @@ import { ReferentiModule } from './referenti/referenti.module';
 import { PreventiviModule } from './preventivi/preventivi.module';
 import { ScadenzeModule } from './scadenze/scadenze.module';
 import { ComunicazioniModule } from './comunicazioni/comunicazioni.module';
+import { DocumentiModule } from './documenti/documenti.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -59,6 +60,8 @@ import { MeModule } from './me/me.module';
     ScadenzeModule,
     // Comunicazioni: thread 1:1 studio↔cliente + allegati (ADR-0043).
     ComunicazioniModule,
+    // Documenti: scambio documenti studio↔cliente + tipi platform/custom (ADR-0044).
+    DocumentiModule,
     // Dashboard KPI aggregati tenant-level (read-only, STOP-dash1).
     DashboardModule,
   ],

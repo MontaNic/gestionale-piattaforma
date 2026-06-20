@@ -5,6 +5,7 @@ import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   CalendarDays,
+  FileText,
   LayoutDashboard,
   MessageSquare,
   Receipt,
@@ -27,7 +28,7 @@ import { cn } from '@gestionale/ui';
 // =============================================================================
 
 interface NavItem {
-  key: 'dashboard' | 'clienti' | 'scadenze' | 'comunicazioni' | 'fatture';
+  key: 'dashboard' | 'clienti' | 'scadenze' | 'comunicazioni' | 'documenti' | 'fatture';
   href: string;
   icon: LucideIcon;
 }
@@ -37,6 +38,7 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'clienti', icon: Users },
   { key: 'scadenze', icon: CalendarDays },
   { key: 'comunicazioni', icon: MessageSquare },
+  { key: 'documenti', icon: FileText },
   { key: 'fatture', icon: Receipt },
 ] as const;
 

@@ -607,6 +607,28 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-20] Modulo Documenti + graduazione StorageService (ADR-0044)
+
+**Cosa:** archivio documenti studio↔cliente per il verticale commercialisti, modello riusato dal PHP StudioDesk (non il codice). 2 commit atomici nello stesso branch/PR (split A): (1) graduazione StorageService, (2) modulo Documenti sopra.
+
+**⚠️ Provenienza scope:** le esclusioni MVP derivano dalla product-interview 10/06, **NON dal BRIEF** (che ha solo una sezione `### Documenti` sulla ristorazione, muta sul modulo accountant). L'ADR-0044 è la fonte autoritativa finché il BRIEF non recepisce.
+
+**Commit 1 — graduazione StorageService (refactor isolato):** Documenti = 2° consumer → chiusa `TD-storage-platform` (ADR-0043). `git mv` di `StorageService`+impl+module+spec da `apps/accountant-api/src/storage` a `packages/platform/src/storage` + re-export. Move puro, **zero cambi di logica** (sanitizzazione anti-traversal invariata). Check anti-regressione: GATE intero verde, **Comunicazioni 12/12 dal nuovo path**, 5 test storage da platform. Unica modifica: `import type Readable` (regola `consistent-type-imports` più stretta sotto `packages/`).
+
+**Commit 2 — modulo Documenti:**
+- 2 model: `DocumentoTipo` (platform tenantId NULL + custom, **NO RLS** + scoping applicativo + partial-unique, pattern ScadenzaCategoria) + `Documento` (**RLS+FORCE flat**, `storageKey` opaca, soft-delete).
+- 2 enum: **`VisibilitaDocumento` = tutti|azienda** (no `utente`, backlog), `DirezioneDocumento`.
+- **DP-codice**: nessun counter — `documenti` (i file) non ha codice nel PHP (il codice è sul *tipo*).
+- Seed: **16 tipi platform** (find-then-create) + **+2 permessi** `documenti.gestisci`/`.visualizza` (39→41) + mapping ruoli.
+- Upload/download via StorageService da `@gestionale/platform`. RLS isolation verificata (A insert → B 0, A 1).
+- UI accountant-web (operatore): archivio filtrabile + upload + download + soft-delete + nav/i18n it-en + error-codes. Niente UI cliente.
+
+**GATE:** typecheck 16/16 ✅ · lint 0 ✅ · test 15/15 (accountant-api 12 · platform 18 con 5 storage · accountant-web 7) ✅.
+
+**Backlog (ADR-0044):** letture/ricevute, user_state archivia/elimina, modelli con schema campi (fase 6C), password per-documento, scade_il+avvisi, cron-gc orfani. **TD:** documenti-tipo-codice (chiave macchina se fase 6C), utente-enum forward (portale), storage-gc.
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].

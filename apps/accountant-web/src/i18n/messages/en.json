@@ -5,6 +5,7 @@
       "clienti": "Clients",
       "scadenze": "Deadlines",
       "comunicazioni": "Messages",
+      "documenti": "Documents",
       "fatture": "Invoices"
     },
     "topbar": {
@@ -368,6 +369,44 @@
       "segnaUrgente": "Mark urgent",
       "rimuoviUrgente": "Unmark urgent",
       "elimina": "Delete"
+    }
+  },
+  "documenti": {
+    "listTitle": "Documents",
+    "listSubtitle": "Archive of documents exchanged with the firm's clients",
+    "newDocumento": "Upload document",
+    "loading": "Loading…",
+    "listEmpty": "No documents.",
+    "retry": "Retry",
+    "download": "Download",
+    "delete": "Delete",
+    "filters": {
+      "azienda": "Client",
+      "tipo": "Type",
+      "visibilita": "Visibility",
+      "all": "All"
+    },
+    "visibilita": {
+      "tutti": "Everyone",
+      "azienda": "Company"
+    },
+    "form": {
+      "azienda": "Client",
+      "aziendaPlaceholder": "Select client",
+      "tipo": "Document type",
+      "tipoPlaceholder": "Select type",
+      "visibilita": "Visibility",
+      "file": "File",
+      "note": "Notes",
+      "fileTooLarge": "File too large (max 20MB).",
+      "submit": "Upload",
+      "cancel": "Cancel"
+    },
+    "confirm": {
+      "title": "Delete document",
+      "body": "Delete document \"{nome}\"? This is reversible (soft-delete).",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
     }
   }
 }

@@ -3,7 +3,7 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (39 permessi atomici namespaced)
+//   1. permissions          (41 permessi atomici namespaced)
 //   2. system_role_templates (10 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //   3. scadenze_categorie    (7 categorie piattaforma, tenant_id NULL)
@@ -145,6 +145,18 @@ const PERMISSIONS: PermissionSeed[] = [
     code: 'comunicazioni.gestisci',
     description: 'Apri/rispondi/assegna/chiudi comunicazioni e allegati',
     category: 'comunicazioni',
+  },
+
+  // documenti.* (2) — verticale accountant (ADR-0044)
+  {
+    code: 'documenti.visualizza',
+    description: 'Visualizzazione/download documenti studio↔cliente',
+    category: 'documenti',
+  },
+  {
+    code: 'documenti.gestisci',
+    description: 'Carica/elimina documenti e gestisci tipi custom',
+    category: 'documenti',
   },
 
   // comande.* (5)
@@ -309,28 +321,34 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'scadenze.gestisci',
       'comunicazioni.visualizza',
       'comunicazioni.gestisci',
+      'documenti.visualizza',
+      'documenti.gestisci',
     ],
   },
   {
     name: 'Segreteria',
-    description: 'Consultazione clienti, preventivi e scadenze + comunicazioni operative.',
+    description:
+      'Consultazione clienti, preventivi e scadenze + comunicazioni/documenti operativi.',
     permissionCodes: [
       'anagrafica.cliente.visualizza',
       'preventivi.visualizza',
       'scadenze.visualizza',
-      // La segreteria smista/risponde le comunicazioni: gestione attiva.
+      // La segreteria smista/risponde le comunicazioni e carica documenti: gestione attiva.
       'comunicazioni.visualizza',
       'comunicazioni.gestisci',
+      'documenti.visualizza',
+      'documenti.gestisci',
     ],
   },
   {
     name: 'Praticante',
-    description: 'Sola visualizzazione clienti, preventivi, scadenze e comunicazioni.',
+    description: 'Sola visualizzazione clienti, preventivi, scadenze, comunicazioni e documenti.',
     permissionCodes: [
       'anagrafica.cliente.visualizza',
       'preventivi.visualizza',
       'scadenze.visualizza',
       'comunicazioni.visualizza',
+      'documenti.visualizza',
     ],
   },
 ];
@@ -1061,6 +1079,71 @@ async function seedScadenzeCategorie(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Tipi documento piattaforma (ADR-0044) — tenant_id NULL, immutabili. I 16 tipi
+// base del PHP StudioDesk. `visibilita_default` 'utente' del PHP è rimappata a
+// 'azienda' (l'enum MVP non ha 'utente', backlog). Idempotente: find-then-create
+// su `nome` WHERE tenant_id IS NULL (il partial-unique copre solo le custom).
+// ─────────────────────────────────────────────────────────────────────────────
+interface DocumentoTipoSeed {
+  nome: string;
+  direzione: 'studio_cliente' | 'cliente_studio' | 'bidirezionale';
+  visibilitaDefault: 'tutti' | 'azienda';
+}
+
+const DOCUMENTI_TIPI_PIATTAFORMA: DocumentoTipoSeed[] = [
+  // Studio → Cliente
+  { nome: 'Dichiarazione dei redditi', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  { nome: 'F24 da pagare', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  {
+    nome: 'Bilancio / Situazione contabile',
+    direzione: 'studio_cliente',
+    visibilitaDefault: 'azienda',
+  },
+  { nome: 'Cedolino paga', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  { nome: 'CU - Certificazione Unica', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  { nome: 'Modello 770', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  { nome: 'Circolare / Comunicazione', direzione: 'studio_cliente', visibilitaDefault: 'tutti' },
+  { nome: 'Visura camerale', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  { nome: 'Contratto / Atto', direzione: 'studio_cliente', visibilitaDefault: 'azienda' },
+  // Cliente → Studio
+  { nome: 'Fattura attiva/passiva', direzione: 'cliente_studio', visibilitaDefault: 'tutti' },
+  { nome: 'Estratto conto bancario', direzione: 'cliente_studio', visibilitaDefault: 'tutti' },
+  { nome: 'Note spese / Ricevute', direzione: 'cliente_studio', visibilitaDefault: 'tutti' },
+  { nome: 'Documento di identità', direzione: 'cliente_studio', visibilitaDefault: 'azienda' },
+  { nome: 'Presenze / Ore lavorate', direzione: 'cliente_studio', visibilitaDefault: 'azienda' },
+  { nome: 'Documenti nuova assunzione', direzione: 'cliente_studio', visibilitaDefault: 'azienda' },
+  // Bidirezionale
+  { nome: 'Altro', direzione: 'bidirezionale', visibilitaDefault: 'tutti' },
+];
+
+async function seedDocumentiTipi(): Promise<void> {
+  console.log(`Documenti tipi (piattaforma): ${DOCUMENTI_TIPI_PIATTAFORMA.length} attesi`);
+  let created = 0;
+  let skipped = 0;
+  for (const [i, tipo] of DOCUMENTI_TIPI_PIATTAFORMA.entries()) {
+    const existing = await prisma.documentoTipo.findFirst({
+      where: { nome: tipo.nome, tenantId: null },
+    });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    await prisma.documentoTipo.create({
+      data: {
+        id: id(),
+        tenantId: null,
+        nome: tipo.nome,
+        direzione: tipo.direzione,
+        visibilitaDefault: tipo.visibilitaDefault,
+        ordine: i,
+      },
+    });
+    created++;
+  }
+  console.log(`  -> ${created} created, ${skipped} re-affirmed\n`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
@@ -1168,6 +1251,9 @@ async function main(): Promise<void> {
   // come permessi/template: seedate SEMPRE (anche in production), non dev-only.
   // ───────────────────────────────────────────────────────────────────────────
   await seedScadenzeCategorie();
+
+  // Tipi documento piattaforma (tenant_id NULL) — reference data globale (ADR-0044).
+  await seedDocumentiTipi();
 
   // ───────────────────────────────────────────────────────────────────────────
   // Dev tenants + admin (opt-out via NODE_ENV=production)

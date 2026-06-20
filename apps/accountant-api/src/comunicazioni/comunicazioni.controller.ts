@@ -37,7 +37,7 @@ import { ComunicazioniService, type ComunicazioniListFilter } from './comunicazi
 import { CreateComunicazioneDto } from './dto/create-comunicazione.dto';
 import { CreateComMessaggioDto } from './dto/create-com-messaggio.dto';
 import { UpdateComunicazioneDto } from './dto/update-comunicazione.dto';
-import { STORAGE_MAX_UPLOAD_BYTES } from '../storage/storage.service';
+import { STORAGE_MAX_UPLOAD_BYTES } from '@gestionale/platform';
 
 // Forma minima del file multipart (memoryStorage di multer) — evita la dip
 // @types/multer non installata.

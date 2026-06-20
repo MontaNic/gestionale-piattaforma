@@ -30,3 +30,10 @@ export { extractSubFromAuthHeader } from './throttler/utils/jwt-decode.util';
 // common
 export { GlobalHttpExceptionFilter } from './common/filters/global-http-exception.filter';
 export { catchUniqueViolation } from './common/prisma-errors';
+
+// storage — astrazione provider-agnostica + impl filesystem locale (graduata da
+// apps/accountant-api al 2° consumer, TD-storage-platform ADR-0043).
+export { StorageService, STORAGE_MAX_UPLOAD_BYTES } from './storage/storage.service';
+export type { StoragePutInput, StoragePutResult, StorageObject } from './storage/storage.service';
+export { LocalFilesystemStorageService } from './storage/local-filesystem-storage.service';
+export { StorageModule } from './storage/storage.module';
