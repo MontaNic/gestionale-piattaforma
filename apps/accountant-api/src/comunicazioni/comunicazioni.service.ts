@@ -25,12 +25,11 @@ import {
   withTenantContextAtomicTx,
 } from '@gestionale/db';
 import { DbService } from '@gestionale/db/nest';
-import { catchUniqueViolation } from '@gestionale/platform';
+import { catchUniqueViolation, StorageService } from '@gestionale/platform';
 
 import type { CreateComunicazioneDto } from './dto/create-comunicazione.dto';
 import type { CreateComMessaggioDto } from './dto/create-com-messaggio.dto';
 import type { UpdateComunicazioneDto } from './dto/update-comunicazione.dto';
-import { StorageService } from '../storage/storage.service';
 
 export interface ComunicazioniListFilter {
   aziendaId?: string;

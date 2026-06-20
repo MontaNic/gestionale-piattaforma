@@ -13,7 +13,7 @@
 // la userà come object key.
 // =============================================================================
 
-import { Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 
 /** Limite upload allegati: 20MB (decisione 10/06). */
 export const STORAGE_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
