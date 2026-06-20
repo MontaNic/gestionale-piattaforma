@@ -75,6 +75,15 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_COM_ALLEGATO_NOT_FOUND: 'Allegato non trovato.',
   E_COM_ALLEGATO_FILE_REQUIRED: 'Nessun file selezionato.',
   E_ALLEGATO_TOO_LARGE: 'File troppo grande (max 20MB).',
+
+  // Dominio documenti (ADR-0044). Codici runtime: not-found, FK business, tipo
+  // duplicato, file mancante. I validation backstop E_DOCUMENTO_*_INVALID/
+  // _REQUIRED/_TOO_LONG sono prevenuti client-side → fallback generico.
+  E_DOCUMENTO_NOT_FOUND: 'Documento non trovato.',
+  E_DOCUMENTO_AZIENDA_NOT_FOUND: 'Cliente non trovato o non accessibile.',
+  E_DOCUMENTO_TIPO_NOT_FOUND: 'Tipo documento non trovato o non accessibile.',
+  E_DOCUMENTO_TIPO_NOME_EXISTS: 'Esiste già un tipo documento con questo nome.',
+  E_DOCUMENTO_FILE_REQUIRED: 'Nessun file selezionato.',
 };
 
 export function messageForErrorCode(code: string): string {

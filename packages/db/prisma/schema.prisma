@@ -66,6 +66,8 @@ model Tenant {
   comMessaggi       ComMessaggio[]
   comAllegati       ComAllegato[]
   comCounter        ComCounter?
+  documentiTipi     DocumentoTipo[]
+  documenti         Documento[]
 
   @@map("tenants")
 }
@@ -131,6 +133,8 @@ model User {
   // Comunicazioni: operatore assegnato a un thread + autore di un messaggio.
   comunicazioniAssegnate Comunicazione[] @relation("ComOperatore")
   comMessaggiAutore      ComMessaggio[]  @relation("ComAutore")
+  // Documenti caricati dall'operatore.
+  documentiCreati        Documento[]     @relation("DocumentoCreatore")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -616,6 +620,7 @@ model Azienda {
   preventivi    Preventivo[]
   scadenze      Scadenza[]
   comunicazioni Comunicazione[]
+  documenti     Documento[]
 
   @@index([tenantId])
   @@index([tenantId, nome])
@@ -904,4 +909,83 @@ model ComCounter {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("com_counter")
+}
+
+// =============================================================================
+// Documenti — scambio documenti studio↔cliente (verticale accountant, ADR-0044).
+// Modello dati riusato da StudioDesk PHP (docs/studiodesk/sql/05_documenti.sql),
+// NON il codice. Scope MVP da product-interview 10/06 (NON dal BRIEF, che è muto
+// sul modulo accountant). Distinto dagli allegati di comunicazione (com_allegati,
+// legati al thread). File via StorageService (graduato in @gestionale/platform).
+// Fuori MVP (backlog ADR-0044): letture/ricevute, user_state archivia/elimina,
+// modelli con schema campi (fase 6C), password per-documento, scadenze+avvisi.
+// =============================================================================
+
+enum DirezioneDocumento {
+  studio_cliente
+  cliente_studio
+  bidirezionale
+
+  @@map("direzione_documento")
+}
+
+// Visibilità MVP: solo `tutti` | `azienda`. `utente` (targeting per-utente
+// cliente) è nel backlog — richiede il portale cliente (livello 2) e una colonna
+// user_id target. Vedi ADR-0044 (TD utente-enum forward).
+enum VisibilitaDocumento {
+  tutti
+  azienda
+
+  @@map("visibilita_documento")
+}
+
+// Catalogo tipi documento: platform (tenantId NULL, immutabili) + custom
+// per-tenant. NIENTE RLS (le righe platform hanno tenant_id NULL): scoping
+// applicativo `tenantId IS NULL OR tenantId = current` + partial-unique sulle
+// custom (pattern ScadenzaCategoria, ADR-0039).
+model DocumentoTipo {
+  id                String              @id
+  tenantId          String?             @map("tenant_id") // NULL = platform immutabile
+  nome              String              @db.VarChar(100)
+  direzione         DirezioneDocumento
+  visibilitaDefault VisibilitaDocumento @default(tutti) @map("visibilita_default")
+  ordine            Int                 @default(0)
+  attivo            Boolean             @default(true)
+
+  tenant    Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documenti Documento[]
+  // partial-unique (tenant_id, nome) WHERE tenant_id IS NOT NULL → in SQL (Pattern 42)
+
+  @@index([tenantId])
+  @@map("documenti_tipi")
+}
+
+// Documenti reali. RLS+FORCE flat (tenant_id diretto). `storageKey` = chiave
+// opaca dello StorageService (MAI path nudo); il file vive fuori dal docroot,
+// download via API con check di visibilità applicativo.
+model Documento {
+  id            String              @id
+  tenantId      String              @map("tenant_id")
+  tipoId        String              @map("tipo_id")
+  aziendaId     String              @map("azienda_id")
+  nomeOriginale String              @map("nome_originale") @db.VarChar(255)
+  storageKey    String              @map("storage_key") @db.VarChar(500)
+  mimeType      String              @default("application/octet-stream") @map("mime_type") @db.VarChar(100)
+  dimensione    Int                 @default(0)
+  visibilita    VisibilitaDocumento @default(tutti)
+  note          String?
+  createdBy     String              @map("created_by") // user interno
+  deletedAt     DateTime?           @map("deleted_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tipo    DocumentoTipo @relation(fields: [tipoId], references: [id], onDelete: Restrict)
+  azienda Azienda       @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
+  autore  User          @relation("DocumentoCreatore", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, aziendaId, deletedAt])
+  @@index([tipoId])
+  @@map("documenti")
 }

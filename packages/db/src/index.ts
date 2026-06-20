@@ -109,6 +109,8 @@ export {
   ComApertura,
   ComLato,
   ComOrigine,
+  DirezioneDocumento,
+  VisibilitaDocumento,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -145,6 +147,8 @@ export type {
   ComMessaggio,
   ComAllegato,
   ComCounter,
+  DocumentoTipo,
+  Documento,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
