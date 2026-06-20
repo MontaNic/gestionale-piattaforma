@@ -4,6 +4,7 @@
       "dashboard": "Dashboard",
       "clienti": "Clients",
       "scadenze": "Deadlines",
+      "comunicazioni": "Messages",
       "fatture": "Invoices"
     },
     "topbar": {
@@ -309,6 +310,64 @@
         "nome": "Name",
         "colore": "Color"
       }
+    }
+  },
+  "comunicazioni": {
+    "listTitle": "Messages",
+    "listSubtitle": "Message threads with the firm's clients",
+    "newComunicazione": "New message",
+    "loading": "Loading…",
+    "listEmpty": "No messages.",
+    "retry": "Retry",
+    "urgente": "Urgent",
+    "assegnata": "Assigned",
+    "daPrendere": "Unassigned",
+    "chiusa": "Closed",
+    "backToList": "Back to list",
+    "notFound": "Message not found.",
+    "chiusaHint": "Thread closed: reopen it to reply.",
+    "filters": {
+      "stato": "Status",
+      "daPrendere": "Unassigned",
+      "urgente": "Urgent only"
+    },
+    "filterStato": {
+      "aperte": "Open",
+      "chiuse": "Closed",
+      "tutte": "All"
+    },
+    "form": {
+      "azienda": "Client",
+      "aziendaPlaceholder": "Select client",
+      "referente": "Contact",
+      "referentePlaceholder": "No contact",
+      "oggetto": "Subject",
+      "testo": "Message",
+      "urgente": "Mark as urgent",
+      "submit": "Open thread",
+      "cancel": "Cancel"
+    },
+    "composer": {
+      "fileTooLarge": "File too large (max 20MB).",
+      "placeholder": "Write a message to the client…",
+      "placeholderInterno": "Write an internal note (not visible to the client)…",
+      "notaInterna": "Internal note",
+      "allega": "Attach file",
+      "invia": "Send",
+      "inviaNota": "Add note"
+    },
+    "lato": {
+      "studio": "Firm",
+      "cliente": "Client",
+      "interno": "Internal note"
+    },
+    "actions": {
+      "prendi": "Take charge",
+      "riapri": "Reopen",
+      "chiudi": "Close",
+      "segnaUrgente": "Mark urgent",
+      "rimuoviUrgente": "Unmark urgent",
+      "elimina": "Delete"
     }
   }
 }
