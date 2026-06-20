@@ -106,6 +106,9 @@ export {
   StatoPreventivo,
   UnitaMisura,
   VisibilitaScadenza,
+  ComApertura,
+  ComLato,
+  ComOrigine,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -138,6 +141,10 @@ export type {
   PreventivoVoce,
   Scadenza,
   ScadenzaCategoria,
+  Comunicazione,
+  ComMessaggio,
+  ComAllegato,
+  ComCounter,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------

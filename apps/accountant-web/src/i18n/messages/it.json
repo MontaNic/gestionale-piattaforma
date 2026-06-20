@@ -4,6 +4,7 @@
       "dashboard": "Dashboard",
       "clienti": "Clienti",
       "scadenze": "Scadenze",
+      "comunicazioni": "Comunicazioni",
       "fatture": "Fatture"
     },
     "topbar": {
@@ -309,6 +310,64 @@
         "nome": "Nome",
         "colore": "Colore"
       }
+    }
+  },
+  "comunicazioni": {
+    "listTitle": "Comunicazioni",
+    "listSubtitle": "Thread di messaggi con i clienti dello studio",
+    "newComunicazione": "Nuova comunicazione",
+    "loading": "Caricamento…",
+    "listEmpty": "Nessuna comunicazione.",
+    "retry": "Riprova",
+    "urgente": "Urgente",
+    "assegnata": "Assegnata",
+    "daPrendere": "Da prendere",
+    "chiusa": "Chiusa",
+    "backToList": "Torna all'elenco",
+    "notFound": "Comunicazione non trovata.",
+    "chiusaHint": "Comunicazione chiusa: riaprila per rispondere.",
+    "filters": {
+      "stato": "Stato",
+      "daPrendere": "Da prendere",
+      "urgente": "Solo urgenti"
+    },
+    "filterStato": {
+      "aperte": "Aperte",
+      "chiuse": "Chiuse",
+      "tutte": "Tutte"
+    },
+    "form": {
+      "azienda": "Cliente",
+      "aziendaPlaceholder": "Seleziona cliente",
+      "referente": "Referente",
+      "referentePlaceholder": "Nessun referente",
+      "oggetto": "Oggetto",
+      "testo": "Messaggio",
+      "urgente": "Segna come urgente",
+      "submit": "Apri comunicazione",
+      "cancel": "Annulla"
+    },
+    "composer": {
+      "fileTooLarge": "File troppo grande (max 20MB).",
+      "placeholder": "Scrivi un messaggio al cliente…",
+      "placeholderInterno": "Scrivi una nota interna (non visibile al cliente)…",
+      "notaInterna": "Nota interna",
+      "allega": "Allega file",
+      "invia": "Invia",
+      "inviaNota": "Aggiungi nota"
+    },
+    "lato": {
+      "studio": "Studio",
+      "cliente": "Cliente",
+      "interno": "Nota interna"
+    },
+    "actions": {
+      "prendi": "Prendi in carico",
+      "riapri": "Riapri",
+      "chiudi": "Chiudi",
+      "segnaUrgente": "Segna urgente",
+      "rimuoviUrgente": "Rimuovi urgente",
+      "elimina": "Elimina"
     }
   }
 }

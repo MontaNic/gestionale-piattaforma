@@ -61,6 +61,20 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_SCADENZA_CATEGORIA_NOT_FOUND: 'Categoria non trovata o non accessibile.',
   // Conflitto runtime (uniqueness per-tenant): non preventibile dalla zod client.
   E_SCADENZA_CATEGORIA_NOME_EXISTS: 'Esiste già una categoria con questo nome.',
+
+  // Dominio comunicazioni (ADR-0043). Codici runtime: not-found, FK business,
+  // regole thread (chiusa, lato cliente) e allegati. I validation backstop
+  // E_COM_*_INVALID/_REQUIRED/_TOO_LONG sono prevenuti client-side → fallback.
+  E_COM_NOT_FOUND: 'Comunicazione non trovata.',
+  E_COM_AZIENDA_NOT_FOUND: 'Cliente non trovato o non accessibile.',
+  E_COM_REFERENTE_NOT_FOUND: 'Referente non trovato per questo cliente.',
+  E_COM_OPERATORE_NOT_FOUND: 'Operatore non trovato.',
+  E_COM_CHIUSA_NO_REPLY: 'La comunicazione è chiusa: riaprila per rispondere.',
+  E_COM_MSG_NOT_FOUND: 'Messaggio non trovato.',
+  E_COM_MSG_LATO_CLIENTE_FORBIDDEN: 'Non puoi inviare messaggi come cliente.',
+  E_COM_ALLEGATO_NOT_FOUND: 'Allegato non trovato.',
+  E_COM_ALLEGATO_FILE_REQUIRED: 'Nessun file selezionato.',
+  E_ALLEGATO_TOO_LARGE: 'File troppo grande (max 20MB).',
 };
 
 export function messageForErrorCode(code: string): string {
@@ -76,5 +90,15 @@ export function messageForErrorCode(code: string): string {
  */
 export function messageForError(err: unknown): string {
   if (err instanceof ApiError) return messageForErrorCode(err.errorCode);
+  // Errori non-ApiError che espongono comunque un `errorCode` string (es. upload
+  // allegati via fetch raw in comunicazioni-api, fuori dal wrapper api-client).
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'errorCode' in err &&
+    typeof (err as { errorCode: unknown }).errorCode === 'string'
+  ) {
+    return messageForErrorCode((err as { errorCode: string }).errorCode);
+  }
   return FALLBACK_MESSAGE;
 }

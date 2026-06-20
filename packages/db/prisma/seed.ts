@@ -3,7 +3,7 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (37 permessi atomici namespaced)
+//   1. permissions          (39 permessi atomici namespaced)
 //   2. system_role_templates (10 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //   3. scadenze_categorie    (7 categorie piattaforma, tenant_id NULL)
@@ -133,6 +133,18 @@ const PERMISSIONS: PermissionSeed[] = [
     code: 'scadenze.gestisci',
     description: 'Crea/modifica/elimina scadenze e categorie custom',
     category: 'scadenze',
+  },
+
+  // comunicazioni.* (2) — verticale accountant (ADR-0043)
+  {
+    code: 'comunicazioni.visualizza',
+    description: 'Visualizzazione comunicazioni (thread studio↔cliente)',
+    category: 'comunicazioni',
+  },
+  {
+    code: 'comunicazioni.gestisci',
+    description: 'Apri/rispondi/assegna/chiudi comunicazioni e allegati',
+    category: 'comunicazioni',
   },
 
   // comande.* (5)
@@ -295,24 +307,30 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'preventivi.gestisci',
       'scadenze.visualizza',
       'scadenze.gestisci',
+      'comunicazioni.visualizza',
+      'comunicazioni.gestisci',
     ],
   },
   {
     name: 'Segreteria',
-    description: 'Consultazione clienti, preventivi e scadenze (sola lettura).',
+    description: 'Consultazione clienti, preventivi e scadenze + comunicazioni operative.',
     permissionCodes: [
       'anagrafica.cliente.visualizza',
       'preventivi.visualizza',
       'scadenze.visualizza',
+      // La segreteria smista/risponde le comunicazioni: gestione attiva.
+      'comunicazioni.visualizza',
+      'comunicazioni.gestisci',
     ],
   },
   {
     name: 'Praticante',
-    description: 'Sola visualizzazione clienti, preventivi e scadenze.',
+    description: 'Sola visualizzazione clienti, preventivi, scadenze e comunicazioni.',
     permissionCodes: [
       'anagrafica.cliente.visualizza',
       'preventivi.visualizza',
       'scadenze.visualizza',
+      'comunicazioni.visualizza',
     ],
   },
 ];
