@@ -588,6 +588,25 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-19] Modulo Comunicazioni — thread studio↔cliente (ADR-0043)
+
+**Cosa:** canale di comunicazione tracciato tra operatori studio e aziende clienti per il verticale commercialisti. Modello dati riusato dal PHP StudioDesk (non il codice), scope tagliato a MVP **operatore-only** (la UI cliente è livello 2/portale, fuori scope). Corsia FULL → ADR-0043.
+
+**Backend:**
+- 3 model (`Comunicazione`, `ComMessaggio`, `ComAllegato`) + `com_counter`. **DP-N1**: thread ancorato ad azienda+referente, NON a user cliente (`autoreUserId` nullable pre-portale). **DP-N2**: `tenantId` denormalizzato su tutte e 3 → RLS **flat** USING-only+FORCE (forma reale repo, `tenant_id` TEXT, **no `::int`**; niente nesting verso il parent).
+- **`codice` per-tenant** (`COM-0001…`) via counter-row `com_counter`, **`SELECT … FOR UPDATE` nella stessa tx** dell'insert (atomico/seriale per-tenant) + partial-unique soft-delete-aware come backstop (Pattern 42).
+- **`StorageService` astratto** (nuovo, 1° consumer) + impl filesystem locale (cap 20MB; path-safety: guard di shape `<uuid>/<uuid>(.ext)?` + containment `resolve`/`startsWith`, 5 test). I consumer iniettano il token astratto → swap R2 = cambio `useClass`. **TD-storage-platform**: estrarre in `packages/platform` al 2° consumer.
+- **RLS isolation** verificata su tutte e 3 (tenant A insert → tenant B 0/0/0, A 1/1/1; `com_allegati` incluso). Nota: gira via helper RLS (setup super-admin), non sotto `gestionale_app` HTTP end-to-end (TD-BV noto, delegato agli e2e).
+- **+2 permessi** `comunicazioni.gestisci`/`.visualizza` (37→39), forma imperativa; mapping Socio/Collaboratore/Segreteria (gestione) + Praticante (sola lettura).
+
+**Frontend (accountant-web, operatore):** inbox filtrabile + dettaglio thread + composer + allegati (upload/download via fetch raw, l'api-client fa solo JSON) + **note interne** (`lato=interno`) + assegnazione/presa-in-carico + read tracking. Voce Sidebar + i18n it/en + error-codes `E_COM_*`. Niente UI cliente.
+
+**GATE:** typecheck 16/16 ✅ · lint 0 ✅ · test 15/15 task (accountant-api unit 12→17 con i 5 storage path-safety) ✅. Pre-commit security: nessun segreto nei file (solo codice).
+
+**Fuori scope (backlog ADR-0043):** multi-canale telegram/whatsapp/email/sa, `whatsapp_inbound_log`, reazioni, snooze, auto-chiusura cron, AI, firma automatica. **PR feature/comunicazioni-adr-0043** (non ancora mergiata).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].
