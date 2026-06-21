@@ -629,6 +629,29 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 ---
 
+## [2026-06-21] Modulo Circolari MVP — broadcast studio→clienti (ADR-0045, PR #101)
+
+**Cosa:** ultimo modulo del **livello 1 operatore-studio** del verticale commercialisti: comunicazioni broadcast **unidirezionali** studio→clienti. Modello riusato dal PHP StudioDesk (DDL base `07`, non il codice), scope tagliato a MVP. Corsia FULL → ADR-0045. **Chiude il livello 1.**
+
+**Scope (locked a STOP 0/1):** lean — testata + destinatari + macchina di stato. **Defer:** versioning (`13_v2`), AI, Telegram/push, A/B, solleciti+cron, letture/conferma, email, destinatario reparto, rich editor (tutto in ADR-0045 §out-of-scope).
+
+**Backend (accountant-api):**
+- 2 model: `Circolare` (testata + soft-delete) + `CircolareDestinatario` (`tipo` tutti/azienda/utente). **DP-N2**: `tenantId` denormalizzato sui destinatari → RLS **flat** USING-only+FORCE (TEXT no-cast), come comunicazioni/documenti. Nessun counter/codice (le circolari non hanno numerazione naturale).
+- 2 enum: `CircolareStato` (bozza/pubblicata/archiviata), `DestinatarioTipo` (`utente` = **forward** livello 2, rifiutato in validazione → TD-circolari-utente-forward).
+- **Macchina di stato**: `publish` (bozza→pubblicata, setta `pubblicataIl`) / `archive` (pubblicata→archiviata); modifica/elimina solo su bozza → **422** altrove. Destinatari replace-integrale in tx atomica (`withTenantContextAtomicTx`).
+- **+4 permessi** `circolari.{create,publish,archive,read_report}` (**41→45**); `create` = operativo (CRUD bozza), publish/archive transizioni separate, `read_report` forward (no endpoint MVP). Socio/Super Admin via `ALL_PERMISSION_CODES`; Collaboratore solo `create`.
+- **Email alla pubblicazione: DEFER** — `MailService` repo è security-only, manca il framework `notifiche_config`. MVP solo in-app.
+
+**Frontend (accountant-web, operatore):** lista (filtro stato + badge + azioni contestuali gated sui permessi) + form inline crea/modifica (titolo, oggetto, body textarea — no rich editor MVP, priorità, scadenza, destinatari tutti|aziende) + dettaglio read-only. Sidebar + i18n it/en.
+
+**GATE + CI:** typecheck 16/16 ✅ · lint 0 ✅ · **8 unit + 16 e2e** nuovi (CRUD, transizioni, 422 guard, RBAC publish-mancante 403, isolamento cross-tenant) · CI PR #101 verde (incl. Playwright). **Deploy host** allineato (migration `add_circolari` applicata + RLS verificata in DB + seed 45). **Smoke runtime** non-superuser (Collaboratore) confermato via tunnel SSH: create/edit/delete OK, publish → 403.
+
+**Divergenze spec→repo (forma, scope invariato):** id UUID v7 app-side via `id()` (no `generate_ulid()`); seed shape reale `{code,description,category}`; relazioni Tenant/Azienda + FK `tenant_id` (richieste da Prisma); ruoli reali Socio/Collaboratore.
+
+**TD (ADR-0045):** circolari-utente-forward, circolari-render (body come testo, serve sanitizzazione server-side prima di HTML), circolari-letture (livello 2), circolari-email.
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].
