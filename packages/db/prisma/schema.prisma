@@ -68,6 +68,8 @@ model Tenant {
   comCounter        ComCounter?
   documentiTipi     DocumentoTipo[]
   documenti         Documento[]
+  circolari            Circolare[]
+  circolariDestinatari CircolareDestinatario[]
 
   @@map("tenants")
 }
@@ -621,6 +623,7 @@ model Azienda {
   scadenze      Scadenza[]
   comunicazioni Comunicazione[]
   documenti     Documento[]
+  circolariDestinatari CircolareDestinatario[]
 
   @@index([tenantId])
   @@index([tenantId, nome])
@@ -988,4 +991,68 @@ model Documento {
   @@index([tenantId, aziendaId, deletedAt])
   @@index([tipoId])
   @@map("documenti")
+}
+
+// =============================================================================
+// Circolari — broadcast unidirezionale studio→clienti (verticale accountant, ADR-0045)
+// =============================================================================
+// MVP livello 1 (operatore studio): testata + destinatari + macchina di stato
+// bozza→pubblicata→archiviata. `circolari_letture` e `richiede_conferma` DEFER
+// al livello 2 (portale cliente). Email/AI/telegram/versioning/solleciti fuori
+// scope (ADR-0045). tenantId denormalizzato sui destinatari → RLS flat (come
+// comunicazioni DP-N2). Nessun `@default` su id: UUID v7 app-side via `id()`.
+
+enum CircolareStato {
+  bozza
+  pubblicata
+  archiviata
+
+  @@map("circolare_stato")
+}
+
+enum DestinatarioTipo {
+  tutti
+  azienda
+  utente // TD-circolari-utente-forward: enum-value pronto per livello 2, nessuna logica MVP
+
+  @@map("destinatario_tipo")
+}
+
+model Circolare {
+  id           String         @id
+  tenantId     String         @map("tenant_id")
+  titolo       String         @db.VarChar(200)
+  oggettoEmail String         @map("oggetto_email") @db.VarChar(200)
+  bodyHtml     String         @map("body_html")
+  stato        CircolareStato @default(bozza)
+  priorita     Int            @default(0)
+  pubblicataIl DateTime?      @map("pubblicata_il")
+  scadeIl      DateTime?      @map("scade_il")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  destinatari CircolareDestinatario[]
+
+  @@index([tenantId])
+  @@index([tenantId, stato, deletedAt])
+  @@map("circolari")
+}
+
+model CircolareDestinatario {
+  id          String           @id
+  tenantId    String           @map("tenant_id") // denormalizzato (RLS flat, no nesting)
+  circolareId String           @map("circolare_id")
+  tipo        DestinatarioTipo
+  aziendaId   String?          @map("azienda_id") // non-null solo se tipo = azienda (validato nel service)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  circolare Circolare @relation(fields: [circolareId], references: [id], onDelete: Cascade)
+  azienda   Azienda?  @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([circolareId])
+  @@index([tenantId, aziendaId])
+  @@map("circolari_destinatari")
 }

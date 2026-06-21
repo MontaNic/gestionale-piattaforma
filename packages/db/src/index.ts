@@ -111,6 +111,8 @@ export {
   ComOrigine,
   DirezioneDocumento,
   VisibilitaDocumento,
+  CircolareStato,
+  DestinatarioTipo,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -149,6 +151,8 @@ export type {
   ComCounter,
   DocumentoTipo,
   Documento,
+  Circolare,
+  CircolareDestinatario,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
