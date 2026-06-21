@@ -27,6 +27,7 @@ import { PreventiviModule } from './preventivi/preventivi.module';
 import { ScadenzeModule } from './scadenze/scadenze.module';
 import { ComunicazioniModule } from './comunicazioni/comunicazioni.module';
 import { DocumentiModule } from './documenti/documenti.module';
+import { CircolariModule } from './circolari/circolari.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -62,6 +63,8 @@ import { MeModule } from './me/me.module';
     ComunicazioniModule,
     // Documenti: scambio documenti studio↔cliente + tipi platform/custom (ADR-0044).
     DocumentiModule,
+    // Circolari: broadcast unidirezionale studio→clienti + macchina di stato (ADR-0045).
+    CircolariModule,
     // Dashboard KPI aggregati tenant-level (read-only, STOP-dash1).
     DashboardModule,
   ],
