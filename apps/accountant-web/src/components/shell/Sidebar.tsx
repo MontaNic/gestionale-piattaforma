@@ -7,6 +7,7 @@ import {
   CalendarDays,
   FileText,
   LayoutDashboard,
+  Megaphone,
   MessageSquare,
   Receipt,
   Users,
@@ -28,7 +29,14 @@ import { cn } from '@gestionale/ui';
 // =============================================================================
 
 interface NavItem {
-  key: 'dashboard' | 'clienti' | 'scadenze' | 'comunicazioni' | 'documenti' | 'fatture';
+  key:
+    | 'dashboard'
+    | 'clienti'
+    | 'scadenze'
+    | 'comunicazioni'
+    | 'documenti'
+    | 'circolari'
+    | 'fatture';
   href: string;
   icon: LucideIcon;
 }
@@ -39,6 +47,7 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'scadenze', icon: CalendarDays },
   { key: 'comunicazioni', icon: MessageSquare },
   { key: 'documenti', icon: FileText },
+  { key: 'circolari', icon: Megaphone },
   { key: 'fatture', icon: Receipt },
 ] as const;
 

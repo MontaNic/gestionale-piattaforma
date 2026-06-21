@@ -159,6 +159,28 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'documenti',
   },
 
+  // circolari.* (4) — verticale accountant, broadcast studio→clienti (ADR-0045)
+  {
+    code: 'circolari.create',
+    description: 'Crea e modifica bozze circolari',
+    category: 'circolari',
+  },
+  {
+    code: 'circolari.publish',
+    description: 'Pubblica circolari (bozza → pubblicata)',
+    category: 'circolari',
+  },
+  {
+    code: 'circolari.archive',
+    description: 'Archivia circolari pubblicate',
+    category: 'circolari',
+  },
+  {
+    code: 'circolari.read_report',
+    description: 'Visualizza report destinatari delle circolari',
+    category: 'circolari',
+  },
+
   // comande.* (5)
   { code: 'comande.crea', description: 'Creazione comande', category: 'comande' },
   {
@@ -323,6 +345,9 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'comunicazioni.gestisci',
       'documenti.visualizza',
       'documenti.gestisci',
+      // Circolari: il collaboratore crea/modifica bozze; publish/archive/report
+      // restano a Socio/Direzione (ADR-0045 §3).
+      'circolari.create',
     ],
   },
   {

@@ -6,7 +6,8 @@
       "scadenze": "Scadenze",
       "comunicazioni": "Comunicazioni",
       "documenti": "Documenti",
-      "fatture": "Fatture"
+      "fatture": "Fatture",
+      "circolari": "Circolari"
     },
     "topbar": {
       "openMenu": "Apri menu",
@@ -407,6 +408,62 @@
       "body": "Eliminare il documento \"{nome}\"? L'operazione è reversibile (soft-delete).",
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
+    }
+  },
+  "circolari": {
+    "listTitle": "Circolari",
+    "listSubtitle": "Comunicazioni broadcast dello studio verso i clienti.",
+    "newCircolare": "Nuova circolare",
+    "loading": "Caricamento…",
+    "listEmpty": "Nessuna circolare. Creane una con \"Nuova circolare\".",
+    "filters": {
+      "stato": "Stato",
+      "all": "Tutte"
+    },
+    "stato": {
+      "bozza": "Bozza",
+      "pubblicata": "Pubblicata",
+      "archiviata": "Archiviata"
+    },
+    "table": {
+      "titolo": "Titolo",
+      "stato": "Stato",
+      "priorita": "Priorità",
+      "pubblicataIl": "Pubblicata il",
+      "scadeIl": "Scade il",
+      "azioni": "Azioni"
+    },
+    "actions": {
+      "edit": "Modifica",
+      "publish": "Pubblica",
+      "archive": "Archivia",
+      "delete": "Elimina"
+    },
+    "confirm": {
+      "deleteTitle": "Eliminare la circolare?",
+      "deleteDescription": "La bozza verrà eliminata. L'operazione non è reversibile."
+    },
+    "destTuttiLabel": "Tutti i clienti",
+    "detail": {
+      "back": "Torna alle circolari",
+      "destinatari": "Destinatari",
+      "contenuto": "Contenuto"
+    },
+    "form": {
+      "titolo": "Titolo",
+      "oggettoEmail": "Oggetto email",
+      "bodyHtml": "Contenuto",
+      "priorita": "Priorità",
+      "scadeIl": "Scade il",
+      "destinatari": "Destinatari",
+      "destTutti": "Tutti i clienti",
+      "destAziende": "Aziende specifiche",
+      "noAziende": "Nessuna azienda disponibile.",
+      "cancel": "Annulla",
+      "save": "Salva",
+      "saving": "Salvataggio…",
+      "errorRequired": "Titolo, oggetto e contenuto sono obbligatori.",
+      "errorDestinatari": "Seleziona almeno un destinatario."
     }
   }
 }

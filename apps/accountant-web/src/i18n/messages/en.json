@@ -6,7 +6,8 @@
       "scadenze": "Deadlines",
       "comunicazioni": "Messages",
       "documenti": "Documents",
-      "fatture": "Invoices"
+      "fatture": "Invoices",
+      "circolari": "Circulars"
     },
     "topbar": {
       "openMenu": "Open menu",
@@ -407,6 +408,62 @@
       "body": "Delete document \"{nome}\"? This is reversible (soft-delete).",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
+    }
+  },
+  "circolari": {
+    "listTitle": "Circulars",
+    "listSubtitle": "Broadcast announcements from the studio to its clients.",
+    "newCircolare": "New circular",
+    "loading": "Loading…",
+    "listEmpty": "No circulars yet. Create one with \"New circular\".",
+    "filters": {
+      "stato": "Status",
+      "all": "All"
+    },
+    "stato": {
+      "bozza": "Draft",
+      "pubblicata": "Published",
+      "archiviata": "Archived"
+    },
+    "table": {
+      "titolo": "Title",
+      "stato": "Status",
+      "priorita": "Priority",
+      "pubblicataIl": "Published on",
+      "scadeIl": "Expires on",
+      "azioni": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "publish": "Publish",
+      "archive": "Archive",
+      "delete": "Delete"
+    },
+    "confirm": {
+      "deleteTitle": "Delete this circular?",
+      "deleteDescription": "The draft will be deleted. This action cannot be undone."
+    },
+    "destTuttiLabel": "All clients",
+    "detail": {
+      "back": "Back to circulars",
+      "destinatari": "Recipients",
+      "contenuto": "Content"
+    },
+    "form": {
+      "titolo": "Title",
+      "oggettoEmail": "Email subject",
+      "bodyHtml": "Content",
+      "priorita": "Priority",
+      "scadeIl": "Expires on",
+      "destinatari": "Recipients",
+      "destTutti": "All clients",
+      "destAziende": "Specific companies",
+      "noAziende": "No companies available.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "errorRequired": "Title, subject and content are required.",
+      "errorDestinatari": "Select at least one recipient."
     }
   }
 }
