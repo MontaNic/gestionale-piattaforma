@@ -22,6 +22,7 @@ import { useAuth } from '@gestionale/auth-web';
 const NAV: ReadonlyArray<{ key: string; label: string }> = [
   { key: '', label: 'Home' },
   { key: 'documenti', label: 'Documenti' },
+  { key: 'comunicazioni', label: 'Comunicazioni' },
 ];
 
 export function PortaleShell({ children }: { children: ReactNode }): JSX.Element {
