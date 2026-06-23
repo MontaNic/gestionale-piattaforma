@@ -76,6 +76,11 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_COM_ALLEGATO_FILE_REQUIRED: 'Nessun file selezionato.',
   E_ALLEGATO_TOO_LARGE: 'File troppo grande (max 20MB).',
 
+  // Portale cliente comunicazioni (ADR-0047). Guard fail-closed se un principal
+  // non-cliente raggiunge /portale/comunicazioni (di norma già bloccato dalla
+  // PermissionsGuard, questo è il messaggio di cortesia).
+  E_PORTALE_COMUNICAZIONI_FORBIDDEN: 'Accesso riservato agli utenti del portale.',
+
   // Dominio documenti (ADR-0044). Codici runtime: not-found, FK business, tipo
   // duplicato, file mancante. I validation backstop E_DOCUMENTO_*_INVALID/
   // _REQUIRED/_TOO_LONG sono prevenuti client-side → fallback generico.
