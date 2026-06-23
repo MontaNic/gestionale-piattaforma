@@ -96,6 +96,8 @@ export { PrismaClient, Prisma };
 
 export {
   DeviceType,
+  UserTipo,
+  ClienteRuolo,
   Allergen,
   DietaryTag,
   PrintDepartment,

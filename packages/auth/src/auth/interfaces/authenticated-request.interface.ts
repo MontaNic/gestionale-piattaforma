@@ -6,6 +6,7 @@
 // =============================================================================
 
 import type { Request } from 'express';
+import type { ClienteRuolo, UserTipo } from '@gestionale/db';
 
 export interface AuthenticatedUser {
   id: string;
@@ -14,6 +15,11 @@ export interface AuthenticatedUser {
   firstName: string;
   lastName: string;
   isActive: boolean;
+  // [livello 2 — portale cliente, ADR-0046] discriminatore + scoping azienda.
+  // aziendaId/clienteRuolo valorizzati solo per tipo='cliente' (CHECK DB).
+  tipo: UserTipo;
+  aziendaId: string | null;
+  clienteRuolo: ClienteRuolo | null;
 }
 
 export interface AuthenticatedRequest extends Request {

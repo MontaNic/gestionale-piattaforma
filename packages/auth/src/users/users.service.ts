@@ -7,6 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { prisma } from '@gestionale/db';
+import type { ClienteRuolo, UserTipo } from '@gestionale/db';
 
 export interface FullProfile {
   user: {
@@ -18,6 +19,11 @@ export interface FullProfile {
     isActive: boolean;
     lastLoginAt: Date | null;
     emailVerifiedAt: Date | null;
+    // [livello 2 — portale cliente, ADR-0046] discriminatore + scoping azienda,
+    // serviti a /me per il routing FE (operatore → back-office, cliente → portale).
+    tipo: UserTipo;
+    aziendaId: string | null;
+    clienteRuolo: ClienteRuolo | null;
   };
   roles: { id: string; name: string; sedeId: string | null }[];
   permissions: string[];
@@ -167,6 +173,9 @@ export class UsersService {
         isActive: user.isActive,
         lastLoginAt: user.lastLoginAt,
         emailVerifiedAt: user.emailVerifiedAt,
+        tipo: user.tipo,
+        aziendaId: user.aziendaId,
+        clienteRuolo: user.clienteRuolo,
       },
       roles: rolesFlat,
       permissions: [...permissionsSet].sort(),

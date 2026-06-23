@@ -24,12 +24,14 @@
 import argon2 from 'argon2';
 
 import {
+  ClienteRuolo,
   id,
   prisma,
   RuoloReferente,
   StatoPreventivo,
   TipoCliente,
   UnitaMisura,
+  UserTipo,
   withSystemContext,
 } from '../src/index';
 
@@ -44,6 +46,9 @@ interface PermissionSeed {
   description: string;
   category: string;
   isPreF2?: boolean;
+  // [livello 2 — portale cliente, ADR-0046 §6] permesso cliente-facing: escluso
+  // dai template studio ("tutti i permessi"), assegnato solo al ruolo "Cliente".
+  isPortale?: boolean;
 }
 
 const PERMISSIONS: PermissionSeed[] = [
@@ -231,6 +236,17 @@ const PERMISSIONS: PermissionSeed[] = [
 
   // ai.* (1) — [PRE F2]
   { code: 'ai.assistant.usa', description: 'Uso AI Assistant', category: 'ai', isPreF2: true },
+
+  // portale.* (1) — [livello 2 — portale cliente, ADR-0046 §6]
+  // Cliente-facing: consumer reale nel task Documenti read-only. Seedato forward
+  // (come circolari.read_report di ADR-0045): il permesso esiste, l'endpoint
+  // arriva col task successivo.
+  {
+    code: 'portale.documenti.visualizza',
+    description: 'Visualizzazione documenti della propria azienda (portale cliente)',
+    category: 'portale',
+    isPortale: true,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -242,8 +258,10 @@ interface RoleTemplateSeed {
   permissionCodes: string[];
 }
 
-// Helper: tutti i codici permission del catalog.
-const ALL_PERMISSION_CODES = PERMISSIONS.map((p) => p.code);
+// Helper: tutti i codici permission del catalog STUDIO (esclusi i portale.*,
+// cliente-facing — ADR-0046 §6). I template studio "tutti i permessi" (Super
+// Admin / Admin sede / Socio) NON devono ricevere permessi del portale cliente.
+const ALL_PERMISSION_CODES = PERMISSIONS.filter((p) => !p.isPortale).map((p) => p.code);
 
 const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   {
@@ -375,6 +393,16 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'comunicazioni.visualizza',
       'documenti.visualizza',
     ],
+  },
+  // [livello 2 — portale cliente, ADR-0046 §6] Ruolo degli utenti-portale
+  // (tipo=cliente). Raccoglie i soli permessi portale.* — nessun permesso studio.
+  // Task 1: solo lettura documenti della propria azienda (consumer reale nel
+  // task Documenti). I poteri admin-azienda (cliente_ruolo='admin') arrivano coi
+  // task successivi e non sono mappati su permessi globali.
+  {
+    name: 'Cliente',
+    description: 'Utente del portale cliente: accesso ai dati della propria azienda.',
+    permissionCodes: ['portale.documenti.visualizza'],
   },
 ];
 
@@ -1060,6 +1088,104 @@ async function seedDevCollaboratore(tenantId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Cliente demo del portale (ADR-0046 DP-defer §7): l'onboarding reale è via
+// invito (differito), qui seedo direttamente un utente tipo=cliente legato a
+// un'azienda demo per la verifica runtime del portale ruolo-cliente.
+// Pattern identico a seedDevCollaboratore. Idempotente.
+// ─────────────────────────────────────────────────────────────────────────────
+async function seedDevClientePortale(tenantId: string): Promise<void> {
+  const ROLE_NAME = 'Cliente';
+  const EMAIL = 'cliente@studio-demo.local';
+  const AZIENDA_CODICE = 'AZ001'; // Rossi Costruzioni S.r.l. (seedDevAziende)
+
+  // 0. Azienda di appartenenza: lookup naturale per codice (deve esistere —
+  // seedDevAziende gira prima in main()). Senza azienda il CHECK DB
+  // chk_cliente_azienda_id rifiuterebbe un cliente orfano (ADR-0046 §2).
+  const azienda = await prisma.azienda.findFirst({
+    where: { tenantId, codice: AZIENDA_CODICE },
+  });
+  if (!azienda)
+    throw new Error(`Azienda demo '${AZIENDA_CODICE}' missing (run seedDevAziende first)`);
+
+  // 1. Template "Cliente" + i suoi permessi (seedati a monte in main()).
+  const tpl = await prisma.systemRoleTemplate.findUnique({ where: { name: ROLE_NAME } });
+  if (!tpl) throw new Error(`System template '${ROLE_NAME}' missing`);
+  const tplPermissions = await prisma.systemRoleTemplatePermission.findMany({
+    where: { templateId: tpl.id },
+  });
+
+  // 2. User tipo=cliente (find-then-create su tenantId+email). aziendaId NOT NULL
+  // + clienteRuolo=admin (auto-promote: primo utente azienda → admin, legacy).
+  const passwordHash = await argon2.hash('Cliente123!', { type: argon2.argon2id });
+  const user = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId, email: EMAIL } },
+    create: {
+      id: id(),
+      tenantId,
+      email: EMAIL,
+      passwordHash,
+      firstName: 'Cliente',
+      lastName: 'Rossi',
+      isActive: true,
+      tipo: UserTipo.cliente,
+      aziendaId: azienda.id,
+      clienteRuolo: ClienteRuolo.admin,
+    },
+    update: {
+      passwordHash,
+      isActive: true,
+      tipo: UserTipo.cliente,
+      aziendaId: azienda.id,
+      clienteRuolo: ClienteRuolo.admin,
+    },
+  });
+  console.log(`  User '${EMAIL}': ${user.id} (cliente → azienda ${AZIENDA_CODICE})`);
+
+  // 3. Role "Cliente" tenant-scoped (clone dal template). TD-BZ: find-then-create.
+  const roleData = { description: tpl.description, isSystem: true };
+  const existingRole = await prisma.role.findFirst({ where: { tenantId, name: ROLE_NAME } });
+  const role = existingRole
+    ? await prisma.role.update({ where: { id: existingRole.id }, data: roleData })
+    : await prisma.role.create({
+        data: { id: id(), tenantId, name: ROLE_NAME, ...roleData },
+      });
+  console.log(`  Role '${ROLE_NAME}' (studio-demo): ${role.id}`);
+
+  // 4. Copia mappings template -> role_permissions.
+  let rolePermCreated = 0;
+  let rolePermSkipped = 0;
+  for (const tp of tplPermissions) {
+    const existing = await prisma.rolePermission.findUnique({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: tp.permissionId } },
+    });
+    if (existing) {
+      rolePermSkipped++;
+    } else {
+      await prisma.rolePermission.create({
+        data: { roleId: role.id, permissionId: tp.permissionId },
+      });
+      rolePermCreated++;
+    }
+  }
+  console.log(
+    `  role_permissions (${ROLE_NAME} studio-demo): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
+  );
+
+  // 5. Assignment user -> Cliente tenant-wide (sede_id NULL).
+  const existingAssignment = await prisma.userRole.findFirst({
+    where: { userId: user.id, roleId: role.id, sedeId: null },
+  });
+  if (!existingAssignment) {
+    await prisma.userRole.create({
+      data: { id: id(), userId: user.id, roleId: role.id, sedeId: null },
+    });
+    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) created`);
+  } else {
+    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) already exists`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Categorie scadenze piattaforma (STOP-scad1) — tenant_id NULL, immutabili.
 // Reference data globale (come permissions): seedate sempre, non dev-only.
 // Idempotente: find-then-create su `nome` WHERE tenant_id IS NULL (la
@@ -1367,6 +1493,7 @@ async function main(): Promise<void> {
     await seedDevReferenti(studio.tenantId);
     await seedDevPreventivi(studio.tenantId);
     await seedDevCollaboratore(studio.tenantId);
+    await seedDevClientePortale(studio.tenantId);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
@@ -1397,6 +1524,7 @@ async function main(): Promise<void> {
     console.log(`    - acme  (manager@acme.local / Manager123!)`);
     console.log(`    - studio-demo  (admin@studio.local / Studio123!)`);
     console.log(`        + collaboratore@studio.local / Collaboratore123! (ruolo Collaboratore)`);
+    console.log(`        + cliente@studio-demo.local / Cliente123! (portale cliente → AZ001)`);
   }
   console.log('  ✅ Seed completato (idempotente).');
 }
