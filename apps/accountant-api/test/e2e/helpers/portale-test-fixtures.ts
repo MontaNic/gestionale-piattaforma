@@ -34,6 +34,8 @@ export async function seedClientePortale(
     email?: string;
     password?: string;
     aziendaCodice?: string;
+    /** Permessi del ruolo "Cliente" (default: solo portale.documenti.visualizza). */
+    codes?: readonly string[];
   },
 ): Promise<ClientePortaleResult> {
   const { Client } = await import('pg');
@@ -71,12 +73,12 @@ export async function seedClientePortale(
     await client.end();
   }
 
-  // 3. Ruolo "Cliente" tenant-scoped con il solo permesso portale.*.
+  // 3. Ruolo "Cliente" tenant-scoped con i permessi portale.* richiesti.
   await seedAziendePermissions(databaseUrl, {
     tenantId: opts.tenantId,
     userId,
     roleName: 'Cliente',
-    codes: [...PORTALE_CLIENTE_CODES],
+    codes: [...(opts.codes ?? PORTALE_CLIENTE_CODES)],
   });
 
   return { userId, aziendaId, email, password };

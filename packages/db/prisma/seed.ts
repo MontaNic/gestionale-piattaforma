@@ -263,6 +263,17 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'portale',
     isPortale: true,
   },
+  // portale.circolari.* (1) — [livello 2 — portale cliente, ADR-0048]
+  // Lettore circolari lato cliente: read + markLetta on-open + conferma. Permesso
+  // unico (conferma è comunque gated dal flag richiedeConferma della testata) →
+  // attiva il consumer reale di circolari_letture + richiede_conferma (deferiti
+  // dall'MVP ADR-0045 §6). read_report lato studio resta forward (task a sé).
+  {
+    code: 'portale.circolari.visualizza',
+    description: 'Visualizzazione circolari della propria azienda (portale cliente)',
+    category: 'portale',
+    isPortale: true,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -422,6 +433,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'portale.documenti.visualizza',
       'portale.comunicazioni.visualizza',
       'portale.comunicazioni.rispondi',
+      'portale.circolari.visualizza',
     ],
   },
 ];
