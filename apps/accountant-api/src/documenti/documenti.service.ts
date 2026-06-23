@@ -19,7 +19,14 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { type Documento, type DocumentoTipo, VisibilitaDocumento, id } from '@gestionale/db';
+import {
+  ClienteRuolo,
+  type Documento,
+  type DocumentoTipo,
+  type Prisma,
+  VisibilitaDocumento,
+  id,
+} from '@gestionale/db';
 import { DbService } from '@gestionale/db/nest';
 import { catchUniqueViolation, StorageService } from '@gestionale/platform';
 
@@ -30,6 +37,23 @@ export interface DocumentiListFilter {
   aziendaId?: string;
   tipoId?: string;
   visibilita?: VisibilitaDocumento;
+}
+
+/**
+ * Vista read-only di un documento per il portale cliente (ADR-0046). Espone solo
+ * i campi consultabili dal cliente: NIENTE `storageKey` (chiave opaca interna),
+ * `createdBy` (user studio) o `tenantId`. `tipoNome` è denormalizzato dal join
+ * così il FE cliente non deve interrogare il catalogo tipi (cui non ha permesso).
+ */
+export interface ClienteDocumentoView {
+  id: string;
+  nomeOriginale: string;
+  mimeType: string;
+  dimensione: number;
+  visibilita: VisibilitaDocumento;
+  note: string | null;
+  createdAt: Date;
+  tipoNome: string;
 }
 
 @Injectable()
@@ -103,6 +127,76 @@ export class DocumentiService {
     }
     const object = await this.storage.get(documento.storageKey, documento.mimeType);
     return { documento, object };
+  }
+
+  // ── Lettore cliente (portale, ADR-0046) ─────────────────────────────────────
+  // Scoping azienda app-level (ADR-0046 §3): l'RLS resta tenant-flat, il filtro
+  // per-azienda lo applica il service col `aziendaId` portato dal principal. La
+  // `visibilita` modula l'accesso intra-azienda: `tutti` → ogni utente-portale
+  // dell'azienda; `azienda` → solo i clienteRuolo='admin'. L'enum `utente`
+  // (targeting per-utente) è ancora forward e non filtra qui. I soft-deleted sono
+  // esclusi dalla softDeleteExtension (il where non menziona `deletedAt`).
+
+  async listForCliente(
+    tenantId: string,
+    aziendaId: string,
+    clienteRuolo: ClienteRuolo | null,
+  ): Promise<ClienteDocumentoView[]> {
+    const documenti = await this.db.prisma.documento.findMany({
+      where: this.clienteWhere(tenantId, aziendaId, clienteRuolo),
+      orderBy: { createdAt: 'desc' },
+      include: { tipo: { select: { nome: true } } },
+    });
+    return documenti.map((d) => this.toClienteView(d));
+  }
+
+  async getForDownloadCliente(
+    tenantId: string,
+    aziendaId: string,
+    clienteRuolo: ClienteRuolo | null,
+    documentoId: string,
+  ) {
+    // ACL DENTRO la query: un documento fuori dalla visibilità del cliente è
+    // indistinguibile da uno inesistente (404), niente leak per id indovinato.
+    const documento = await this.db.prisma.documento.findFirst({
+      where: { ...this.clienteWhere(tenantId, aziendaId, clienteRuolo), id: documentoId },
+    });
+    if (!documento) {
+      throw new NotFoundException({
+        errorCode: 'E_DOCUMENTO_NOT_FOUND',
+        message: 'Documento not found',
+      });
+    }
+    const object = await this.storage.get(documento.storageKey, documento.mimeType);
+    return { documento, object };
+  }
+
+  // Predicato di visibilità cliente condiviso da list/download (single source of
+  // truth dell'ACL). admin → tutti+azienda (nessun filtro visibilita); altrimenti
+  // solo `tutti`.
+  private clienteWhere(
+    tenantId: string,
+    aziendaId: string,
+    clienteRuolo: ClienteRuolo | null,
+  ): Prisma.DocumentoWhereInput {
+    return {
+      tenantId,
+      aziendaId,
+      ...(clienteRuolo === ClienteRuolo.admin ? {} : { visibilita: VisibilitaDocumento.tutti }),
+    };
+  }
+
+  private toClienteView(d: Documento & { tipo: { nome: string } }): ClienteDocumentoView {
+    return {
+      id: d.id,
+      nomeOriginale: d.nomeOriginale,
+      mimeType: d.mimeType,
+      dimensione: d.dimensione,
+      visibilita: d.visibilita,
+      note: d.note,
+      createdAt: d.createdAt,
+      tipoNome: d.tipo.nome,
+    };
   }
 
   async softDelete(tenantId: string, documentoId: string): Promise<{ id: string; deleted: true }> {
