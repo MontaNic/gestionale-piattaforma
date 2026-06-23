@@ -46,7 +46,8 @@ e richiede la risoluzione del set destinatari (`tutti`→tutti i clienti del ten
 Si attivano i due deferral di ADR-0045 §6:
 
 - `Circolare.richiedeConferma` (`Boolean @default(false)`, ALTER su `circolari`):
-  authoring lato studio (create/update), consumato dal lettore portale.
+  authoring lato studio (create/update DTO+service **e checkbox nella
+  `CircolareForm`**), consumato dal lettore portale.
 - `CircolareLettura` (nuova tabella `circolari_letture`): una riga per
   `(circolare, utente-cliente)` con `lettaAt` (markLetta on-open) e `confermataAt?`
   (presa-visione). `@@unique([circolareId, userId])` — gemello dello `UNIQUE
@@ -129,10 +130,6 @@ finché manca la sanitizzazione server-side → **TD-circolari-render** di ADR-0
 
 ### Negative / Trade-off
 
-- **Authoring `richiedeConferma` non ancora esposto nel form operatore studio**: il
-  campo è settabile via API (DTO+service), ma la `CircolareForm` lato studio non ha
-  la checkbox → in produzione un operatore non può ancora creare dal solo UI una
-  circolare con conferma richiesta. Aggiunta minima rinviata (vedi Tech debt).
 - Conferma con permesso unico (no `portale.circolari.conferma` dedicato): scelta di
   semplicità MVP, la conferma resta gated dal flag di testata.
 
@@ -150,9 +147,6 @@ del body · download allegati (l'MVP circolari è testo-only, ADR-0045).
 
 ## Tech debt
 
-- **TD-circolari-conferma-form**: esporre `richiedeConferma` nella `CircolareForm`
-  lato studio (checkbox), così l'autoring della conferma è completo da UI e non
-  solo via API.
 - **TD-circolari-read-report**: endpoint studio `GET /circolari/:id/report` +
   risoluzione del set destinatari atteso × stato lettura/conferma (consumer del
   permesso `circolari.read_report` già seedato).

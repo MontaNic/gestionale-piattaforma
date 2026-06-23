@@ -25,6 +25,7 @@ export interface Circolare {
   bodyHtml: string;
   stato: CircolareStato;
   priorita: number;
+  richiedeConferma: boolean;
   pubblicataIl: string | null;
   scadeIl: string | null;
   createdAt: string;
@@ -48,6 +49,7 @@ export interface CreateCircolareInput {
   bodyHtml: string;
   priorita?: number;
   scadeIl?: string;
+  richiedeConferma?: boolean;
   destinatari: CreateDestinatarioInput[];
 }
 
@@ -57,5 +59,6 @@ export interface UpdateCircolareInput {
   bodyHtml?: string;
   priorita?: number;
   scadeIl?: string;
+  richiedeConferma?: boolean;
   destinatari?: CreateDestinatarioInput[];
 }

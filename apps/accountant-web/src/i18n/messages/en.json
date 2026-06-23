@@ -455,6 +455,7 @@
       "bodyHtml": "Content",
       "priorita": "Priority",
       "scadeIl": "Expires on",
+      "richiedeConferma": "Require read confirmation",
       "destinatari": "Recipients",
       "destTutti": "All clients",
       "destAziende": "Specific companies",
