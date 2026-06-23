@@ -45,29 +45,29 @@ model Tenant {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  sedi              Sede[]
-  users             User[]
-  roles             Role[]
-  auditLogs         AuditLog[]
-  menus             Menu[]
-  menuCategories    MenuCategory[]
-  articles          Article[]
-  priceLists        PriceList[]
-  articlePrices     ArticlePrice[]
-  recipes           Recipe[]
-  pricingRules      PricingRule[]
-  aziende           Azienda[]
-  referenti         Referente[]
-  preventivi        Preventivo[]
-  preventiviVoci    PreventivoVoce[]
-  scadenze          Scadenza[]
-  scadenzeCategorie ScadenzaCategoria[]
-  comunicazioni     Comunicazione[]
-  comMessaggi       ComMessaggio[]
-  comAllegati       ComAllegato[]
-  comCounter        ComCounter?
-  documentiTipi     DocumentoTipo[]
-  documenti         Documento[]
+  sedi                 Sede[]
+  users                User[]
+  roles                Role[]
+  auditLogs            AuditLog[]
+  menus                Menu[]
+  menuCategories       MenuCategory[]
+  articles             Article[]
+  priceLists           PriceList[]
+  articlePrices        ArticlePrice[]
+  recipes              Recipe[]
+  pricingRules         PricingRule[]
+  aziende              Azienda[]
+  referenti            Referente[]
+  preventivi           Preventivo[]
+  preventiviVoci       PreventivoVoce[]
+  scadenze             Scadenza[]
+  scadenzeCategorie    ScadenzaCategoria[]
+  comunicazioni        Comunicazione[]
+  comMessaggi          ComMessaggio[]
+  comAllegati          ComAllegato[]
+  comCounter           ComCounter?
+  documentiTipi        DocumentoTipo[]
+  documenti            Documento[]
   circolari            Circolare[]
   circolariDestinatari CircolareDestinatario[]
 
@@ -103,6 +103,27 @@ model Sede {
 // Identity: User (vive a livello tenant; ruoli per-sede via UserRole.sedeId)
 // =============================================================================
 
+// [livello 2 — portale cliente, ADR-0046] Discriminatore single-table:
+// operatore = utente interno studio (default → backfill implicito sugli esistenti);
+// cliente   = utente del portale, sempre legato a una azienda (vedi CHECK
+//             chk_cliente_azienda_id nella migration add_portale_cliente_identity).
+enum UserTipo {
+  operatore
+  cliente
+
+  @@map("user_tipo")
+}
+
+// Ruolo del cliente DENTRO la propria azienda (legacy `users.cliente_ruolo`).
+// admin = gestisce anagrafica/referenti/inviti della propria azienda (task
+// successivi); utente = standard. Nullo per gli operatori.
+enum ClienteRuolo {
+  admin
+  utente
+
+  @@map("cliente_ruolo")
+}
+
 model User {
   id                  String    @id
   tenantId            String    @map("tenant_id")
@@ -115,6 +136,12 @@ model User {
   lastLoginAt         DateTime? @map("last_login_at")
   failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
   isActive            Boolean   @default(true) @map("is_active")
+
+  // [livello 2 — portale cliente, ADR-0046] identità operatore vs cliente.
+  // Invariante DB: tipo='cliente' ⟺ aziendaId NOT NULL (CHECK chk_cliente_azienda_id).
+  tipo         UserTipo      @default(operatore)
+  aziendaId    String?       @map("azienda_id")
+  clienteRuolo ClienteRuolo? @map("cliente_ruolo")
 
   // [PRE F2] — campi predisposti, non attivati in F1
   totpSecret String?   @map("totp_secret") // 2FA TOTP
@@ -131,6 +158,10 @@ model User {
   assignedRoles UserRole[] @relation("UserRoleAssignedBy")
   sessions      Session[]
   auditLogs     AuditLog[]
+  // [livello 2 — portale cliente, ADR-0046] azienda di appartenenza (solo
+  // tipo=cliente). CASCADE: eliminare l'azienda elimina i suoi utenti-portale
+  // (divergenza dal legacy SET NULL, incompatibile con il CHECK §2 ADR-0046).
+  azienda       Azienda?   @relation("AziendaUtentiPortale", fields: [aziendaId], references: [id], onDelete: Cascade)
 
   // Comunicazioni: operatore assegnato a un thread + autore di un messaggio.
   comunicazioniAssegnate Comunicazione[] @relation("ComOperatore")
@@ -141,6 +172,7 @@ model User {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
+  @@index([aziendaId])
   @@map("users")
 }
 
@@ -617,13 +649,15 @@ model Azienda {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  referenti     Referente[]
-  preventivi    Preventivo[]
-  scadenze      Scadenza[]
-  comunicazioni Comunicazione[]
-  documenti     Documento[]
+  tenant               Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  referenti            Referente[]
+  preventivi           Preventivo[]
+  scadenze             Scadenza[]
+  comunicazioni        Comunicazione[]
+  documenti            Documento[]
   circolariDestinatari CircolareDestinatario[]
+  // [livello 2 — portale cliente, ADR-0046] utenti-portale di questa azienda.
+  utentiPortale        User[]                  @relation("AziendaUtentiPortale")
 
   @@index([tenantId])
   @@index([tenantId, nome])

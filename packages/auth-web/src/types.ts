@@ -6,6 +6,10 @@ export interface LoginResponse {
   };
 }
 
+// [livello 2 — portale cliente, ADR-0046] discriminatore identità (wire = stringa).
+export type UserTipo = 'operatore' | 'cliente';
+export type ClienteRuolo = 'admin' | 'utente';
+
 export interface MeUser {
   id: string;
   tenantId: string;
@@ -15,6 +19,10 @@ export interface MeUser {
   isActive: boolean;
   lastLoginAt: string | null;
   emailVerifiedAt: string | null;
+  // [livello 2 — portale cliente, ADR-0046] routing FE per tipo + scoping azienda.
+  tipo: UserTipo;
+  aziendaId: string | null;
+  clienteRuolo: ClienteRuolo | null;
 }
 
 export interface MeRole {

@@ -11,8 +11,8 @@ import { Button } from '@gestionale/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@gestionale/ui';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@gestionale/ui';
 import { Input } from '@gestionale/ui';
-import { apiPost, ApiError } from '@gestionale/api-client';
-import { setTokens, type LoginResponse } from '@gestionale/auth-web';
+import { apiGet, apiPost, ApiError } from '@gestionale/api-client';
+import { setTokens, type LoginResponse, type MeResponse } from '@gestionale/auth-web';
 import { messageForErrorCode } from '@/lib/error-codes';
 
 // TD-2 ADR-0012 resolution: slug runtime da URL (`/t/<slug>/login`) via
@@ -42,7 +42,12 @@ export default function LoginPage() {
     try {
       const response = await apiPost<LoginResponse>('/auth/login', values, { tenantSlug });
       setTokens(response.data.accessToken, response.data.refreshToken);
-      router.push(`/t/${tenantSlug}/dashboard`);
+      // [ADR-0046 §4] Login unico, redirect post-login per tipo: operatore →
+      // back-office studio, cliente → portale. Lo shape del JWT resta minimal →
+      // il tipo arriva da /me (fresh).
+      const me = await apiGet<MeResponse>('/me', { accessToken: response.data.accessToken });
+      const dest = me.data.user.tipo === 'cliente' ? 'portale' : 'dashboard';
+      router.push(`/t/${tenantSlug}/${dest}`);
     } catch (err) {
       if (err instanceof ApiError) {
         // TD-AJ: backend emette errorCode esplicito (auth.service.throwInvalidCredentials).

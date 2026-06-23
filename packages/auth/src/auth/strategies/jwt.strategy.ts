@@ -104,6 +104,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       firstName: user.firstName,
       lastName: user.lastName,
       isActive: user.isActive,
+      // [livello 2 — portale cliente, ADR-0046] discriminatore + scoping azienda,
+      // caricati fresh (come ruoli/permessi) → revoca/cambio istantaneo.
+      tipo: user.tipo,
+      aziendaId: user.aziendaId,
+      clienteRuolo: user.clienteRuolo,
     };
     return authenticatedUser; // Passport mette automaticamente su req.user
   }

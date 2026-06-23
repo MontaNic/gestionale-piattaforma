@@ -22,4 +22,4 @@ export {
   setTokens,
 } from './auth';
 export { performLogout } from './auth-logout';
-export type { LoginResponse, MeResponse, MeRole, MeUser } from './types';
+export type { ClienteRuolo, LoginResponse, MeResponse, MeRole, MeUser, UserTipo } from './types';
