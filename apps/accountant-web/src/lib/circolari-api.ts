@@ -11,6 +11,7 @@ import { getAccessToken } from '@gestionale/auth-web';
 
 import type {
   Circolare,
+  CircolareReportView,
   CircolareStato,
   CircolareWithDestinatari,
   CreateCircolareInput,
@@ -42,6 +43,11 @@ export async function getCircolari(params: GetCircolariParams = {}): Promise<Cir
 
 export async function getCircolare(id: string): Promise<CircolareWithDestinatari> {
   const res = await apiGet<Wrapped<CircolareWithDestinatari>>(`/circolari/${id}`, authOptions());
+  return res.data;
+}
+
+export async function getCircolareReport(id: string): Promise<CircolareReportView> {
+  const res = await apiGet<Wrapped<CircolareReportView>>(`/circolari/${id}/report`, authOptions());
   return res.data;
 }
 

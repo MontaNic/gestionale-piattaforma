@@ -449,6 +449,17 @@
       "destinatari": "Destinatari",
       "contenuto": "Contenuto"
     },
+    "report": {
+      "title": "Report letture",
+      "attesi": "Destinatari",
+      "letti": "Letture",
+      "confermati": "Conferme",
+      "empty": "Nessun destinatario per questa circolare.",
+      "colDestinatario": "Destinatario",
+      "colLetta": "Letta",
+      "colConfermata": "Confermata",
+      "nonLetta": "Non letta"
+    },
     "form": {
       "titolo": "Titolo",
       "oggettoEmail": "Oggetto email",

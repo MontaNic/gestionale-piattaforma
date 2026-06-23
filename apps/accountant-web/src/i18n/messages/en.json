@@ -449,6 +449,17 @@
       "destinatari": "Recipients",
       "contenuto": "Content"
     },
+    "report": {
+      "title": "Read report",
+      "attesi": "Recipients",
+      "letti": "Reads",
+      "confermati": "Confirmations",
+      "empty": "No recipients for this circular.",
+      "colDestinatario": "Recipient",
+      "colLetta": "Read",
+      "colConfermata": "Confirmed",
+      "nonLetta": "Unread"
+    },
     "form": {
       "titolo": "Title",
       "oggettoEmail": "Email subject",

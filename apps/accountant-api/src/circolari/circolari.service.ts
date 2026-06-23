@@ -25,6 +25,7 @@ import {
   CircolareStato,
   DestinatarioTipo,
   Prisma,
+  UserTipo,
   type Circolare,
   id,
   withTenantContextAtomicTx,
@@ -67,6 +68,34 @@ export interface ClienteCircolareDetailView extends ClienteCircolareListView {
 type CircolareConLetturaCliente = Prisma.CircolareGetPayload<{
   include: { letture: true };
 }>;
+
+// ── Report letture lato studio (ADR-0048 §1 / TD-circolari-read-report) ──────
+// Consumer di `circolari.read_report`. Il set destinatari *atteso* è la risoluzione
+// dei destinatari (`tutti`→tutti i clienti del tenant, `azienda`→clienti di quelle
+// aziende) incrociata con lo stato lettura/conferma (`circolari_letture`). Summary
+// per il colpo d'occhio + breakdown per il dettaglio operativo (D1).
+export interface CircolareReportRecipient {
+  userId: string;
+  nome: string;
+  email: string;
+  aziendaId: string | null;
+  letta: boolean;
+  lettaAt: Date | null;
+  confermata: boolean;
+  confermataAt: Date | null;
+}
+
+export interface CircolareReportView {
+  circolareId: string;
+  stato: CircolareStato;
+  richiedeConferma: boolean;
+  summary: {
+    attesi: number;
+    letti: number;
+    confermati: number;
+  };
+  recipients: CircolareReportRecipient[];
+}
 
 @Injectable()
 export class CircolariService {
@@ -241,6 +270,86 @@ export class CircolariService {
     });
     this.logger.log(`Circolare soft-deleted: ${circolareId} tenant=${tenantId}`);
     return { id: circolareId, deleted: true };
+  }
+
+  // ── Report letture lato studio (ADR-0048 §1) ────────────────────────────────
+  // Risolve il set destinatari atteso × stato lettura/conferma. Solo circolari
+  // pubblicate/archiviate (una bozza non ha destinatari risolvibili né letture):
+  // bozza → 422. Il set atteso sono gli utenti tipo='cliente' del tenant raggiunti
+  // dai destinatari ('tutti' → tutti; 'azienda' → clienti di quelle aziende),
+  // dedotto in-query; le letture esistono solo per utenti nel set (la markLetta
+  // cliente passa dallo stesso predicato di visibilità) → niente orfani da gestire.
+  async getReport(tenantId: string, circolareId: string): Promise<CircolareReportView> {
+    const circolare = await this.db.prisma.circolare.findFirst({
+      where: { id: circolareId, tenantId },
+      include: { destinatari: true },
+    });
+    if (!circolare) {
+      throw new NotFoundException({
+        errorCode: 'E_CIRCOLARE_NOT_FOUND',
+        message: 'Circolare not found',
+      });
+    }
+    if (circolare.stato === CircolareStato.bozza) {
+      throw new UnprocessableEntityException({
+        errorCode: 'E_CIRCOLARE_NOT_REPORTABLE',
+        message: 'Report disponibile solo per circolari pubblicate o archiviate',
+      });
+    }
+
+    // Risoluzione destinatari → predicato sul set di utenti-cliente atteso.
+    const hasTutti = circolare.destinatari.some((d) => d.tipo === DestinatarioTipo.tutti);
+    const aziendaIds = circolare.destinatari
+      .filter((d) => d.tipo === DestinatarioTipo.azienda && d.aziendaId)
+      .map((d) => d.aziendaId as string);
+
+    const clienteWhere: Prisma.UserWhereInput = {
+      tenantId,
+      tipo: UserTipo.cliente,
+      // 'tutti' copre l'intero tenant → ignora il filtro per azienda; altrimenti
+      // restringi alle aziende destinatarie. Senza 'tutti' né aziende → set vuoto.
+      ...(hasTutti ? {} : { aziendaId: { in: aziendaIds } }),
+    };
+
+    const [recipients, letture] = await Promise.all([
+      this.db.prisma.user.findMany({
+        where: clienteWhere,
+        select: { id: true, firstName: true, lastName: true, email: true, aziendaId: true },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { email: 'asc' }],
+      }),
+      this.db.prisma.circolareLettura.findMany({
+        where: { circolareId },
+        select: { userId: true, lettaAt: true, confermataAt: true },
+      }),
+    ]);
+
+    const letturaByUser = new Map(letture.map((l) => [l.userId, l]));
+
+    const rows: CircolareReportRecipient[] = recipients.map((u) => {
+      const lettura = letturaByUser.get(u.id);
+      return {
+        userId: u.id,
+        nome: `${u.firstName} ${u.lastName}`.trim(),
+        email: u.email,
+        aziendaId: u.aziendaId,
+        letta: lettura != null,
+        lettaAt: lettura?.lettaAt ?? null,
+        confermata: lettura?.confermataAt != null,
+        confermataAt: lettura?.confermataAt ?? null,
+      };
+    });
+
+    return {
+      circolareId: circolare.id,
+      stato: circolare.stato,
+      richiedeConferma: circolare.richiedeConferma,
+      summary: {
+        attesi: rows.length,
+        letti: rows.filter((r) => r.letta).length,
+        confermati: rows.filter((r) => r.confermata).length,
+      },
+      recipients: rows,
+    };
   }
 
   // ── Lato cliente (portale, ADR-0048) ─────────────────────────────────────────
