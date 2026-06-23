@@ -43,6 +43,31 @@ export interface CircolariListFilter {
   stato?: CircolareStato;
 }
 
+// ── Viste lato cliente (portale, ADR-0048) ───────────────────────────────────
+// Shape ridotto e cliente-safe: niente tenantId/deletedAt/destinatari; aggiunge
+// lo stato lettura/conferma del cliente corrente. `letta`=true se esiste una riga
+// circolari_letture per (circolare, utente); `confermata`=true se confermataAt set.
+export interface ClienteCircolareListView {
+  id: string;
+  titolo: string;
+  oggettoEmail: string;
+  priorita: number;
+  richiedeConferma: boolean;
+  pubblicataIl: Date | null;
+  scadeIl: Date | null;
+  letta: boolean;
+  confermata: boolean;
+}
+
+export interface ClienteCircolareDetailView extends ClienteCircolareListView {
+  bodyHtml: string;
+}
+
+// Circolare con la (sola) lettura del cliente corrente — include filtrato per userId.
+type CircolareConLetturaCliente = Prisma.CircolareGetPayload<{
+  include: { letture: true };
+}>;
+
 @Injectable()
 export class CircolariService {
   private readonly logger = new Logger(CircolariService.name);
@@ -86,6 +111,7 @@ export class CircolariService {
           oggettoEmail: dto.oggettoEmail,
           bodyHtml: dto.bodyHtml,
           priorita: dto.priorita ?? 0,
+          richiedeConferma: dto.richiedeConferma ?? false,
           scadeIl: dto.scadeIl ? new Date(dto.scadeIl) : null,
           // stato → default 'bozza'; pubblicataIl resta null fino a publish().
         },
@@ -140,6 +166,7 @@ export class CircolariService {
           oggettoEmail: dto.oggettoEmail,
           bodyHtml: dto.bodyHtml,
           priorita: dto.priorita,
+          richiedeConferma: dto.richiedeConferma,
           scadeIl: dto.scadeIl !== undefined ? new Date(dto.scadeIl) : undefined,
         },
       });
@@ -214,6 +241,136 @@ export class CircolariService {
     });
     this.logger.log(`Circolare soft-deleted: ${circolareId} tenant=${tenantId}`);
     return { id: circolareId, deleted: true };
+  }
+
+  // ── Lato cliente (portale, ADR-0048) ─────────────────────────────────────────
+  // Superficie read + presa-visione: il cliente vede solo le circolari PUBBLICATE
+  // indirizzate alla propria azienda (destinatario 'tutti' o 'azienda'+aziendaId).
+  // Lo scoping è SEMPRE dentro la query (clienteWhere): una circolare non visibile
+  // è indistinguibile da una inesistente (404), niente leak per id indovinato.
+
+  async listForCliente(
+    tenantId: string,
+    aziendaId: string,
+    userId: string,
+  ): Promise<ClienteCircolareListView[]> {
+    const circolari = await this.db.prisma.circolare.findMany({
+      where: this.clienteWhere(tenantId, aziendaId),
+      orderBy: { pubblicataIl: 'desc' },
+      include: { letture: { where: { userId } } },
+    });
+    return circolari.map((c) => this.toClienteListView(c));
+  }
+
+  // Dettaglio + markLetta on-open (upsert idempotente: non re-tocca lettaAt né
+  // confermataAt). Il body è restituito grezzo come testo (TD-circolari-render:
+  // niente HTML finché non c'è sanitizzazione server-side).
+  async getForCliente(
+    tenantId: string,
+    aziendaId: string,
+    userId: string,
+    circolareId: string,
+  ): Promise<ClienteCircolareDetailView> {
+    const circolare = await this.db.prisma.circolare.findFirst({
+      where: { ...this.clienteWhere(tenantId, aziendaId), id: circolareId },
+      include: { letture: { where: { userId } } },
+    });
+    if (!circolare) {
+      throw new NotFoundException({
+        errorCode: 'E_CIRCOLARE_NOT_FOUND',
+        message: 'Circolare not found',
+      });
+    }
+    await this.markLetta(tenantId, circolareId, userId);
+    return {
+      ...this.toClienteListView(circolare),
+      letta: true, // appena segnata
+      bodyHtml: circolare.bodyHtml,
+    };
+  }
+
+  // Conferma di presa-visione. 422 se la circolare non la richiede. Idempotente:
+  // una conferma già registrata non viene sovrascritta (timestamp originale).
+  async confermaCliente(
+    tenantId: string,
+    aziendaId: string,
+    userId: string,
+    circolareId: string,
+  ): Promise<{ confermataAt: Date }> {
+    const circolare = await this.db.prisma.circolare.findFirst({
+      where: { ...this.clienteWhere(tenantId, aziendaId), id: circolareId },
+      select: { id: true, richiedeConferma: true },
+    });
+    if (!circolare) {
+      throw new NotFoundException({
+        errorCode: 'E_CIRCOLARE_NOT_FOUND',
+        message: 'Circolare not found',
+      });
+    }
+    if (!circolare.richiedeConferma) {
+      throw new UnprocessableEntityException({
+        errorCode: 'E_CIRCOLARE_NO_CONFERMA',
+        message: 'Questa circolare non richiede conferma di lettura',
+      });
+    }
+
+    const existing = await this.db.prisma.circolareLettura.findUnique({
+      where: { circolareId_userId: { circolareId, userId } },
+      select: { confermataAt: true },
+    });
+    if (existing?.confermataAt) {
+      return { confermataAt: existing.confermataAt };
+    }
+
+    const now = new Date();
+    await this.db.prisma.circolareLettura.upsert({
+      where: { circolareId_userId: { circolareId, userId } },
+      create: { id: id(), tenantId, circolareId, userId, lettaAt: now, confermataAt: now },
+      update: { confermataAt: now },
+    });
+    this.logger.log(`Circolare confermata: ${circolareId} user=${userId} tenant=${tenantId}`);
+    return { confermataAt: now };
+  }
+
+  // Segna la circolare come letta (upsert idempotente). `update: {}` → riapertura
+  // del dettaglio non sposta lettaAt e non azzera una eventuale conferma.
+  private async markLetta(tenantId: string, circolareId: string, userId: string): Promise<void> {
+    await this.db.prisma.circolareLettura.upsert({
+      where: { circolareId_userId: { circolareId, userId } },
+      create: { id: id(), tenantId, circolareId, userId },
+      update: {},
+    });
+  }
+
+  // Predicato di visibilità cliente (single source of truth dell'ACL portale):
+  // pubblicata + destinatario 'tutti' o 'azienda'+aziendaId. La softDeleteExtension
+  // applica deletedAt IS NULL; le bozze/archiviate sono fuori. clienteRuolo non
+  // incide (una circolare è un broadcast, non ha visibilità per-ruolo).
+  private clienteWhere(tenantId: string, aziendaId: string): Prisma.CircolareWhereInput {
+    return {
+      tenantId,
+      stato: CircolareStato.pubblicata,
+      destinatari: {
+        some: {
+          OR: [{ tipo: DestinatarioTipo.tutti }, { tipo: DestinatarioTipo.azienda, aziendaId }],
+        },
+      },
+    };
+  }
+
+  private toClienteListView(c: CircolareConLetturaCliente): ClienteCircolareListView {
+    const lettura = c.letture[0];
+    return {
+      id: c.id,
+      titolo: c.titolo,
+      oggettoEmail: c.oggettoEmail,
+      priorita: c.priorita,
+      richiedeConferma: c.richiedeConferma,
+      pubblicataIl: c.pubblicataIl,
+      scadeIl: c.scadeIl,
+      letta: lettura != null,
+      confermata: lettura?.confermataAt != null,
+    };
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

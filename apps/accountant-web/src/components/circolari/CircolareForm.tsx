@@ -54,6 +54,9 @@ export function CircolareForm({
   const [scadeIl, setScadeIl] = useState<string>(
     initial?.scadeIl ? initial.scadeIl.slice(0, 10) : '',
   );
+  const [richiedeConferma, setRichiedeConferma] = useState<boolean>(
+    initial?.richiedeConferma ?? false,
+  );
 
   const initialMode: DestMode =
     !initial || initial.destinatari.some((d) => d.tipo === 'tutti') ? 'tutti' : 'aziende';
@@ -104,6 +107,7 @@ export function CircolareForm({
       bodyHtml,
       priorita,
       scadeIl: scadeIl || undefined,
+      richiedeConferma,
       destinatari,
     });
   }
@@ -172,6 +176,15 @@ export function CircolareForm({
               />
             </div>
           </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={richiedeConferma}
+              onChange={(e) => setRichiedeConferma(e.target.checked)}
+            />
+            {t('richiedeConferma')}
+          </label>
 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">{t('destinatari')}</legend>

@@ -70,6 +70,7 @@ model Tenant {
   documenti            Documento[]
   circolari            Circolare[]
   circolariDestinatari CircolareDestinatario[]
+  circolariLetture     CircolareLettura[]
 
   @@map("tenants")
 }
@@ -164,10 +165,12 @@ model User {
   azienda       Azienda?   @relation("AziendaUtentiPortale", fields: [aziendaId], references: [id], onDelete: Cascade)
 
   // Comunicazioni: operatore assegnato a un thread + autore di un messaggio.
-  comunicazioniAssegnate Comunicazione[] @relation("ComOperatore")
-  comMessaggiAutore      ComMessaggio[]  @relation("ComAutore")
+  comunicazioniAssegnate Comunicazione[]    @relation("ComOperatore")
+  comMessaggiAutore      ComMessaggio[]     @relation("ComAutore")
   // Documenti caricati dall'operatore.
-  documentiCreati        Documento[]     @relation("DocumentoCreatore")
+  documentiCreati        Documento[]        @relation("DocumentoCreatore")
+  // [livello 2 — portale cliente, ADR-0048] letture/conferme circolari (cliente).
+  circolariLetture       CircolareLettura[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1053,21 +1056,25 @@ enum DestinatarioTipo {
 }
 
 model Circolare {
-  id           String         @id
-  tenantId     String         @map("tenant_id")
-  titolo       String         @db.VarChar(200)
-  oggettoEmail String         @map("oggetto_email") @db.VarChar(200)
-  bodyHtml     String         @map("body_html")
-  stato        CircolareStato @default(bozza)
-  priorita     Int            @default(0)
-  pubblicataIl DateTime?      @map("pubblicata_il")
-  scadeIl      DateTime?      @map("scade_il")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
-  deletedAt    DateTime?      @map("deleted_at")
+  id               String         @id
+  tenantId         String         @map("tenant_id")
+  titolo           String         @db.VarChar(200)
+  oggettoEmail     String         @map("oggetto_email") @db.VarChar(200)
+  bodyHtml         String         @map("body_html")
+  stato            CircolareStato @default(bozza)
+  priorita         Int            @default(0)
+  // [livello 2 — portale cliente, ADR-0048] richiede presa-visione esplicita dal
+  // cliente. Authoring lato studio (create/update); consumato dal lettore portale.
+  richiedeConferma Boolean        @default(false) @map("richiede_conferma")
+  pubblicataIl     DateTime?      @map("pubblicata_il")
+  scadeIl          DateTime?      @map("scade_il")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  deletedAt        DateTime?      @map("deleted_at")
 
   tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   destinatari CircolareDestinatario[]
+  letture     CircolareLettura[]
 
   @@index([tenantId])
   @@index([tenantId, stato, deletedAt])
@@ -1089,4 +1096,27 @@ model CircolareDestinatario {
   @@index([circolareId])
   @@index([tenantId, aziendaId])
   @@map("circolari_destinatari")
+}
+
+// [livello 2 — portale cliente, ADR-0048] Tracking lettura/conferma per utente.
+// Una riga per (circolare, utente-cliente): `lettaAt` segnato all'apertura del
+// dettaglio (markLetta on-open, idempotente via upsert); `confermataAt` valorizzato
+// solo se la circolare `richiedeConferma` (POST :id/conferma). `tenantId`
+// denormalizzato → RLS flat USING-only, identica alle altre tabelle del modulo.
+model CircolareLettura {
+  id           String    @id
+  tenantId     String    @map("tenant_id") // denormalizzato (RLS flat, no nesting)
+  circolareId  String    @map("circolare_id")
+  userId       String    @map("user_id")
+  lettaAt      DateTime  @default(now()) @map("letta_at")
+  confermataAt DateTime? @map("confermata_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  circolare Circolare @relation(fields: [circolareId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([circolareId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("circolari_letture")
 }

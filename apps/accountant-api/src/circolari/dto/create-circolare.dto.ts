@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -58,6 +59,11 @@ export class CreateCircolareDto {
   @IsOptional()
   @IsISO8601({}, { message: 'E_CIRCOLARE_SCADE_IL_INVALID' })
   scadeIl?: string;
+
+  // [livello 2 — portale cliente, ADR-0048] richiede presa-visione esplicita.
+  @IsOptional()
+  @IsBoolean({ message: 'E_CIRCOLARE_RICHIEDE_CONFERMA_INVALID' })
+  richiedeConferma?: boolean;
 
   @IsArray({ message: 'E_CIRCOLARE_DESTINATARI_INVALID' })
   @ArrayMinSize(1, { message: 'E_CIRCOLARE_DESTINATARI_REQUIRED' })
