@@ -2,8 +2,8 @@
 // circolari.controller.ts — REST /circolari (verticale accountant, ADR-0045)
 // =============================================================================
 // Solo operatore studio (livello 1). Permessi: circolari.{create,publish,
-// archive}. `circolari.read_report` è seedato come forward (report destinatari
-// = livello 2, nessun endpoint MVP). Prefisso /api/v1 da main.ts.
+// archive,read_report}. `read_report` espone GET /:id/report (set destinatari
+// atteso × stato lettura/conferma, ADR-0048 §1). Prefisso /api/v1 da main.ts.
 //
 // La lettura (list/get/patch/delete bozza) richiede `circolari.create`: è il
 // permesso "operativo" del verticale; publish/archive sono transizioni a parte.
@@ -64,6 +64,16 @@ export class CircolariController {
   async getById(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.circolari.getById(user.tenantId, id);
+    return { data };
+  }
+
+  // Report letture: set destinatari atteso × stato lettura/conferma (ADR-0048 §1).
+  // Permesso dedicato `read_report` (Socio/Super Admin; non Collaboratore).
+  @Get(':id/report')
+  @RequirePermissions('circolari.read_report')
+  async report(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.circolari.getReport(user.tenantId, id);
     return { data };
   }
 

@@ -26,6 +26,12 @@ export const CIRCOLARI_ADMIN_CODES = [
 export const CIRCOLARI_REDATTORE_CODES = ['circolari.create'] as const;
 
 /**
+ * Socio: admin del modulo + `circolari.read_report` (consumer del report letture,
+ * ADR-0048 §1). Authoring/publish per preparare i dati + read_report per il report.
+ */
+export const CIRCOLARI_SOCIO_CODES = [...CIRCOLARI_ADMIN_CODES, 'circolari.read_report'] as const;
+
+/**
  * Crea un utente "redattore" circolari nello stesso tenant con SOLO
  * `circolari.create` (no publish). Per il test 403 su POST /:id/publish.
  * Mirror di seedScadenzeViewer.

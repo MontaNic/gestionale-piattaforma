@@ -53,6 +53,31 @@ export interface CreateCircolareInput {
   destinatari: CreateDestinatarioInput[];
 }
 
+// ── Report letture lato studio (ADR-0048 §1) ────────────────────────────────
+// Date ISO sul filo (lettaAt/confermataAt formattati con Intl lato componente).
+export interface CircolareReportRecipient {
+  userId: string;
+  nome: string;
+  email: string;
+  aziendaId: string | null;
+  letta: boolean;
+  lettaAt: string | null;
+  confermata: boolean;
+  confermataAt: string | null;
+}
+
+export interface CircolareReportView {
+  circolareId: string;
+  stato: CircolareStato;
+  richiedeConferma: boolean;
+  summary: {
+    attesi: number;
+    letti: number;
+    confermati: number;
+  };
+  recipients: CircolareReportRecipient[];
+}
+
 export interface UpdateCircolareInput {
   titolo?: string;
   oggettoEmail?: string;
