@@ -89,6 +89,13 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_DOCUMENTO_TIPO_NOT_FOUND: 'Tipo documento non trovato o non accessibile.',
   E_DOCUMENTO_TIPO_NOME_EXISTS: 'Esiste già un tipo documento con questo nome.',
   E_DOCUMENTO_FILE_REQUIRED: 'Nessun file selezionato.',
+
+  // Dominio circolari (ADR-0045 studio + ADR-0048 portale cliente). Codici
+  // runtime rilevanti al cliente: not-found, conferma non richiesta, guard
+  // fail-closed se un principal non-cliente raggiunge /portale/circolari.
+  E_CIRCOLARE_NOT_FOUND: 'Circolare non trovata.',
+  E_CIRCOLARE_NO_CONFERMA: 'Questa circolare non richiede conferma di lettura.',
+  E_PORTALE_CIRCOLARI_FORBIDDEN: 'Accesso riservato agli utenti del portale.',
 };
 
 export function messageForErrorCode(code: string): string {

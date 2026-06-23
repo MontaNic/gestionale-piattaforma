@@ -23,6 +23,7 @@ const NAV: ReadonlyArray<{ key: string; label: string }> = [
   { key: '', label: 'Home' },
   { key: 'documenti', label: 'Documenti' },
   { key: 'comunicazioni', label: 'Comunicazioni' },
+  { key: 'circolari', label: 'Circolari' },
 ];
 
 export function PortaleShell({ children }: { children: ReactNode }): JSX.Element {
