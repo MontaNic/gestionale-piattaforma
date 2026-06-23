@@ -639,7 +639,7 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 - 2 model: `Circolare` (testata + soft-delete) + `CircolareDestinatario` (`tipo` tutti/azienda/utente). **DP-N2**: `tenantId` denormalizzato sui destinatari → RLS **flat** USING-only+FORCE (TEXT no-cast), come comunicazioni/documenti. Nessun counter/codice (le circolari non hanno numerazione naturale).
 - 2 enum: `CircolareStato` (bozza/pubblicata/archiviata), `DestinatarioTipo` (`utente` = **forward** livello 2, rifiutato in validazione → TD-circolari-utente-forward).
 - **Macchina di stato**: `publish` (bozza→pubblicata, setta `pubblicataIl`) / `archive` (pubblicata→archiviata); modifica/elimina solo su bozza → **422** altrove. Destinatari replace-integrale in tx atomica (`withTenantContextAtomicTx`).
-- **+4 permessi** `circolari.{create,publish,archive,read_report}` (**41→45**); `create` = operativo (CRUD bozza), publish/archive transizioni separate, `read_report` forward (no endpoint MVP). Socio/Super Admin via `ALL_PERMISSION_CODES`; Collaboratore solo `create`.
+- **+4 permessi** `circolari.{create,publish,archive,read_report}` (**41→45**); `create` = operativo (CRUD bozza), publish/archive transizioni separate, `read_report` allora forward (endpoint consegnato il 2026-06-23 → PR #107, ADR-0048 §1, vedi entry sotto). Socio/Super Admin via `ALL_PERMISSION_CODES`; Collaboratore solo `create`.
 - **Email alla pubblicazione: DEFER** — `MailService` repo è security-only, manca il framework `notifiche_config`. MVP solo in-app.
 
 **Frontend (accountant-web, operatore):** lista (filtro stato + badge + azioni contestuali gated sui permessi) + form inline crea/modifica (titolo, oggetto, body textarea — no rich editor MVP, priorità, scadenza, destinatari tutti|aziende) + dettaglio read-only. Sidebar + i18n it/en.
@@ -649,6 +649,30 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 **Divergenze spec→repo (forma, scope invariato):** id UUID v7 app-side via `id()` (no `generate_ulid()`); seed shape reale `{code,description,category}`; relazioni Tenant/Azienda + FK `tenant_id` (richieste da Prisma); ruoli reali Socio/Collaboratore.
 
 **TD (ADR-0045):** circolari-utente-forward, circolari-render (body come testo, serve sanitizzazione server-side prima di HTML), circolari-letture (livello 2), circolari-email.
+
+---
+
+## [2026-06-23] Livello 2 — Portale cliente: documenti/comunicazioni/circolari + report letture studio (ADR-0046/0047/0048, PR #103→#107)
+
+**Cosa:** apertura del **livello 2 — portale cliente** del verticale commercialisti (il lato-cliente, finora sempre differito). Arco di 5 PR squash-merge consecutivi (#103→#107) che porta i clienti dentro la piattaforma in lettura/reply e chiude l'ultimo TD forward di Circolari. **Catalogo permessi 45→49.** Main @ `b43aeb1`.
+
+**#103 — Foundation identità + routing (ADR-0046):** `User.tipo` (`UserTipo` operatore|cliente), `aziendaId`, `clienteRuolo` (`ClienteRuolo`); invariante DB `tipo='cliente' ⟺ aziendaId NOT NULL` (CHECK `chk_cliente_azienda_id`, CASCADE su azienda). Auth routing operatore vs cliente + shell portale. Permesso `portale.documenti.visualizza` seedato **forward** (consumer reale nel task successivo). Migration `add_portale_cliente_identity`.
+
+**#104 — Documenti read-only (ADR-0046):** lettore cliente dei documenti della propria azienda (visibilità `tutti`|`azienda`), download via StorageService (`@gestionale/platform`). Primo consumer reale di `portale.documenti.visualizza`.
+
+**#105 — Comunicazioni reply-only (ADR-0047):** prima superficie portale **bidirezionale** — il cliente legge e **risponde** ai thread della propria azienda (no apertura nuovi thread). 2 permessi distinti `portale.comunicazioni.{visualizza,rispondi}` (la scrittura giustifica lo split, a differenza del singolo `documenti.visualizza`).
+
+**#106 — Circolari letture + conferma (ADR-0048):** lettore circolari cliente (read + `markLetta` on-open + conferma presa-visione). **Attiva i due deferral di ADR-0045 §6:** `Circolare.richiedeConferma` (ALTER) + nuova tabella `circolari_letture` (riga per `(circolare,utente)` con `lettaAt`/`confermataAt?`, `@@unique([circolareId,userId])`, **RLS flat** USING+FORCE TEXT no-cast). Permesso `portale.circolari.visualizza`. ACL cliente sempre in-query (`clienteWhere`): non visibile ⟺ inesistente (404, no leak per id indovinato). Migration `add_circolari_letture`.
+
+**#107 — Report letture lato studio (ADR-0048 §1, oggi):** consumer reale di `circolari.read_report` (seedato forward da ADR-0045). `GET /circolari/:id/report`: risoluzione del set destinatari **atteso** (`tutti`→tutti i clienti del tenant, `azienda`→clienti dell'azienda, dedup in-query) × left-join `circolari_letture` → **summary** (attesi/letti/confermati) **+ breakdown** per destinatario. Bozza → **422** `E_CIRCOLARE_NOT_REPORTABLE`. FE: pannello "Report letture" nel dettaglio circolare studio, **gated** `read_report` + nascosto su bozza; colonna "Confermata" solo se `richiedeConferma`. **Nessuna migration. Chiude TD-circolari-read-report.**
+
+**GATE + CI (#107):** typecheck api+web ✅ · lint 0 ✅ · **e2e `circolari-report` 6/6** (RBAC 403/200, risoluzione tutti/azienda, count lettura/conferma, bozza 422) · CI PR #107 verde (Lint·Typecheck·Format·Test + Playwright). **Verifica runtime** 6/6 a livello API+RBAC con attori reali (Socio `admin@studio.local` con `read_report`, Collaboratore `collaboratore@studio.local` senza).
+
+**Decisioni read_report (STOP 0):** summary+breakdown (D1), bozza→422 (D2), conferma condizionata a `richiedeConferma` (D3), pannello gated (D4), no paginazione MVP (D5).
+
+**Deploy host:** `gestionale-test` allineato a `main` lato **sorgente** (migration `add_portale_cliente_identity` + `add_circolari_letture` applicate, seed 49, RLS verificata in DB). ⚠️ **Scoperto:** il tier applicativo NON è in esecuzione sull'host — Caddy serve un placeholder statico, quindi `/api/health` 200 è un **falso positivo** (stesso body su path inesistenti). Deploy app reale (build prod + container + Caddy `reverse_proxy`) = task infra separato da pianificare con STOP dedicato (ricognizione fatta: Dockerfile app assenti, stack live = `docker-compose.dev.yml` + override `prod.yml` solo-caddy).
+
+**Backlog livello 2 (non implementati):** destinatario `utente` (broadcast a singolo), storico circolari archiviate lato cliente, notifiche email/push alla pubblicazione, rendering HTML sanitizzato del body (TD-circolari-render), download allegati circolari, paginazione/export CSV del report.
 
 ---
 
