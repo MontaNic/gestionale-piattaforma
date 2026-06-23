@@ -247,6 +247,22 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'portale',
     isPortale: true,
   },
+  // portale.comunicazioni.* (2) — [livello 2 — portale cliente, ADR-0047]
+  // Prima superficie portale bidirezionale: read + reply lato cliente. Due
+  // permessi distinti (a differenza del singolo documenti.visualizza) perché qui
+  // c'è una scrittura.
+  {
+    code: 'portale.comunicazioni.visualizza',
+    description: 'Visualizzazione comunicazioni della propria azienda (portale cliente)',
+    category: 'portale',
+    isPortale: true,
+  },
+  {
+    code: 'portale.comunicazioni.rispondi',
+    description: 'Risposta alle comunicazioni della propria azienda (portale cliente)',
+    category: 'portale',
+    isPortale: true,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -402,7 +418,11 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   {
     name: 'Cliente',
     description: 'Utente del portale cliente: accesso ai dati della propria azienda.',
-    permissionCodes: ['portale.documenti.visualizza'],
+    permissionCodes: [
+      'portale.documenti.visualizza',
+      'portale.comunicazioni.visualizza',
+      'portale.comunicazioni.rispondi',
+    ],
   },
 ];
 

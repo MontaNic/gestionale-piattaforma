@@ -29,6 +29,7 @@ import { catchUniqueViolation, StorageService } from '@gestionale/platform';
 
 import type { CreateComunicazioneDto } from './dto/create-comunicazione.dto';
 import type { CreateComMessaggioDto } from './dto/create-com-messaggio.dto';
+import type { ReplyClienteDto } from './dto/reply-cliente.dto';
 import type { UpdateComunicazioneDto } from './dto/update-comunicazione.dto';
 
 export interface ComunicazioniListFilter {
@@ -37,6 +38,45 @@ export interface ComunicazioniListFilter {
   urgente?: boolean;
   operatoreAssegnatoId?: string;
   daPrendere?: boolean; // operatoreAssegnatoId IS NULL
+}
+
+// ── Viste cliente (portale, ADR-0047 §7) ──────────────────────────────────────
+// Denormalizzate, distinte dalle entity Prisma: niente leak di campi interni
+// (operatoreAssegnatoId/urgente/referenteId sul thread, autoreUserId/tenantId sul
+// messaggio). I messaggi `lato=interno` (note operatore) non entrano mai.
+
+export interface ClienteComAllegatoView {
+  id: string;
+  nomeOrig: string;
+  mimeType: string;
+  dimensione: number;
+}
+
+export interface ClienteComMessaggioView {
+  id: string;
+  lato: ComLato; // solo `studio` | `cliente` lato portale (mai `interno`)
+  testo: string;
+  createdAt: Date;
+  allegati: ClienteComAllegatoView[];
+}
+
+export interface ClienteComunicazioneListView {
+  id: string;
+  codice: string;
+  oggetto: string;
+  chiusa: boolean;
+  updatedAt: Date;
+  nonLetti: number; // messaggi `lato=studio` non ancora letti dal cliente
+}
+
+export interface ClienteComunicazioneDetailView {
+  id: string;
+  codice: string;
+  oggetto: string;
+  chiusa: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  messaggi: ClienteComMessaggioView[];
 }
 
 // tx raw: l'extended client strippa i metodi *Unsafe dal tipo (vedi rls.ts).
@@ -291,6 +331,149 @@ export class ComunicazioniService {
     return { updated: res.count };
   }
 
+  // ── Portale cliente (ADR-0047) ───────────────────────────────────────────────
+  // Superficie SOLO cliente: lista/dettaglio/reply/read-tracking scoped per
+  // azienda. Lo scoping per-azienda è app-level (RLS resta tenant-flat, ADR-0046
+  // §3): `aziendaId` arriva dal principal cliente. Metodi distinti da quelli
+  // operatore (nessun ramo `if cliente` nei metodi esistenti).
+
+  // Lista thread della propria azienda + conteggio messaggi studio non letti.
+  async listForCliente(
+    tenantId: string,
+    aziendaId: string,
+  ): Promise<ClienteComunicazioneListView[]> {
+    const threads = await this.db.prisma.comunicazione.findMany({
+      where: { tenantId, aziendaId },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (threads.length === 0) return [];
+
+    // Conteggio "non letti dal cliente" (messaggi lato=studio, lettoCliente=false)
+    // in una sola query groupBy invece di N+1.
+    const counts = await this.db.prisma.comMessaggio.groupBy({
+      by: ['comunicazioneId'],
+      where: {
+        tenantId,
+        comunicazioneId: { in: threads.map((t) => t.id) },
+        lato: ComLato.studio,
+        lettoCliente: false,
+      },
+      _count: { _all: true },
+    });
+    const nonLettiByThread = new Map(counts.map((c) => [c.comunicazioneId, c._count._all]));
+
+    return threads.map((t) => ({
+      id: t.id,
+      codice: t.codice,
+      oggetto: t.oggetto,
+      chiusa: t.chiusa,
+      updatedAt: t.updatedAt,
+      nonLetti: nonLettiByThread.get(t.id) ?? 0,
+    }));
+  }
+
+  // Dettaglio thread con messaggi (ESCLUSE le note interne, ADR-0047 §3).
+  async getForCliente(
+    tenantId: string,
+    aziendaId: string,
+    comunicazioneId: string,
+  ): Promise<ClienteComunicazioneDetailView> {
+    const com = await this.db.prisma.comunicazione.findFirst({
+      // ACL nella query: un thread di altra azienda è indistinguibile da uno
+      // inesistente (404), niente leak per id indovinato.
+      where: { id: comunicazioneId, tenantId, aziendaId },
+      include: {
+        messaggi: {
+          where: { lato: { not: ComLato.interno } },
+          orderBy: { createdAt: 'asc' },
+          include: { allegati: true },
+        },
+      },
+    });
+    if (!com) {
+      throw new NotFoundException({
+        errorCode: 'E_COM_NOT_FOUND',
+        message: 'Comunicazione not found',
+      });
+    }
+    return {
+      id: com.id,
+      codice: com.codice,
+      oggetto: com.oggetto,
+      chiusa: com.chiusa,
+      createdAt: com.createdAt,
+      updatedAt: com.updatedAt,
+      messaggi: com.messaggi.map((m) => ({
+        id: m.id,
+        lato: m.lato,
+        testo: m.testo,
+        createdAt: m.createdAt,
+        allegati: m.allegati.map((a) => ({
+          id: a.id,
+          nomeOrig: a.nomeOrig,
+          mimeType: a.mimeType,
+          dimensione: a.dimensione,
+        })),
+      })),
+    };
+  }
+
+  // Reply lato cliente: forza `lato=cliente` e valorizza `autoreUserId`
+  // (chiude il trade-off ADR-0043, ADR-0047 §4).
+  async replyCliente(
+    tenantId: string,
+    aziendaId: string,
+    comunicazioneId: string,
+    autoreUserId: string,
+    dto: ReplyClienteDto,
+  ): Promise<ClienteComMessaggioView> {
+    const com = await this.getTestataCliente(tenantId, aziendaId, comunicazioneId);
+    if (com.chiusa) {
+      throw new BadRequestException({
+        errorCode: 'E_COM_CHIUSA_NO_REPLY',
+        message: 'Comunicazione chiusa: lo studio deve riaprirla prima di rispondere',
+      });
+    }
+
+    const read = this.readFlagsFor(ComLato.cliente);
+    const msg = await this.db.prisma.comMessaggio.create({
+      data: {
+        id: id(),
+        tenantId,
+        comunicazioneId,
+        autoreUserId,
+        lato: ComLato.cliente,
+        testo: dto.testo,
+        lettoStudio: read.lettoStudio,
+        lettoCliente: read.lettoCliente,
+      },
+    });
+
+    // Bump attività del thread (updatedAt → ordina l'inbox studio e portale).
+    await this.db.prisma.comunicazione.update({
+      where: { id: comunicazioneId },
+      data: { urgente: com.urgente },
+    });
+
+    this.logger.log(`ComMessaggio cliente created: ${msg.id} com=${comunicazioneId}`);
+    return { id: msg.id, lato: msg.lato, testo: msg.testo, createdAt: msg.createdAt, allegati: [] };
+  }
+
+  // Marca come letti dal cliente i messaggi lato studio non ancora letti
+  // (duale di markLettoStudio, ADR-0047 §5).
+  async markLettoCliente(
+    tenantId: string,
+    aziendaId: string,
+    comunicazioneId: string,
+  ): Promise<{ updated: number }> {
+    await this.getTestataCliente(tenantId, aziendaId, comunicazioneId);
+    const res = await this.db.prisma.comMessaggio.updateMany({
+      where: { tenantId, comunicazioneId, lato: ComLato.studio, lettoCliente: false },
+      data: { lettoCliente: true },
+    });
+    return { updated: res.count };
+  }
+
   // ── Allegati ───────────────────────────────────────────────────────────────
 
   async addAllegato(
@@ -349,6 +532,25 @@ export class ComunicazioniService {
   private async getTestata(tenantId: string, comunicazioneId: string): Promise<Comunicazione> {
     const com = await this.db.prisma.comunicazione.findFirst({
       where: { id: comunicazioneId, tenantId },
+    });
+    if (!com) {
+      throw new NotFoundException({
+        errorCode: 'E_COM_NOT_FOUND',
+        message: 'Comunicazione not found',
+      });
+    }
+    return com;
+  }
+
+  // Testata scoped per-azienda (portale cliente, ADR-0047 §3). Un thread di altra
+  // azienda → 404 (indistinguibile da inesistente, niente leak per id).
+  private async getTestataCliente(
+    tenantId: string,
+    aziendaId: string,
+    comunicazioneId: string,
+  ): Promise<Comunicazione> {
+    const com = await this.db.prisma.comunicazione.findFirst({
+      where: { id: comunicazioneId, tenantId, aziendaId },
     });
     if (!com) {
       throw new NotFoundException({
