@@ -120,6 +120,9 @@ importers:
       '@nestjs/testing':
         specifier: ^11.1.19
         version: 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(@nestjs/platform-express@11.1.19)
+      '@swc/cli':
+        specifier: ^0.8.1
+        version: 0.8.1(@swc/core@1.15.33)(chokidar@4.0.3)
       '@swc/core':
         specifier: ^1.15.33
         version: 1.15.33
@@ -203,7 +206,7 @@ importers:
         version: 0.460.0(react@18.3.1)
       next:
         specifier: ^15.0.0
-        version: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       next-intl:
         specifier: 4.12.0
         version: 4.12.0(next@15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
@@ -421,7 +424,7 @@ importers:
         version: 0.460.0(react@18.3.1)
       next:
         specifier: ^15.0.0
-        version: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       next-intl:
         specifier: 4.12.0
         version: 4.12.0(next@15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
@@ -583,7 +586,7 @@ importers:
         version: 25.0.1
       next:
         specifier: ^15.0.0
-        version: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -650,7 +653,7 @@ importers:
     devDependencies:
       next:
         specifier: ^15.0.0
-        version: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       next-intl:
         specifier: 4.12.0
         version: 4.12.0(next@15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
@@ -8166,8 +8169,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@keyv/serialize@1.1.1':
-    optional: true
+  '@keyv/serialize@1.1.1': {}
 
   '@kwsites/file-exists@1.1.1':
     dependencies:
@@ -9001,8 +9003,7 @@ snapshots:
 
   '@schummar/icu-type-parser@1.21.5': {}
 
-  '@sec-ant/readable-stream@0.4.1':
-    optional: true
+  '@sec-ant/readable-stream@0.4.1': {}
 
   '@simple-libs/child-process-utils@1.0.2':
     dependencies:
@@ -9010,11 +9011,9 @@ snapshots:
 
   '@simple-libs/stream-utils@1.2.0': {}
 
-  '@sindresorhus/is@7.2.0':
-    optional: true
+  '@sindresorhus/is@7.2.0': {}
 
-  '@sindresorhus/merge-streams@4.0.0':
-    optional: true
+  '@sindresorhus/merge-streams@4.0.0': {}
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -9038,7 +9037,6 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@swc/core-darwin-arm64@1.15.33':
     optional: true
@@ -9271,8 +9269,7 @@ snapshots:
       '@types/express-serve-static-core': 5.1.1
       '@types/serve-static': 2.2.0
 
-  '@types/http-cache-semantics@4.2.0':
-    optional: true
+  '@types/http-cache-semantics@4.2.0': {}
 
   '@types/http-errors@2.0.5': {}
 
@@ -9637,14 +9634,23 @@ snapshots:
       msw: 2.14.6(@types/node@20.19.40)(typescript@5.9.3)
       vite: 7.3.3(@types/node@20.19.40)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
 
-  '@vitest/mocker@3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@20.19.40)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))':
+  '@vitest/mocker@3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@22.19.19)(jiti@1.21.7)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 3.2.4
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
-      vite: 7.3.3(@types/node@20.19.40)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
+      vite: 7.3.3(@types/node@22.19.19)(jiti@1.21.7)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
+
+  '@vitest/mocker@3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@22.19.19)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 3.2.4
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
+      vite: 7.3.3(@types/node@22.19.19)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)
 
   '@vitest/pretty-format@3.2.4':
     dependencies:
@@ -9753,13 +9759,11 @@ snapshots:
       file-type: 21.3.4
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@xhmikosr/bin-check@8.2.1':
     dependencies:
       execa: 9.6.1
       isexe: 4.0.0
-    optional: true
 
   '@xhmikosr/bin-wrapper@14.2.3':
     dependencies:
@@ -9771,7 +9775,6 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@xhmikosr/decompress-tar@9.0.1':
     dependencies:
@@ -9782,7 +9785,6 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@xhmikosr/decompress-tarbz2@9.0.1':
     dependencies:
@@ -9795,7 +9797,6 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@xhmikosr/decompress-targz@9.0.1':
     dependencies:
@@ -9806,7 +9807,6 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@xhmikosr/decompress-unzip@8.1.1':
     dependencies:
@@ -9815,7 +9815,6 @@ snapshots:
       yauzl: 3.3.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@xhmikosr/decompress@11.1.2':
     dependencies:
@@ -9829,7 +9828,6 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@xhmikosr/downloader@16.1.2':
     dependencies:
@@ -9845,12 +9843,10 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
       - supports-color
-    optional: true
 
   '@xhmikosr/os-filter-obj@4.0.0':
     dependencies:
       arch: 3.0.0
-    optional: true
 
   '@xtuc/ieee754@1.2.0': {}
 
@@ -9948,8 +9944,7 @@ snapshots:
 
   append-field@1.0.0: {}
 
-  arch@3.0.0:
-    optional: true
+  arch@3.0.0: {}
 
   archiver-utils@5.0.2:
     dependencies:
@@ -10167,13 +10162,11 @@ snapshots:
       binary-version: 7.1.0
       semver: 7.8.0
       semver-truncate: 3.0.0
-    optional: true
 
   binary-version@7.1.0:
     dependencies:
       execa: 8.0.1
       find-versions: 6.0.0
-    optional: true
 
   bl@4.1.0:
     dependencies:
@@ -10220,8 +10213,7 @@ snapshots:
       node-releases: 2.0.44
       update-browserslist-db: 1.2.3(browserslist@4.28.2)
 
-  buffer-crc32@0.2.13:
-    optional: true
+  buffer-crc32@0.2.13: {}
 
   buffer-crc32@1.0.0: {}
 
@@ -10253,8 +10245,7 @@ snapshots:
 
   byline@5.0.0: {}
 
-  byte-counter@0.1.0:
-    optional: true
+  byte-counter@0.1.0: {}
 
   bytes@3.1.2: {}
 
@@ -10277,8 +10268,7 @@ snapshots:
 
   cac@6.7.14: {}
 
-  cacheable-lookup@7.0.0:
-    optional: true
+  cacheable-lookup@7.0.0: {}
 
   cacheable-request@13.0.19:
     dependencies:
@@ -10289,7 +10279,6 @@ snapshots:
       mimic-response: 4.0.0
       normalize-url: 8.1.1
       responselike: 4.0.2
-    optional: true
 
   call-bind-apply-helpers@1.0.2:
     dependencies:
@@ -10426,11 +10415,9 @@ snapshots:
 
   commander@4.1.1: {}
 
-  commander@6.2.1:
-    optional: true
+  commander@6.2.1: {}
 
-  commander@8.3.0:
-    optional: true
+  commander@8.3.0: {}
 
   comment-json@5.0.0:
     dependencies:
@@ -10484,8 +10471,7 @@ snapshots:
       '@simple-libs/stream-utils': 1.2.0
       meow: 13.2.0
 
-  convert-hrtime@5.0.0:
-    optional: true
+  convert-hrtime@5.0.0: {}
 
   convert-source-map@2.0.0: {}
 
@@ -10605,7 +10591,6 @@ snapshots:
   decompress-response@10.0.0:
     dependencies:
       mimic-response: 4.0.0
-    optional: true
 
   deep-eql@5.0.2: {}
 
@@ -10917,7 +10902,7 @@ snapshots:
       eslint: 9.39.4(jiti@1.21.7)
       eslint-import-resolver-node: 0.3.10
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@1.21.7))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.4(jiti@1.21.7))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@1.21.7))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@1.21.7))
       eslint-plugin-react-hooks: 5.2.0(eslint@9.39.4(jiti@1.21.7))
@@ -10967,7 +10952,7 @@ snapshots:
       tinyglobby: 0.2.16
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.4(jiti@1.21.7))
     transitivePeerDependencies:
       - supports-color
 
@@ -11008,7 +10993,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@1.21.7)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.4(jiti@1.21.7)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -11307,7 +11292,6 @@ snapshots:
       onetime: 6.0.0
       signal-exit: 4.1.0
       strip-final-newline: 3.0.0
-    optional: true
 
   execa@9.6.1:
     dependencies:
@@ -11323,7 +11307,6 @@ snapshots:
       signal-exit: 4.1.0
       strip-final-newline: 4.0.0
       yoctocolors: 2.1.2
-    optional: true
 
   expect-type@1.3.0: {}
 
@@ -11365,13 +11348,11 @@ snapshots:
   ext-list@2.2.2:
     dependencies:
       mime-db: 1.54.0
-    optional: true
 
   ext-name@5.0.0:
     dependencies:
       ext-list: 2.2.2
       sort-keys-length: 1.0.1
-    optional: true
 
   fast-check@3.23.2:
     dependencies:
@@ -11429,7 +11410,6 @@ snapshots:
   figures@6.1.0:
     dependencies:
       is-unicode-supported: 2.1.0
-    optional: true
 
   file-entry-cache@8.0.0:
     dependencies:
@@ -11444,13 +11424,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  filename-reserved-regex@4.0.0:
-    optional: true
+  filename-reserved-regex@4.0.0: {}
 
   filenamify@7.0.1:
     dependencies:
       filename-reserved-regex: 4.0.0
-    optional: true
 
   fill-range@7.1.1:
     dependencies:
@@ -11476,7 +11454,6 @@ snapshots:
     dependencies:
       semver-regex: 4.0.5
       super-regex: 1.1.0
-    optional: true
 
   fix-dts-default-cjs-exports@1.0.1:
     dependencies:
@@ -11517,8 +11494,7 @@ snapshots:
       typescript: 5.9.3
       webpack: 5.106.0(@swc/core@1.15.33)(lightningcss@1.32.0)
 
-  form-data-encoder@4.1.0:
-    optional: true
+  form-data-encoder@4.1.0: {}
 
   form-data@4.0.5:
     dependencies:
@@ -11560,8 +11536,7 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  function-timeout@1.0.2:
-    optional: true
+  function-timeout@1.0.2: {}
 
   function.prototype.name@1.1.8:
     dependencies:
@@ -11604,14 +11579,12 @@ snapshots:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.1
 
-  get-stream@8.0.1:
-    optional: true
+  get-stream@8.0.1: {}
 
   get-stream@9.0.1:
     dependencies:
       '@sec-ant/readable-stream': 0.4.1
       is-stream: 4.0.1
-    optional: true
 
   get-symbol-description@1.1.0:
     dependencies:
@@ -11701,7 +11674,6 @@ snapshots:
       p-cancelable: 4.0.1
       responselike: 4.0.2
       type-fest: 4.41.0
-    optional: true
 
   graceful-fs@4.2.11: {}
 
@@ -11742,8 +11714,7 @@ snapshots:
 
   html-escaper@2.0.2: {}
 
-  http-cache-semantics@4.2.0:
-    optional: true
+  http-cache-semantics@4.2.0: {}
 
   http-errors@2.0.1:
     dependencies:
@@ -11764,7 +11735,6 @@ snapshots:
     dependencies:
       quick-lru: 5.1.1
       resolve-alpn: 1.2.1
-    optional: true
 
   https-proxy-agent@7.0.6:
     dependencies:
@@ -11773,11 +11743,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  human-signals@5.0.0:
-    optional: true
+  human-signals@5.0.0: {}
 
-  human-signals@8.0.1:
-    optional: true
+  human-signals@8.0.1: {}
 
   husky@9.1.7: {}
 
@@ -11820,7 +11788,6 @@ snapshots:
   inspect-with-kind@1.0.5:
     dependencies:
       kind-of: 6.0.3
-    optional: true
 
   internal-slot@1.1.0:
     dependencies:
@@ -11941,8 +11908,7 @@ snapshots:
 
   is-obj@2.0.0: {}
 
-  is-plain-obj@1.1.0:
-    optional: true
+  is-plain-obj@1.1.0: {}
 
   is-plain-obj@4.1.0: {}
 
@@ -11965,11 +11931,9 @@ snapshots:
 
   is-stream@2.0.1: {}
 
-  is-stream@3.0.0:
-    optional: true
+  is-stream@3.0.0: {}
 
-  is-stream@4.0.1:
-    optional: true
+  is-stream@4.0.1: {}
 
   is-string@1.1.1:
     dependencies:
@@ -11988,8 +11952,7 @@ snapshots:
 
   is-unicode-supported@0.1.0: {}
 
-  is-unicode-supported@2.1.0:
-    optional: true
+  is-unicode-supported@2.1.0: {}
 
   is-weakmap@2.0.2: {}
 
@@ -12008,8 +11971,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isexe@4.0.0:
-    optional: true
+  isexe@4.0.0: {}
 
   istanbul-lib-coverage@3.2.2: {}
 
@@ -12163,10 +12125,8 @@ snapshots:
   keyv@5.6.0:
     dependencies:
       '@keyv/serialize': 1.1.1
-    optional: true
 
-  kind-of@6.0.3:
-    optional: true
+  kind-of@6.0.3: {}
 
   language-subtag-registry@0.3.23: {}
 
@@ -12311,8 +12271,7 @@ snapshots:
 
   loupe@3.2.1: {}
 
-  lowercase-keys@3.0.0:
-    optional: true
+  lowercase-keys@3.0.0: {}
 
   lru-cache@10.4.3: {}
 
@@ -12347,7 +12306,6 @@ snapshots:
       p-event: 6.0.1
       type-fest: 4.41.0
       web-worker: 1.5.0
-    optional: true
 
   make-dir@4.0.0:
     dependencies:
@@ -12396,13 +12354,11 @@ snapshots:
 
   mimic-fn@2.1.0: {}
 
-  mimic-fn@4.0.0:
-    optional: true
+  mimic-fn@4.0.0: {}
 
   mimic-function@5.0.1: {}
 
-  mimic-response@4.0.0:
-    optional: true
+  mimic-response@4.0.0: {}
 
   min-indent@1.0.1: {}
 
@@ -12533,7 +12489,7 @@ snapshots:
       '@swc/core': 1.15.33
       icu-minify: 4.12.0
       negotiator: 1.0.0
-      next: 15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next: 15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       next-intl-swc-plugin-extractor: 4.12.0
       po-parser: 2.1.1
       react: 18.3.1
@@ -12548,7 +12504,7 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  next@15.5.18(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  next@15.5.18(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 15.5.18
       '@swc/helpers': 0.5.15
@@ -12556,7 +12512,7 @@ snapshots:
       postcss: 8.4.31
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
-      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@18.3.1)
+      styled-jsx: 5.1.6(react@18.3.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.18
       '@next/swc-darwin-x64': 15.5.18
@@ -12599,19 +12555,16 @@ snapshots:
 
   normalize-path@3.0.0: {}
 
-  normalize-url@8.1.1:
-    optional: true
+  normalize-url@8.1.1: {}
 
   npm-run-path@5.3.0:
     dependencies:
       path-key: 4.0.0
-    optional: true
 
   npm-run-path@6.0.0:
     dependencies:
       path-key: 4.0.0
       unicorn-magic: 0.3.0
-    optional: true
 
   nwsapi@2.2.23: {}
 
@@ -12682,7 +12635,6 @@ snapshots:
   onetime@6.0.0:
     dependencies:
       mimic-fn: 4.0.0
-    optional: true
 
   onetime@7.0.0:
     dependencies:
@@ -12718,13 +12670,11 @@ snapshots:
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
 
-  p-cancelable@4.0.1:
-    optional: true
+  p-cancelable@4.0.1: {}
 
   p-event@6.0.1:
     dependencies:
       p-timeout: 6.1.4
-    optional: true
 
   p-limit@3.1.0:
     dependencies:
@@ -12734,8 +12684,7 @@ snapshots:
     dependencies:
       p-limit: 3.1.0
 
-  p-timeout@6.1.4:
-    optional: true
+  p-timeout@6.1.4: {}
 
   package-json-from-dist@1.0.1: {}
 
@@ -12750,8 +12699,7 @@ snapshots:
       json-parse-even-better-errors: 2.3.1
       lines-and-columns: 1.2.4
 
-  parse-ms@4.0.0:
-    optional: true
+  parse-ms@4.0.0: {}
 
   parse5@7.3.0:
     dependencies:
@@ -12778,8 +12726,7 @@ snapshots:
 
   path-key@3.1.1: {}
 
-  path-key@4.0.0:
-    optional: true
+  path-key@4.0.0: {}
 
   path-parse@1.0.7: {}
 
@@ -12806,8 +12753,7 @@ snapshots:
 
   pause@0.0.1: {}
 
-  pend@1.2.0:
-    optional: true
+  pend@1.2.0: {}
 
   perfect-debounce@1.0.0: {}
 
@@ -12859,7 +12805,6 @@ snapshots:
   piscina@4.9.2:
     optionalDependencies:
       '@napi-rs/nice': 1.1.1
-    optional: true
 
   pkg-types@1.3.1:
     dependencies:
@@ -12964,7 +12909,6 @@ snapshots:
   pretty-ms@9.3.0:
     dependencies:
       parse-ms: 4.0.0
-    optional: true
 
   prisma@6.19.3(magicast@0.3.5)(typescript@5.9.3):
     dependencies:
@@ -13033,8 +12977,7 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-  quick-lru@5.1.1:
-    optional: true
+  quick-lru@5.1.1: {}
 
   range-parser@1.2.1: {}
 
@@ -13172,8 +13115,7 @@ snapshots:
 
   require-from-string@2.0.2: {}
 
-  resolve-alpn@1.2.1:
-    optional: true
+  resolve-alpn@1.2.1: {}
 
   resolve-from@4.0.0: {}
 
@@ -13200,7 +13142,6 @@ snapshots:
   responselike@4.0.2:
     dependencies:
       lowercase-keys: 3.0.0
-    optional: true
 
   restore-cursor@3.1.0:
     dependencies:
@@ -13331,15 +13272,12 @@ snapshots:
   seek-bzip@2.0.0:
     dependencies:
       commander: 6.2.1
-    optional: true
 
-  semver-regex@4.0.5:
-    optional: true
+  semver-regex@4.0.5: {}
 
   semver-truncate@3.0.0:
     dependencies:
       semver: 7.8.0
-    optional: true
 
   semver@6.3.1: {}
 
@@ -13469,8 +13407,7 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  slash@3.0.0:
-    optional: true
+  slash@3.0.0: {}
 
   slice-ansi@7.1.2:
     dependencies:
@@ -13485,12 +13422,10 @@ snapshots:
   sort-keys-length@1.0.1:
     dependencies:
       sort-keys: 1.1.2
-    optional: true
 
   sort-keys@1.1.2:
     dependencies:
       is-plain-obj: 1.1.0
-    optional: true
 
   source-map-js@1.2.1: {}
 
@@ -13648,13 +13583,10 @@ snapshots:
     dependencies:
       inspect-with-kind: 1.0.5
       is-plain-obj: 1.1.0
-    optional: true
 
-  strip-final-newline@3.0.0:
-    optional: true
+  strip-final-newline@3.0.0: {}
 
-  strip-final-newline@4.0.0:
-    optional: true
+  strip-final-newline@4.0.0: {}
 
   strip-indent@3.0.0:
     dependencies:
@@ -13672,12 +13604,10 @@ snapshots:
     dependencies:
       '@tokenizer/token': 0.3.0
 
-  styled-jsx@5.1.6(@babel/core@7.29.7)(react@18.3.1):
+  styled-jsx@5.1.6(react@18.3.1):
     dependencies:
       client-only: 0.0.1
       react: 18.3.1
-    optionalDependencies:
-      '@babel/core': 7.29.7
 
   sucrase@3.35.1:
     dependencies:
@@ -13694,7 +13624,6 @@ snapshots:
       function-timeout: 1.0.2
       make-asynchronous: 1.1.0
       time-span: 5.1.0
-    optional: true
 
   superagent@10.3.0:
     dependencies:
@@ -13876,13 +13805,11 @@ snapshots:
     dependencies:
       any-promise: 1.3.0
 
-  through@2.3.8:
-    optional: true
+  through@2.3.8: {}
 
   time-span@5.1.0:
     dependencies:
       convert-hrtime: 5.0.0
-    optional: true
 
   tinybench@2.9.0: {}
 
@@ -14068,8 +13995,7 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
 
-  type-fest@4.41.0:
-    optional: true
+  type-fest@4.41.0: {}
 
   type-fest@5.6.0:
     dependencies:
@@ -14154,7 +14080,6 @@ snapshots:
     dependencies:
       buffer: 5.7.1
       through: 2.3.8
-    optional: true
 
   undici-types@5.26.5: {}
 
@@ -14162,8 +14087,7 @@ snapshots:
 
   undici@7.25.0: {}
 
-  unicorn-magic@0.3.0:
-    optional: true
+  unicorn-magic@0.3.0: {}
 
   universalify@2.0.1: {}
 
@@ -14423,7 +14347,7 @@ snapshots:
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.4
-      '@vitest/mocker': 3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@20.19.40)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
+      '@vitest/mocker': 3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@22.19.19)(jiti@1.21.7)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
       '@vitest/pretty-format': 3.2.4
       '@vitest/runner': 3.2.4
       '@vitest/snapshot': 3.2.4
@@ -14465,7 +14389,7 @@ snapshots:
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.4
-      '@vitest/mocker': 3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@20.19.40)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
+      '@vitest/mocker': 3.2.4(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@7.3.3(@types/node@22.19.19)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
       '@vitest/pretty-format': 3.2.4
       '@vitest/runner': 3.2.4
       '@vitest/snapshot': 3.2.4
@@ -14516,8 +14440,7 @@ snapshots:
     dependencies:
       defaults: 1.0.4
 
-  web-worker@1.5.0:
-    optional: true
+  web-worker@1.5.0: {}
 
   webidl-conversions@7.0.0: {}
 
@@ -14704,7 +14627,6 @@ snapshots:
     dependencies:
       buffer-crc32: 0.2.13
       pend: 1.2.0
-    optional: true
 
   yn@3.1.1: {}
 
@@ -14712,8 +14634,7 @@ snapshots:
 
   yoctocolors-cjs@2.1.3: {}
 
-  yoctocolors@2.1.2:
-    optional: true
+  yoctocolors@2.1.2: {}
 
   zip-stream@6.0.1:
     dependencies:
