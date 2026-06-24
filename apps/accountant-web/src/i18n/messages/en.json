@@ -513,5 +513,56 @@
       "validationMismatch": "Passwords don't match",
       "connectionError": "Connection error. Please try again."
     }
+  },
+  "inviti": {
+    "sectionTitle": "Portal invitations",
+    "sectionSubtitle": "Invite the client's contacts to access the portal.",
+    "newInvito": "Invite client",
+    "emailLabel": "Email",
+    "emailPlaceholder": "client@example.com",
+    "adminLabel": "Invite as company administrator",
+    "submit": "Send invitation",
+    "submitting": "Sending…",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "listEmpty": "No pending invitations.",
+    "retry": "Retry",
+    "validationEmail": "Invalid email",
+    "revoke": "Revoke",
+    "col": {
+      "email": "Email",
+      "ruolo": "Role",
+      "scadenza": "Expires",
+      "invitatoDa": "Invited by",
+      "azioni": "Actions"
+    },
+    "ruolo": {
+      "admin": "Administrator",
+      "utente": "User"
+    },
+    "confirm": {
+      "title": "Revoke invitation",
+      "body": "Revoke the invitation for {email}?",
+      "confirmLabel": "Revoke",
+      "cancelLabel": "Cancel"
+    }
+  },
+  "acceptInvite": {
+    "title": "Complete your registration",
+    "description": "Set your details to access the client portal.",
+    "firstNameLabel": "First name",
+    "lastNameLabel": "Last name",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
+    "confirmLabel": "Confirm password",
+    "submit": "Create account and sign in",
+    "submitting": "Creating…",
+    "tokenMissing": "Invalid or incomplete invitation link. Please ask the firm for a new invite.",
+    "validationFirstName": "First name is required",
+    "validationLastName": "Last name is required",
+    "validationTooShort": "Password too short (min 8 characters)",
+    "validationMismatch": "Passwords don't match",
+    "connectionError": "Connection error. Please try again.",
+    "goToLogin": "Go to login"
   }
 }

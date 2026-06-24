@@ -102,6 +102,14 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_CIRCOLARE_NOT_FOUND: 'Circolare non trovata.',
   E_CIRCOLARE_NO_CONFERMA: 'Questa circolare non richiede conferma di lettura.',
   E_PORTALE_CIRCOLARI_FORBIDDEN: 'Accesso riservato agli utenti del portale.',
+
+  // Inviti cliente (feat/invito-cliente). Codici runtime di /aziende/:id/inviti
+  // e /auth/accept-invite. I validation backstop E_INVITO_*_INVALID/_REQUIRED/
+  // _TOO_LONG sono prevenuti dalla zod client-side → fallback generico.
+  E_INVITO_NOT_FOUND: 'Invito non trovato.',
+  E_INVITO_TOKEN_INVALID: 'Invito non valido o già utilizzato. Chiedi un nuovo invito allo studio.',
+  E_INVITO_TOKEN_EXPIRED: 'Invito scaduto. Chiedi allo studio di inviarne uno nuovo.',
+  E_INVITO_EMAIL_EXISTS: 'Esiste già un account con questa email. Prova ad accedere.',
 };
 
 export function messageForErrorCode(code: string): string {
