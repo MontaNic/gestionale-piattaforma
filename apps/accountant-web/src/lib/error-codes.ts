@@ -110,6 +110,15 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_INVITO_TOKEN_INVALID: 'Invito non valido o già utilizzato. Chiedi un nuovo invito allo studio.',
   E_INVITO_TOKEN_EXPIRED: 'Invito scaduto. Chiedi allo studio di inviarne uno nuovo.',
   E_INVITO_EMAIL_EXISTS: 'Esiste già un account con questa email. Prova ad accedere.',
+
+  // Superadmin platform (Task 3). Gestione tenant sotto /platform/*.
+  E_PLATFORM_FORBIDDEN: 'Accesso riservato al superadmin di piattaforma.',
+  E_PLATFORM_NOT_CONFIGURED: 'Piattaforma non configurata. Contatta il supporto.',
+  E_PLATFORM_CANNOT_MODIFY_SELF: 'Non puoi modificare il tenant di piattaforma.',
+  E_TENANT_NOT_FOUND: 'Studio non trovato.',
+  E_TENANT_SLUG_EXISTS: 'Esiste già uno studio con questo slug.',
+  E_TENANT_SLUG_INVALID_FORMAT: 'Slug non valido (minuscole, numeri e trattini, 3-50 caratteri).',
+  E_TENANT_SLUG_RESERVED: 'Slug riservato: scegline un altro.',
 };
 
 export function messageForErrorCode(code: string): string {
