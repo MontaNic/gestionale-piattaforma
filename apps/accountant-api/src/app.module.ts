@@ -115,6 +115,11 @@ export class AppModule implements NestModule {
       { path: 'auth/login', method: RequestMethod.POST },
       // D2b: /auth/login-pin richiede tenant resolution via header (pre-auth).
       { path: 'auth/login-pin', method: RequestMethod.POST },
+      // Reset password: entrambi @Public pre-auth, tenant via X-Tenant-Slug.
+      // /forgot-password risolve l'utente per (tenant,email); /reset-password
+      // fa lookup token scoped al tenant (RLS via req.tenantId).
+      { path: 'auth/forgot-password', method: RequestMethod.POST },
+      { path: 'auth/reset-password', method: RequestMethod.POST },
       // /auth/refresh non incluso: deriva tenantId dal payload JWT del
       // refresh token (verificato in AuthService.refresh). Header non serve.
     );

@@ -26,6 +26,14 @@ export enum AuthErrorCode {
   TENANT_REQUIRED = 'E_AUTH_TENANT_REQUIRED',
   TENANT_MISMATCH = 'E_AUTH_TENANT_MISMATCH',
   SESSION_INVALID = 'E_AUTH_SESSION_INVALID',
+  // Reset password (forgot/reset flow). RESET_TOKEN_INVALID copre token
+  // inesistente, malformato e già usato (no oracle sullo stato del token);
+  // RESET_TOKEN_EXPIRED è distinto solo per UX ("link scaduto, richiedine
+  // uno nuovo"). PASSWORD_TOO_SHORT è validazione applicativa server-side
+  // (difesa anche dove la ValidationPipe non gira — vedi test-app E2E).
+  RESET_TOKEN_INVALID = 'E_AUTH_RESET_TOKEN_INVALID',
+  RESET_TOKEN_EXPIRED = 'E_AUTH_RESET_TOKEN_EXPIRED',
+  PASSWORD_TOO_SHORT = 'E_AUTH_PASSWORD_TOO_SHORT',
 }
 
 export enum CommonErrorCode {

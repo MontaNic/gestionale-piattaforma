@@ -71,6 +71,7 @@ model Tenant {
   circolari            Circolare[]
   circolariDestinatari CircolareDestinatario[]
   circolariLetture     CircolareLettura[]
+  passwordResets       PasswordReset[]
 
   @@map("tenants")
 }
@@ -171,6 +172,8 @@ model User {
   documentiCreati        Documento[]        @relation("DocumentoCreatore")
   // [livello 2 — portale cliente, ADR-0048] letture/conferme circolari (cliente).
   circolariLetture       CircolareLettura[]
+  // Reset password: token monouso a tempo (forgot/reset flow).
+  passwordResets         PasswordReset[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -328,6 +331,34 @@ model Session {
   @@index([refreshTokenHash])
   @@index([userId, isActive])
   @@map("sessions")
+}
+
+// =============================================================================
+// Password reset — token monouso a tempo (flow forgot/reset, ADR-0008)
+// =============================================================================
+// Tenant-scoped (RLS flat, tenant_id denormalizzato → policy identica a
+// circolari_letture). Sicurezza:
+//   - In DB salviamo SOLO l'hash sha256 del token (token_hash), mai il
+//     plaintext: l'email contiene il token in chiaro, il DB no (parità con
+//     refresh_token_hash su sessions).
+//   - expires_at: TTL breve (1h, vedi AuthService). usedAt: monouso —
+//     valorizzato al consumo, blocca i replay.
+model PasswordReset {
+  id        String    @id
+  tenantId  String    @map("tenant_id")
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash") // sha256 hex del token (no plaintext)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_resets")
 }
 
 // =============================================================================
