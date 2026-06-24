@@ -30,6 +30,11 @@ COPY packages/api-client  ./packages/api-client
 COPY packages/shared      ./packages/shared
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* sono inlined da Next a BUILD-TIME (non runtime): l'api-client gira
+# solo lato browser (tutti i consumer sono 'use client'), quindi base URL relativo
+# /api/v1 -> same-origin su apex e su ogni tenant *.studiodesk.cloud (tenancy via
+# header X-Tenant-Slug, host-agnostica). Caddy instrada /api/* all'accountant-api.
+ENV NEXT_PUBLIC_API_URL=/api/v1
 # turbo builda i workspace dep con script build (shared) in ordine, poi next build.
 # ui/i18n/api-client/auth-web non hanno 'build' (transpilati da Next) -> turbo li salta.
 RUN pnpm turbo run build --filter=@gestionale/accountant-web...

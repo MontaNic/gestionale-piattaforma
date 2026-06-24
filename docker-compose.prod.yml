@@ -46,6 +46,58 @@ services:
       - gestionale_network
       - web
 
+  # ── App del gestionale dietro il proxy (ADR-0042 §1) ──────────────────────────
+  # Build dal context repo-root: i Dockerfile COPYano apps/ + packages/ del
+  # workspace pnpm. NESSUNA porta pubblicata sull'host: raggiungibili solo da
+  # Caddy via service name sulla gestionale_network (come postgres/redis).
+  # NB: caddy NON ha depends_on su questi servizi di proposito — il proxy live
+  # (che serve anche gli host co-locati) non deve dipendere dal loro ciclo di vita.
+  accountant-api:
+    build:
+      context: .
+      dockerfile: apps/accountant-api/Dockerfile
+    image: gestionale/accountant-api
+    restart: unless-stopped
+    # JWT/Throttle/Lockout/SMTP dal .env; override sotto per le var host-specific
+    # (dentro la rete si usa il service name, non 127.0.0.1 = il container stesso).
+    env_file:
+      - .env
+    environment:
+      PORT: '3002'
+      REDIS_HOST: redis
+      # DATABASE_URL/DIRECT_URL del .env puntano a 127.0.0.1 (migration eseguite
+      # sull'host). Nel container servono le varianti host=postgres, stessi
+      # credenziali+encoding: vanno aggiunte a .env (vedi nota nel report).
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?DATABASE_URL_DOCKER mancante in .env (variante host=postgres)}
+      DIRECT_URL: ${DIRECT_URL_DOCKER:?DIRECT_URL_DOCKER mancante in .env (variante host=postgres)}
+      # Same-origin (routing path-based /api/*) -> CORS di fatto non scatta;
+      # valore di sicurezza per eventuali richieste cross-origin.
+      CORS_ORIGIN: https://studiodesk.cloud
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gestionale_network
+
+  accountant-web:
+    build:
+      context: .
+      dockerfile: apps/accountant-web/Dockerfile
+    image: gestionale/accountant-web
+    restart: unless-stopped
+    # Next standalone (server.js) legge PORT/HOSTNAME a runtime. HOSTNAME 0.0.0.0
+    # obbligatorio in container (il default localhost non accetta connessioni
+    # esterne). NEXT_PUBLIC_API_URL=/api/v1 è inlined a build-time nel Dockerfile.
+    environment:
+      PORT: '3003'
+      HOSTNAME: '0.0.0.0'
+    depends_on:
+      - accountant-api
+    networks:
+      - gestionale_network
+
 # `web` è external: la sua vita non è legata a questo compose (la crea/possiede
 # l'operatore una tantum: `docker network create web`). Vedi ADR-0042.
 networks:

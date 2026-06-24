@@ -1,8 +1,8 @@
 # Caddyfile di produzione — HTTPS wildcard via Let's Encrypt (DNS-01 Cloudflare).
 #
-# Stato attuale: serve SOLO un placeholder. Le app (api/web) non sono ancora
-# dietro questo proxy; quando lo saranno si sostituirà `respond` con `reverse_proxy`
-# verso i service name della gestionale_network (es. restaurant-web:3001, api:3000).
+# Stato attuale: reverse_proxy verso le app del gestionale sulla gestionale_network,
+# split path-based same-origin: /api/* -> accountant-api:3002 (prefisso /api/v1
+# preservato), tutto il resto -> accountant-web:3003 (Next standalone). Vedi ADR-0042 §1.
 #
 # Segreti: NESSUN valore in chiaro qui. Il token Cloudflare e l'email ACME arrivano
 # dall'ambiente (file .env, gitignored) e sono iniettati nel container dal compose:
@@ -45,11 +45,18 @@ studiodesk.cloud, *.studiodesk.cloud {
 	# sull'host (è gitignored), come la rete `web` external (vedi docker-compose.prod.yml).
 	import colocated.*.caddy
 
-	# Fallback: ogni altro host (apex + altri *.studiodesk.cloud). Placeholder
-	# finché le app del gestionale non saranno dietro il proxy. È comportamento
-	# del gateway gestionale, quindi resta versionato qui (non nello snippet).
+	# Gestionale dietro il proxy (ADR-0042 §1): split path-based same-origin su
+	# apex + tenant *.studiodesk.cloud. `handle` è first-match: gli host co-locati
+	# (import sopra) vincono per i loro host, valutati prima di questi due blocchi.
+	#
+	# /api/* -> accountant-api:3002. `handle` (NON handle_path) NON strippa il
+	# prefisso: l'API conserva il suo global prefix /api/v1.
+	handle /api/* {
+		reverse_proxy accountant-api:3002
+	}
+	# Tutto il resto -> accountant-web:3003 (Next standalone, browser only).
 	handle {
-		respond "Gestionale — HTTPS it works! ({host})" 200
+		reverse_proxy accountant-web:3003
 	}
 
 	encode gzip zstd
