@@ -565,6 +565,7 @@ export class AuthService {
   //   - tenantId pre-risolto da TenantMiddleware (endpoint @Public pre-auth).
   async forgotPassword(
     tenantId: string,
+    tenantSlug: string,
     email: string,
     meta: { ip?: string; userAgent?: string },
   ): Promise<{ success: true }> {
@@ -602,7 +603,10 @@ export class AuthService {
       },
     });
 
-    const resetLink = `${this.resetUrlBase()}/reset-password?token=${token}`;
+    // Link tenant-scoped: la route FE è /t/<slug>/reset-password (multi-tenant
+    // path-based, TD-2 ADR-0012). Lo slug arriva dal controller (X-Tenant-Slug
+    // validato da TenantMiddleware) — il service ha solo il tenantId.
+    const resetLink = `${this.resetUrlBase()}/t/${tenantSlug}/reset-password?token=${token}`;
     const emailSent = await this.mail.sendPasswordResetEmail({
       to: user.email,
       resetLink,

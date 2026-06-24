@@ -477,5 +477,41 @@
       "errorRequired": "Title, subject and content are required.",
       "errorDestinatari": "Select at least one recipient."
     }
+  },
+  "auth": {
+    "login": {
+      "forgotPasswordLink": "Forgot password?"
+    },
+    "forgotPassword": {
+      "title": "Reset your password",
+      "description": "Enter your email and we'll send you a link to reset your password.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "name@firm.com",
+      "validationEmail": "Invalid email",
+      "submit": "Send reset link",
+      "submitting": "Sending…",
+      "successTitle": "Check your email",
+      "successBody": "If an account is associated with this email, you'll receive a link to reset your password.",
+      "backToLogin": "Back to login",
+      "connectionError": "Connection error. Please try again."
+    },
+    "resetPassword": {
+      "title": "Choose a new password",
+      "description": "Set the new password for your account.",
+      "passwordLabel": "New password",
+      "passwordPlaceholder": "••••••••",
+      "confirmLabel": "Confirm password",
+      "confirmPlaceholder": "••••••••",
+      "submit": "Reset password",
+      "submitting": "Updating…",
+      "successTitle": "Password updated",
+      "successBody": "Your password has been reset. You can now sign in with your new credentials.",
+      "goToLogin": "Go to login",
+      "requestNew": "Request a new link",
+      "tokenMissing": "Invalid or incomplete link. Please request a new password reset.",
+      "validationTooShort": "Password too short (min 8 characters)",
+      "validationMismatch": "Passwords don't match",
+      "connectionError": "Connection error. Please try again."
+    }
   }
 }

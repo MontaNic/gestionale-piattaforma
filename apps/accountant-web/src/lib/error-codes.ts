@@ -28,6 +28,12 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   [AuthErrorCode.TENANT_MISMATCH]:
     'Accesso non autorizzato a questo tenant. Effettua nuovamente il login.',
   [AuthErrorCode.SESSION_INVALID]: 'Sessione non valida. Effettua nuovamente il login.',
+  // Reset password (feat/reset-password). Il backend emette questi codici sul
+  // 400 di /auth/reset-password (token invalido/scaduto, password troppo corta).
+  [AuthErrorCode.RESET_TOKEN_INVALID]:
+    'Link di reset non valido o già utilizzato. Richiedine uno nuovo.',
+  [AuthErrorCode.RESET_TOKEN_EXPIRED]: 'Link di reset scaduto. Richiedine uno nuovo.',
+  [AuthErrorCode.PASSWORD_TOO_SHORT]: 'La password deve contenere almeno 8 caratteri.',
   [CommonErrorCode.RATE_LIMITED]: 'Troppe richieste. Attendi qualche istante e riprova.',
 
   // Fallback difensivo: `parseError` srotola `E_VALIDATION` → codice specifico

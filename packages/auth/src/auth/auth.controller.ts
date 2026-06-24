@@ -64,7 +64,10 @@ export class AuthController {
     @Req() req: AuthenticatedRequest,
   ): Promise<{ data: { success: true } }> {
     if (!tenantId) throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
-    const result = await this.auth.forgotPassword(tenantId, dto.email, {
+    // Slug dal header già validato da TenantMiddleware (esiste se tenantId è
+    // risolto): serve a costruire il link FE tenant-scoped /t/<slug>/reset-password.
+    const tenantSlug = req.header('x-tenant-slug') ?? '';
+    const result = await this.auth.forgotPassword(tenantId, tenantSlug, dto.email, {
       ip: req.ip,
       userAgent: req.header('user-agent'),
     });

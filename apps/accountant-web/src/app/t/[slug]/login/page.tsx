@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
 import { Alert, AlertDescription } from '@gestionale/ui';
@@ -30,6 +32,7 @@ export default function LoginPage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const tenantSlug = params.slug;
+  const tAuth = useTranslations('auth.login');
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<LoginFormValues>({
@@ -112,6 +115,9 @@ export default function LoginPage() {
               )}
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Accesso in corso...' : 'Accedi'}
+              </Button>
+              <Button asChild variant="link" className="w-full">
+                <Link href={`/t/${tenantSlug}/forgot-password`}>{tAuth('forgotPasswordLink')}</Link>
               </Button>
             </form>
           </Form>

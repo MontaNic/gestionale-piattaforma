@@ -477,5 +477,41 @@
       "errorRequired": "Titolo, oggetto e contenuto sono obbligatori.",
       "errorDestinatari": "Seleziona almeno un destinatario."
     }
+  },
+  "auth": {
+    "login": {
+      "forgotPasswordLink": "Password dimenticata?"
+    },
+    "forgotPassword": {
+      "title": "Reimposta la password",
+      "description": "Inserisci la tua email: ti invieremo un link per reimpostare la password.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "nome@studio.it",
+      "validationEmail": "Email non valida",
+      "submit": "Invia link di reset",
+      "submitting": "Invio in corso…",
+      "successTitle": "Controlla la tua email",
+      "successBody": "Se esiste un account associato a questa email, riceverai un link per reimpostare la password.",
+      "backToLogin": "Torna al login",
+      "connectionError": "Errore di connessione al server"
+    },
+    "resetPassword": {
+      "title": "Scegli una nuova password",
+      "description": "Imposta la nuova password per il tuo account.",
+      "passwordLabel": "Nuova password",
+      "passwordPlaceholder": "••••••••",
+      "confirmLabel": "Conferma password",
+      "confirmPlaceholder": "••••••••",
+      "submit": "Reimposta password",
+      "submitting": "Aggiornamento in corso…",
+      "successTitle": "Password aggiornata",
+      "successBody": "La tua password è stata reimpostata. Ora puoi accedere con le nuove credenziali.",
+      "goToLogin": "Vai al login",
+      "requestNew": "Richiedi un nuovo link",
+      "tokenMissing": "Link non valido o incompleto. Richiedi un nuovo reset della password.",
+      "validationTooShort": "Password troppo corta (min 8 caratteri)",
+      "validationMismatch": "Le password non coincidono",
+      "connectionError": "Errore di connessione al server"
+    }
   }
 }
