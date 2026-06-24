@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
+  Building2,
   CalendarDays,
   FileText,
   LayoutDashboard,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@gestionale/ui';
+import { PLATFORM_SLUG } from '@/lib/platform-types';
 
 // =============================================================================
 // Sidebar.tsx — Primary nav shell (ADR-0018 DP-2)
@@ -36,7 +38,10 @@ interface NavItem {
     | 'comunicazioni'
     | 'documenti'
     | 'circolari'
-    | 'fatture';
+    | 'fatture'
+    | 'platform';
+  // Segmento dopo /t/<slug>/ (default = key). Override per route annidate.
+  path?: string;
   href: string;
   icon: LucideIcon;
 }
@@ -51,6 +56,13 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'fatture', icon: Receipt },
 ] as const;
 
+// Voce superadmin: mostrata SOLO nel tenant di piattaforma `oneplatform`.
+const PLATFORM_NAV_ITEM: Omit<NavItem, 'href'> = {
+  key: 'platform',
+  path: 'platform/tenants',
+  icon: Building2,
+};
+
 interface SidebarProps {
   onNavigate?: () => void;
 }
@@ -60,6 +72,10 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
   const pathname = usePathname();
   const t = useTranslations('shell.nav');
   const slug = params.slug;
+
+  // La voce Piattaforma compare solo nel tenant oneplatform (gating UX; il BE
+  // rinforza con PlatformGuard).
+  const items = slug === PLATFORM_SLUG ? [...NAV_ITEMS, PLATFORM_NAV_ITEM] : NAV_ITEMS;
 
   return (
     <nav
@@ -71,8 +87,8 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
         <span className="text-lg font-semibold">Gestionale</span>
       </div>
       <ul className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {NAV_ITEMS.map((item) => {
-          const href = `/t/${slug}/${item.key}`;
+        {items.map((item) => {
+          const href = `/t/${slug}/${item.path ?? item.key}`;
           // Prefix match: la voce resta attiva anche sui segmenti dinamici
           // figli (es. /clienti/[id] tiene "Clienti" attivo). Match esatto sul
           // top-level + startsWith su `${href}/` per le sub-route.

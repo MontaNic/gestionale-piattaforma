@@ -7,7 +7,8 @@
       "comunicazioni": "Comunicazioni",
       "documenti": "Documenti",
       "fatture": "Fatture",
-      "circolari": "Circolari"
+      "circolari": "Circolari",
+      "platform": "Piattaforma"
     },
     "topbar": {
       "openMenu": "Apri menu",
@@ -564,5 +565,54 @@
     "validationMismatch": "Le password non coincidono",
     "connectionError": "Errore di connessione al server",
     "goToLogin": "Vai al login"
+  },
+  "platform": {
+    "title": "Studi (tenant)",
+    "subtitle": "Gestione degli studi della piattaforma.",
+    "newTenant": "Nuovo studio",
+    "loading": "Caricamento…",
+    "listEmpty": "Nessuno studio.",
+    "retry": "Riprova",
+    "forbidden": "Accesso riservato al superadmin di piattaforma.",
+    "col": {
+      "name": "Nome",
+      "slug": "Slug",
+      "stato": "Stato",
+      "creato": "Creato",
+      "azioni": "Azioni"
+    },
+    "stato": {
+      "attivo": "Attivo",
+      "sospeso": "Sospeso"
+    },
+    "actions": {
+      "suspend": "Sospendi",
+      "restore": "Riattiva",
+      "delete": "Elimina"
+    },
+    "form": {
+      "name": "Nome studio",
+      "slug": "Slug",
+      "slugHint": "Minuscole, numeri e trattini (3-50 caratteri).",
+      "adminEmail": "Email amministratore",
+      "adminPassword": "Password amministratore",
+      "adminFirstName": "Nome amministratore",
+      "adminLastName": "Cognome amministratore",
+      "submit": "Crea studio",
+      "submitting": "Creazione in corso…",
+      "cancel": "Annulla",
+      "validationName": "Nome obbligatorio (min 3 caratteri)",
+      "validationSlug": "Slug non valido (minuscole, numeri, trattini, 3-50)",
+      "validationEmail": "Email non valida",
+      "validationPassword": "Password troppo corta (min 8 caratteri)",
+      "validationFirstName": "Nome obbligatorio",
+      "validationLastName": "Cognome obbligatorio"
+    },
+    "confirm": {
+      "deleteTitle": "Elimina studio",
+      "deleteBody": "Eliminare lo studio {name}? L'operazione è reversibile dal database.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
+    }
   }
 }

@@ -29,6 +29,7 @@ import { ComunicazioniModule } from './comunicazioni/comunicazioni.module';
 import { DocumentiModule } from './documenti/documenti.module';
 import { CircolariModule } from './circolari/circolari.module';
 import { InvitiModule } from './inviti/inviti.module';
+import { PlatformModule } from './platform/platform.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -70,6 +71,8 @@ import { MeModule } from './me/me.module';
     DashboardModule,
     // Inviti cliente: onboarding utenti-portale via token email (feat/invito-cliente).
     InvitiModule,
+    // Platform superadmin: gestione tenant (gated PlatformGuard, Task 3).
+    PlatformModule,
   ],
   controllers: [AppController],
   providers: [

@@ -7,7 +7,8 @@
       "comunicazioni": "Messages",
       "documenti": "Documents",
       "fatture": "Invoices",
-      "circolari": "Circulars"
+      "circolari": "Circulars",
+      "platform": "Platform"
     },
     "topbar": {
       "openMenu": "Open menu",
@@ -564,5 +565,54 @@
     "validationMismatch": "Passwords don't match",
     "connectionError": "Connection error. Please try again.",
     "goToLogin": "Go to login"
+  },
+  "platform": {
+    "title": "Studios (tenants)",
+    "subtitle": "Manage the platform studios.",
+    "newTenant": "New studio",
+    "loading": "Loading…",
+    "listEmpty": "No studios.",
+    "retry": "Retry",
+    "forbidden": "Restricted to the platform superadmin.",
+    "col": {
+      "name": "Name",
+      "slug": "Slug",
+      "stato": "Status",
+      "creato": "Created",
+      "azioni": "Actions"
+    },
+    "stato": {
+      "attivo": "Active",
+      "sospeso": "Suspended"
+    },
+    "actions": {
+      "suspend": "Suspend",
+      "restore": "Restore",
+      "delete": "Delete"
+    },
+    "form": {
+      "name": "Studio name",
+      "slug": "Slug",
+      "slugHint": "Lowercase, numbers and dashes (3-50 chars).",
+      "adminEmail": "Admin email",
+      "adminPassword": "Admin password",
+      "adminFirstName": "Admin first name",
+      "adminLastName": "Admin last name",
+      "submit": "Create studio",
+      "submitting": "Creating…",
+      "cancel": "Cancel",
+      "validationName": "Name is required (min 3 characters)",
+      "validationSlug": "Invalid slug (lowercase, numbers, dashes, 3-50)",
+      "validationEmail": "Invalid email",
+      "validationPassword": "Password too short (min 8 characters)",
+      "validationFirstName": "First name is required",
+      "validationLastName": "Last name is required"
+    },
+    "confirm": {
+      "deleteTitle": "Delete studio",
+      "deleteBody": "Delete studio {name}? This is reversible from the database.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
+    }
   }
 }
