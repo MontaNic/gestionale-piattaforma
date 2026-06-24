@@ -33,6 +33,10 @@ export type { FullProfile } from './users/users.service';
 
 // tenancy: tenants (CRUD) + tenant (infra) + context (interceptor)
 export { TenantsModule } from './tenants/tenants.module';
+// TenantsService + DTO + result: riusati dal modulo platform (superadmin Task 3).
+export { TenantsService } from './tenants/tenants.service';
+export type { CreateTenantResult } from './tenants/tenants.service';
+export { CreateTenantDto } from './tenants/dto/create-tenant.dto';
 export { TenantModule } from './tenant/tenant.module';
 export { TenantMiddleware } from './tenant/tenant.middleware';
 export { CurrentTenant } from './tenant/decorators/current-tenant.decorator';

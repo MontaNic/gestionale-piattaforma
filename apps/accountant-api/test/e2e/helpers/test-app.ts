@@ -28,6 +28,11 @@ import type { TestContainers } from './test-containers';
 // seedMinimal: insert raw SQL (no Prisma seed.ts completo) per velocità.
 // =============================================================================
 
+// Id fisso del tenant di piattaforma usato negli E2E (combacia con quello che
+// PlatformGuard legge da PLATFORM_TENANT_ID). I test seedano un tenant con
+// questo id per impersonare il superadmin di piattaforma.
+export const E2E_PLATFORM_TENANT_ID = '01900000-0000-7000-8000-000000000001';
+
 export async function createTestApp(containers: TestContainers): Promise<INestApplication> {
   // Override env BEFORE module compile (ConfigModule.forRoot legge process.env).
   process.env.DATABASE_URL = containers.databaseUrl;
@@ -39,6 +44,10 @@ export async function createTestApp(containers: TestContainers): Promise<INestAp
   // CORS_ORIGIN: irrilevante in E2E (supertest non manda preflight), ma
   // settato per evitare warning bootstrap se la var manca.
   process.env.CORS_ORIGIN = 'http://localhost:3003';
+
+  // PLATFORM_TENANT_ID (Task 3): id del tenant `oneplatform`. PlatformGuard lo
+  // confronta con req.user.tenantId. I test seedano un tenant con questo id.
+  process.env.PLATFORM_TENANT_ID = E2E_PLATFORM_TENANT_ID;
 
   // MailService: SMTP_PORT=1 (porta chiusa) → transporter.verify() fail-open
   // log warn, no mail real sent.

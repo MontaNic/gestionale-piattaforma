@@ -450,8 +450,14 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
 // Helper: seed di un tenant dev completo (tenant + sede + user + role + assignments)
 // Idempotente: re-run safe. D3b extension per supportare N tenant dev (demo, acme).
 // ─────────────────────────────────────────────────────────────────────────────
+// Id fisso e well-known del tenant di piattaforma `oneplatform`: il superadmin
+// è un utente di questo tenant (decisione Task 3, opzione b — nessuna identità
+// platform separata). Deve combaciare con PLATFORM_TENANT_ID in .env, che il
+// PlatformGuard confronta con req.user.tenantId. Id stabile = env riferibile.
+export const PLATFORM_TENANT_ID = '01900000-0000-7000-8000-000000000001';
+
 interface SeedDevTenantParams {
-  tenant: { slug: string; name: string };
+  tenant: { slug: string; name: string; id?: string };
   sede: { name: string; address: string; city: string; postalCode: string };
   user: { email: string; password: string; firstName: string; lastName: string };
   superAdminTplId: string;
@@ -467,7 +473,14 @@ async function seedDevTenant(
   // 1. Tenant
   const tenant = await prisma.tenant.upsert({
     where: { slug: tenantInfo.slug },
-    create: { id: id(), name: tenantInfo.name, slug: tenantInfo.slug, isActive: true },
+    // id opzionale: il tenant di piattaforma usa un id fisso (PLATFORM_TENANT_ID);
+    // gli altri tenant dev usano uuidv7 generato.
+    create: {
+      id: tenantInfo.id ?? id(),
+      name: tenantInfo.name,
+      slug: tenantInfo.slug,
+      isActive: true,
+    },
     update: { name: tenantInfo.name, isActive: true },
   });
   console.log(`  Tenant '${tenantInfo.slug}': ${tenant.id}`);
@@ -1535,6 +1548,30 @@ async function main(): Promise<void> {
     await seedDevCollaboratore(studio.tenantId);
     await seedDevClientePortale(studio.tenantId);
 
+    // Tenant di PIATTAFORMA `oneplatform` (Task 3 — superadmin minimale). Id
+    // FISSO (PLATFORM_TENANT_ID) per essere riferibile da .env. Il suo Super
+    // Admin è il superadmin di piattaforma: ha sistema.tenant.gestisci e (via
+    // PLATFORM_TENANT_ID) accede agli endpoint /platform/*. Nessuna identità
+    // platform separata (decisione opzione b). Nessun dato di dominio.
+    await seedDevTenant({
+      tenant: { slug: 'oneplatform', name: 'OnePlatform', id: PLATFORM_TENANT_ID },
+      sede: {
+        name: 'Sede Piattaforma',
+        address: 'Via Piattaforma 1',
+        city: 'Milano',
+        postalCode: '20100',
+      },
+      user: {
+        email: 'superadmin@oneplatform.local',
+        password: 'Superadmin123!',
+        firstName: 'Super',
+        lastName: 'Admin',
+      },
+      superAdminTplId: superAdminTpl.id,
+      superAdminTplDescription: superAdminTpl.description,
+      tplPermissions,
+    });
+
     // ─────────────────────────────────────────────────────────────────────────
     // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
     // passo 8b-1): estratta dal core del tenant e orchestrata qui al top-level.
@@ -1565,6 +1602,9 @@ async function main(): Promise<void> {
     console.log(`    - studio-demo  (admin@studio.local / Studio123!)`);
     console.log(`        + collaboratore@studio.local / Collaboratore123! (ruolo Collaboratore)`);
     console.log(`        + cliente@studio-demo.local / Cliente123! (portale cliente → AZ001)`);
+    console.log(
+      `    - oneplatform  (superadmin@oneplatform.local / Superadmin123!) → PLATFORM_TENANT_ID`,
+    );
   }
   console.log('  ✅ Seed completato (idempotente).');
 }
