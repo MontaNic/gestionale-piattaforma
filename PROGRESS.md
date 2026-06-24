@@ -674,6 +674,18 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 
 **Backlog livello 2 (non implementati):** destinatario `utente` (broadcast a singolo), storico circolari archiviate lato cliente, notifiche email/push alla pubblicazione, rendering HTML sanitizzato del body (TD-circolari-render), download allegati circolari, paginazione/export CSV del report.
 
+## [2026-06-25] Deploy applicativo + Onda 1 completa (#109-112)
+
+Deploy applicativo reale: Dockerfile api/web multi-stage, compose prod, Caddy reverse_proxy path-based (PR #109, `8a06f88`). App live su gestionale-test.
+
+Onda 1 — Sblocca l'uso reale:
+- Reset password (#110, `e67c5f9`): forgot/reset flow, token sha256 TTL 1h, no-oracle, logout globale.
+- Invito cliente (#111, `09e7998`): token sha256 TTL 7gg, auto-promote admin, auto-login post-accept, permesso `clienti.invitare` (50 permessi totali).
+- Superadmin minimale (#112, `6f7e0d2`): tenant `oneplatform`, PlatformGuard, lifecycle tenant (list/create/suspend/restore/delete), UI `/platform/tenants`.
+
+Ricognizione AI betadesk: subsistema Groq mappato, chiave ruotata, piano portare su NestJS (Onda 6).
+Prossimo: Onda 2 — identità visiva + homepage portale cliente + dashboard operatore differenziata.
+
 ---
 
 ## 📌 Contesto rapido
