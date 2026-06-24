@@ -65,6 +65,10 @@ services:
     environment:
       PORT: '3002'
       REDIS_HOST: redis
+      # SMTP_HOST/_PORT del .env puntano a 127.0.0.1:1025 (mailpit via host).
+      # Nel container il MTA dev si raggiunge per service name (vedi REDIS_HOST).
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
       # DATABASE_URL/DIRECT_URL del .env puntano a 127.0.0.1 (migration eseguite
       # sull'host). Nel container servono le varianti host=postgres, stessi
       # credenziali+encoding: vanno aggiunte a .env (vedi nota nel report).

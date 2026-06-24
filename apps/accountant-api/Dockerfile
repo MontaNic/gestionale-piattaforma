@@ -38,18 +38,21 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Solo i file necessari per l'avvio
-COPY --from=builder /app/apps/accountant-api/dist ./dist
-COPY --from=builder /app/apps/accountant-api/package.json ./
+# Preserva il layout pnpm del builder invece di re-installare (pnpm deploy 9.15
+# ri-risolve il workspace e perderebbe il client Prisma generato). Si copiano:
+# - node_modules root: lo store virtuale .pnpm (incl. @prisma/client + engine musl
+#   gia generato) verso cui puntano tutti i symlink relativi
+# - packages/*: dir reali dei workspace dep (target dei symlink @gestionale/*)
+# - apps/accountant-api/node_modules: la symlink-farm delle deps dell'app
+# - dist + package.json dell'app
+# L'app gira dalla sua dir cosi Node risolve via apps/accountant-api/node_modules
+# -> ../../node_modules/.pnpm (symlink relativi, validi nella stessa struttura).
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/auth/dist      ./packages/auth/dist
-COPY --from=builder /app/packages/auth/package.json ./packages/auth/
-COPY --from=builder /app/packages/db/dist        ./packages/db/dist
-COPY --from=builder /app/packages/db/package.json ./packages/db/
-COPY --from=builder /app/packages/platform/dist  ./packages/platform/dist
-COPY --from=builder /app/packages/platform/package.json ./packages/platform/
-COPY --from=builder /app/packages/shared/dist    ./packages/shared/dist
-COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/accountant-api/node_modules ./apps/accountant-api/node_modules
+COPY --from=builder /app/apps/accountant-api/dist ./apps/accountant-api/dist
+COPY --from=builder /app/apps/accountant-api/package.json ./apps/accountant-api/
 
+WORKDIR /app/apps/accountant-api
 EXPOSE 3002
 CMD ["node", "dist/src/main.js"]
