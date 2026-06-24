@@ -28,6 +28,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { id, prisma, runInTenantContext } from '@gestionale/db';
@@ -45,6 +46,10 @@ import { validatePin } from './utils/pin-validator';
 // Costanti TTL — coerenti con §B1 brief.
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15min
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7d
+// Reset password: TTL token monouso (1h, allineato al testo email) +
+// lunghezza minima password (coerente con LoginDto/MinLength(8)).
+const PASSWORD_RESET_TTL_SECONDS = 60 * 60; // 1h
+const MIN_PASSWORD_LENGTH = 8;
 
 export type AuditAction =
   | 'auth.login.success'
@@ -59,6 +64,10 @@ export type AuditAction =
   | 'auth.login_pin.failure'
   // B1 (sessione 8) — lockout transition:
   | 'auth.account_locked' // promoted to lockout: count >= threshold
+  // Reset password (forgot/reset flow):
+  | 'auth.password_reset.requested' // forgot-password ricevuto (email esiste o no)
+  | 'auth.password_reset.completed' // reset-password andato a buon fine
+  | 'auth.password_reset.failure' // token invalido/scaduto/usato o password corta
   // RBAC (sessione 11 ADR-0017) — emesso da PermissionsGuard su deny path,
   // con dedupe Redis 60s/(userId,endpoint) per evitare flood audit log.
   | 'auth.permission_denied';
@@ -79,6 +88,7 @@ export class AuthService {
     @Inject(JwtService) private readonly jwt: JwtService,
     @Inject(LockoutService) private readonly lockout: LockoutService,
     @Inject(MailService) private readonly mail: MailService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   // Durata lockout in minuti, usata per UI message email. Allineata a
@@ -543,8 +553,185 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------------
+  // FORGOT PASSWORD — genera token monouso + invia email (no oracle)
+  // ---------------------------------------------------------------------------
+  // (ADR-0008) Sicurezza:
+  //   - Response SEMPRE { success: true } indipendentemente dall'esistenza
+  //     dell'email: niente enumeration (parità con login no-info-leak).
+  //   - Token = 32 byte random hex; in DB salviamo SOLO sha256(token).
+  //   - I reset pendenti precedenti dello stesso user vengono invalidati
+  //     (un solo link valido alla volta).
+  //   - Email inviata solo se l'utente esiste ed è attivo (no destinatario → no send).
+  //   - tenantId pre-risolto da TenantMiddleware (endpoint @Public pre-auth).
+  async forgotPassword(
+    tenantId: string,
+    email: string,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<{ success: true }> {
+    const user = await this.users.findByTenantEmail(tenantId, email);
+
+    if (!user || !user.isActive) {
+      // No oracle: stessa response. Audit del tentativo senza recipient reale.
+      await this.recordAudit({
+        tenantId,
+        userId: undefined,
+        action: 'auth.password_reset.requested',
+        meta,
+        payload: { emailSent: false, reason: 'user_not_found_or_inactive' },
+      });
+      return { success: true };
+    }
+
+    // Invalida eventuali token pendenti dello stesso user (single-active-link).
+    await prisma.passwordReset.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(token);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_SECONDS * 1000);
+
+    await prisma.passwordReset.create({
+      data: {
+        id: id(),
+        tenantId,
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    const resetLink = `${this.resetUrlBase()}/reset-password?token=${token}`;
+    const emailSent = await this.mail.sendPasswordResetEmail({
+      to: user.email,
+      resetLink,
+      firstName: user.firstName,
+    });
+
+    await this.recordAudit({
+      tenantId,
+      userId: user.id,
+      action: 'auth.password_reset.requested',
+      meta,
+      payload: { emailSent, emailReason: emailSent ? null : 'send_failed' },
+    });
+
+    return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // RESET PASSWORD — consuma token monouso + set nuova password
+  // ---------------------------------------------------------------------------
+  // Flusso:
+  //   1. Re-valida lunghezza password server-side (ValidationPipe non gira in E2E).
+  //   2. Lookup per sha256(token) scoped al tenant. Assente/usato → INVALID.
+  //   3. Scaduto → EXPIRED (distinto solo per UX).
+  //   4. User assente/disattivo/cross-tenant → INVALID (no leak).
+  //   5. Tx atomica: update password + mark token used + revoke TUTTE le
+  //      sessioni attive + reset failed counter. Cambio password = logout globale.
+  async resetPassword(
+    tenantId: string,
+    token: string,
+    newPassword: string,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<{ success: true }> {
+    if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new BadRequestException(AuthErrorCode.PASSWORD_TOO_SHORT);
+    }
+
+    const tokenHash = this.hashToken(token);
+    const reset = await prisma.passwordReset.findFirst({
+      where: { tokenHash, tenantId },
+    });
+
+    if (!reset || reset.usedAt) {
+      await this.recordAudit({
+        tenantId,
+        userId: reset?.userId,
+        action: 'auth.password_reset.failure',
+        meta,
+        payload: { reason: reset ? 'token_used' : 'token_not_found' },
+      });
+      throw new BadRequestException(AuthErrorCode.RESET_TOKEN_INVALID);
+    }
+
+    if (reset.expiresAt < new Date()) {
+      await this.recordAudit({
+        tenantId,
+        userId: reset.userId,
+        action: 'auth.password_reset.failure',
+        meta,
+        payload: { reason: 'token_expired' },
+      });
+      throw new BadRequestException(AuthErrorCode.RESET_TOKEN_EXPIRED);
+    }
+
+    const user = await this.users.findById(reset.userId);
+    if (!user || !user.isActive || user.tenantId !== tenantId) {
+      await this.recordAudit({
+        tenantId,
+        userId: reset.userId,
+        action: 'auth.password_reset.failure',
+        meta,
+        payload: { reason: 'user_invalid' },
+      });
+      throw new BadRequestException(AuthErrorCode.RESET_TOKEN_INVALID);
+    }
+
+    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+
+    // Tx atomica: password + token usato + sessioni revocate (logout globale
+    // post cambio password) + reset contatore tentativi falliti.
+    const revoked = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, failedLoginAttempts: 0 },
+      });
+      await tx.passwordReset.update({
+        where: { id: reset.id },
+        data: { usedAt: new Date() },
+      });
+      const sessions = await tx.session.updateMany({
+        where: { userId: user.id, isActive: true },
+        data: { isActive: false },
+      });
+      return sessions.count;
+    });
+
+    await this.recordAudit({
+      tenantId,
+      userId: user.id,
+      action: 'auth.password_reset.completed',
+      meta,
+      payload: { revokedSessionCount: revoked },
+    });
+
+    return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /** sha256 hex del token: in DB sta solo l'hash, mai il plaintext. */
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Base URL del FE per costruire il reset link. Env `PASSWORD_RESET_URL_BASE`
+   * (dedicato) → fallback `CORS_ORIGIN` (già configurato) → default dev.
+   * Trailing slash normalizzato.
+   */
+  private resetUrlBase(): string {
+    const base =
+      this.config.get<string>('PASSWORD_RESET_URL_BASE') ??
+      this.config.get<string>('CORS_ORIGIN') ??
+      'http://localhost:3003';
+    return base.replace(/\/+$/, '');
+  }
+
   private async issueTokensAndCreateSession(
     userId: string,
     tenantId: string,

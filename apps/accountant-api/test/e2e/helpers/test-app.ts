@@ -90,6 +90,7 @@ export async function truncateDatabase(databaseUrl: string): Promise<void> {
       scadenze_categorie,
       aziende,
       audit_logs,
+      password_resets,
       sessions,
       user_roles,
       role_permissions,

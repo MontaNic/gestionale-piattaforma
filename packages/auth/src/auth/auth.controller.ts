@@ -16,10 +16,12 @@ import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import type { AuthTokensPayload } from './dto/auth-response.dto';
+import type { ForgotPasswordDto } from './dto/forgot-password.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { LoginPinDto } from './dto/login-pin.dto';
 import type { PinSetupDto } from './dto/pin-setup.dto';
 import type { RefreshDto } from './dto/refresh.dto';
+import type { ResetPasswordDto } from './dto/reset-password.dto';
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,
@@ -44,6 +46,52 @@ export class AuthController {
       userAgent: req.header('user-agent'),
     });
     return { data: tokens };
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST /api/v1/auth/forgot-password — Public (reset password flow)
+  // ---------------------------------------------------------------------------
+  // X-Tenant-Slug required (TenantMiddleware scoped a questo path). Response
+  // SEMPRE 200 { success: true } (no oracle su esistenza email). @AuthStrict
+  // rate-limita per IP (anti email-bombing).
+  @Public()
+  @AuthStrict()
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  async forgotPassword(
+    @CurrentTenant() tenantId: string | undefined,
+    @Body() dto: ForgotPasswordDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ data: { success: true } }> {
+    if (!tenantId) throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
+    const result = await this.auth.forgotPassword(tenantId, dto.email, {
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+    });
+    return { data: result };
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST /api/v1/auth/reset-password — Public (reset password flow)
+  // ---------------------------------------------------------------------------
+  // X-Tenant-Slug required (token lookup scoped al tenant via RLS). @AuthStrict
+  // rate-limita per IP. Token invalido/usato → 400 E_AUTH_RESET_TOKEN_INVALID,
+  // scaduto → 400 E_AUTH_RESET_TOKEN_EXPIRED, password corta → 400 E_AUTH_PASSWORD_TOO_SHORT.
+  @Public()
+  @AuthStrict()
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-password')
+  async resetPassword(
+    @CurrentTenant() tenantId: string | undefined,
+    @Body() dto: ResetPasswordDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ data: { success: true } }> {
+    if (!tenantId) throw new UnauthorizedException(AuthErrorCode.TENANT_REQUIRED);
+    const result = await this.auth.resetPassword(tenantId, dto.token, dto.newPassword, {
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+    });
+    return { data: result };
   }
 
   @Public()

@@ -51,6 +51,14 @@ interface RefreshTokenTheftContext {
   revokedSessionCount: number;
 }
 
+interface PasswordResetContext {
+  to: string;
+  /** URL completo con token in chiaro (es. https://.../reset-password?token=...). */
+  resetLink: string;
+  /** Nome dell'utente per il saluto. */
+  firstName: string;
+}
+
 @Injectable()
 export class MailService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(MailService.name);
@@ -162,6 +170,37 @@ ${uaLine}
 <li>Se non riconosci l'attività, contatta immediatamente l'amministratore.</li>
 </ul>
 <p style="color: #666; font-size: 0.85em;">Questa è una notifica automatica di sicurezza. Non rispondere a questa email.</p>
+</body></html>`;
+
+    return this.sendSafe({ to: ctx.to, subject, html });
+  }
+
+  // ---------------------------------------------------------------------------
+  // sendPasswordResetEmail — link reset password monouso a tempo
+  // ---------------------------------------------------------------------------
+  // Trigger: AuthService.forgotPassword per un'email esistente+attiva. Il link
+  // contiene il token in chiaro (in DB salviamo solo l'hash). Content rivela
+  // SOLO: nome utente + link + durata validità. MAI: password, hash, IP.
+  // Inviata SOLO quando l'utente esiste: la response HTTP è comunque 200 generica
+  // (no oracle), ma la mail parte solo se c'è un destinatario reale.
+  async sendPasswordResetEmail(ctx: PasswordResetContext): Promise<boolean> {
+    const subject = '[Gestionale] Reimposta la tua password';
+    const safeName = escapeHtml(ctx.firstName);
+    // resetLink generato server-side (base URL da env + token random): non
+    // user-controlled. Escape difensivo comunque per coerenza col resto.
+    const safeLink = escapeHtml(ctx.resetLink);
+
+    const html = `<!doctype html>
+<html lang="it"><body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2>Reimposta la tua password</h2>
+<p>Ciao ${safeName},</p>
+<p>Abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account.</p>
+<p><a href="${safeLink}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">Reimposta password</a></p>
+<p>Oppure copia e incolla questo link nel browser:</p>
+<p><code>${safeLink}</code></p>
+<p>Il link è valido per <strong>1 ora</strong> e può essere usato una sola volta.</p>
+<p><strong>Se non hai richiesto tu il reset</strong>, ignora questa email: la tua password resta invariata.</p>
+<p style="color: #666; font-size: 0.85em;">Questa è una notifica automatica. Non rispondere a questa email.</p>
 </body></html>`;
 
     return this.sendSafe({ to: ctx.to, subject, html });

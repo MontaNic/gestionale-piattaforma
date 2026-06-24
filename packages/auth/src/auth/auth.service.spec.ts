@@ -18,6 +18,7 @@
 // Instanziamo AuthService manualmente con i mock cast a tipo dei collaboratori.
 // Niente perdita di significato: stiamo testando la business logic, non il DI.
 
+import type { ConfigService } from '@nestjs/config';
 import type { JwtService } from '@nestjs/jwt';
 import type { MailService } from '@gestionale/platform';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -134,7 +135,9 @@ describe('AuthService', () => {
   let mail: {
     sendAccountLockedEmail: ReturnType<typeof vi.fn>;
     sendRefreshTokenTheftEmail: ReturnType<typeof vi.fn>;
+    sendPasswordResetEmail: ReturnType<typeof vi.fn>;
   };
+  let config: { get: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     users = {
@@ -168,7 +171,11 @@ describe('AuthService', () => {
     mail = {
       sendAccountLockedEmail: vi.fn().mockResolvedValue(true),
       sendRefreshTokenTheftEmail: vi.fn().mockResolvedValue(true),
+      sendPasswordResetEmail: vi.fn().mockResolvedValue(true),
     };
+    // ConfigService mock: get() → undefined (i test esistenti non sondano il
+    // reset link; il fallback default URL è coperto in resetUrlBase()).
+    config = { get: vi.fn().mockReturnValue(undefined) };
 
     // Manual instantiation: cast dei mock al tipo dei collaboratori reali.
     // Bypass del DI container Nest (vedi nota sopra su emitDecoratorMetadata).
@@ -177,6 +184,7 @@ describe('AuthService', () => {
       jwt as unknown as JwtService,
       lockout as unknown as LockoutService,
       mail as unknown as MailService,
+      config as unknown as ConfigService,
     );
 
     vi.mocked(argon2.verify).mockReset();
