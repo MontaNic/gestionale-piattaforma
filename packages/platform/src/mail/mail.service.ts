@@ -59,6 +59,16 @@ interface PasswordResetContext {
   firstName: string;
 }
 
+interface InvitoClienteContext {
+  to: string;
+  /** URL completo con token in chiaro (.../t/<slug>/accept-invite?token=...). */
+  inviteLink: string;
+  /** Ragione sociale dell'azienda cliente. */
+  aziendaNome: string;
+  /** Nome dell'operatore che ha inviato l'invito. */
+  invitatoDaNome: string;
+}
+
 @Injectable()
 export class MailService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(MailService.name);
@@ -200,6 +210,34 @@ ${uaLine}
 <p><code>${safeLink}</code></p>
 <p>Il link è valido per <strong>1 ora</strong> e può essere usato una sola volta.</p>
 <p><strong>Se non hai richiesto tu il reset</strong>, ignora questa email: la tua password resta invariata.</p>
+<p style="color: #666; font-size: 0.85em;">Questa è una notifica automatica. Non rispondere a questa email.</p>
+</body></html>`;
+
+    return this.sendSafe({ to: ctx.to, subject, html });
+  }
+
+  // ---------------------------------------------------------------------------
+  // sendInvitoClienteEmail — invito onboarding al portale cliente
+  // ---------------------------------------------------------------------------
+  // Trigger: InvitiService.creaInvito. Il link contiene il token in chiaro (in
+  // DB solo l'hash). Content: nome azienda + chi invita + link + scadenza. MAI
+  // password/hash. Inviata solo a un destinatario reale (email dell'invito).
+  async sendInvitoClienteEmail(ctx: InvitoClienteContext): Promise<boolean> {
+    const subject = '[Gestionale] Invito al portale clienti';
+    const safeAzienda = escapeHtml(ctx.aziendaNome);
+    const safeInvitante = escapeHtml(ctx.invitatoDaNome);
+    const safeLink = escapeHtml(ctx.inviteLink);
+
+    const html = `<!doctype html>
+<html lang="it"><body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2>Sei stato invitato al portale clienti</h2>
+<p><strong>${safeInvitante}</strong> ti ha invitato ad accedere al portale clienti per <strong>${safeAzienda}</strong>.</p>
+<p>Per completare la registrazione e impostare la tua password, clicca qui:</p>
+<p><a href="${safeLink}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">Completa la registrazione</a></p>
+<p>Oppure copia e incolla questo link nel browser:</p>
+<p><code>${safeLink}</code></p>
+<p>Il link è valido per <strong>7 giorni</strong> e può essere usato una sola volta.</p>
+<p>Se non ti aspettavi questo invito, puoi ignorare questa email.</p>
 <p style="color: #666; font-size: 0.85em;">Questa è una notifica automatica. Non rispondere a questa email.</p>
 </body></html>`;
 

@@ -82,7 +82,7 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'sistema',
   },
 
-  // anagrafica.* (5)
+  // anagrafica.* (6)
   {
     code: 'anagrafica.cliente.crea',
     description: 'Creazione anagrafica clienti',
@@ -106,6 +106,14 @@ const PERMISSIONS: PermissionSeed[] = [
   {
     code: 'anagrafica.fornitore.gestisci',
     description: 'Gestione fornitori',
+    category: 'anagrafica',
+  },
+  // Invito clienti al portale (onboarding utenti-portale). Non-portale
+  // (isPortale assente → false): è un potere lato studio. Flowa in
+  // ALL_PERMISSION_CODES → Super Admin + Admin sede + Socio (admin-tier).
+  {
+    code: 'clienti.invitare',
+    description: 'Invito di clienti al portale (onboarding utenti-portale)',
     category: 'anagrafica',
   },
 
@@ -294,7 +302,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   {
     name: 'Super Admin',
     description: 'Accesso completo a tutte le funzioni della piattaforma.',
-    // Tutti i 35 permessi.
+    // Tutti i permessi studio (non-portale).
     permissionCodes: ALL_PERMISSION_CODES,
   },
   {

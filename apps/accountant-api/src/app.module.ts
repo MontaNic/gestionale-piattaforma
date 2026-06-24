@@ -28,6 +28,7 @@ import { ScadenzeModule } from './scadenze/scadenze.module';
 import { ComunicazioniModule } from './comunicazioni/comunicazioni.module';
 import { DocumentiModule } from './documenti/documenti.module';
 import { CircolariModule } from './circolari/circolari.module';
+import { InvitiModule } from './inviti/inviti.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -67,6 +68,8 @@ import { MeModule } from './me/me.module';
     CircolariModule,
     // Dashboard KPI aggregati tenant-level (read-only, STOP-dash1).
     DashboardModule,
+    // Inviti cliente: onboarding utenti-portale via token email (feat/invito-cliente).
+    InvitiModule,
   ],
   controllers: [AppController],
   providers: [
@@ -120,6 +123,8 @@ export class AppModule implements NestModule {
       // fa lookup token scoped al tenant (RLS via req.tenantId).
       { path: 'auth/forgot-password', method: RequestMethod.POST },
       { path: 'auth/reset-password', method: RequestMethod.POST },
+      // Accept-invite: @Public pre-auth, tenant via X-Tenant-Slug → req.tenantId.
+      { path: 'auth/accept-invite', method: RequestMethod.POST },
       // /auth/refresh non incluso: deriva tenantId dal payload JWT del
       // refresh token (verificato in AuthService.refresh). Header non serve.
     );

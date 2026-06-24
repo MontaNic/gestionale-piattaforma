@@ -8,6 +8,10 @@
 
 // auth
 export { AuthModule } from './auth/auth.module';
+// AuthService + token payload: esposti per riuso del token-issuance da consumer
+// app-level (es. accept-invite logga il cliente appena creato).
+export { AuthService } from './auth/auth.service';
+export type { AuthTokensPayload } from './auth/dto/auth-response.dto';
 export { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 export { TenantConsistencyGuard } from './auth/guards/tenant-consistency.guard';
 export { Public, IS_PUBLIC_KEY } from './auth/decorators/public.decorator';

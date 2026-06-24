@@ -72,6 +72,7 @@ model Tenant {
   circolariDestinatari CircolareDestinatario[]
   circolariLetture     CircolareLettura[]
   passwordResets       PasswordReset[]
+  clienteInviti        ClienteInvito[]
 
   @@map("tenants")
 }
@@ -174,6 +175,8 @@ model User {
   circolariLetture       CircolareLettura[]
   // Reset password: token monouso a tempo (forgot/reset flow).
   passwordResets         PasswordReset[]
+  // Inviti cliente creati da questo operatore (invitatoDa).
+  clienteInvitiCreati    ClienteInvito[]    @relation("ClienteInvitoInvitatoDa")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -359,6 +362,38 @@ model PasswordReset {
   @@index([userId])
   @@index([tokenHash])
   @@map("password_resets")
+}
+
+// =============================================================================
+// Invito cliente — onboarding utente-portale (token email, ADR-0046 / legacy
+// StudioDesk `inviti`)
+// =============================================================================
+// Tenant-scoped (RLS flat, tenant_id denormalizzato → policy identica a
+// password_resets). Token sha256 (no plaintext, parità con PasswordReset),
+// TTL 7gg, monouso (usedAt). Dedup naturale (tenant, azienda, email): un solo
+// invito per coppia → creaInvito fa upsert (rinnova token+scadenza).
+// Alla accettazione: crea User tipo=cliente con clienteRuolo dell'invito
+// (auto-promote ad admin se l'azienda non ha ancora un admin attivo).
+model ClienteInvito {
+  id           String       @id
+  tenantId     String       @map("tenant_id")
+  aziendaId    String       @map("azienda_id")
+  email        String
+  clienteRuolo ClienteRuolo @default(utente) @map("cliente_ruolo")
+  tokenHash    String       @map("token_hash") // sha256 hex del token (no plaintext)
+  expiresAt    DateTime     @map("expires_at")
+  usedAt       DateTime?    @map("used_at")
+  invitatoDaId String       @map("invitato_da_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  azienda    Azienda @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
+  invitatoDa User    @relation("ClienteInvitoInvitatoDa", fields: [invitatoDaId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, aziendaId, email])
+  @@index([tenantId])
+  @@index([tokenHash])
+  @@map("cliente_inviti")
 }
 
 // =============================================================================
@@ -692,6 +727,8 @@ model Azienda {
   circolariDestinatari CircolareDestinatario[]
   // [livello 2 — portale cliente, ADR-0046] utenti-portale di questa azienda.
   utentiPortale        User[]                  @relation("AziendaUtentiPortale")
+  // Inviti onboarding clienti (token email → registrazione utente-portale).
+  clienteInviti        ClienteInvito[]
 
   @@index([tenantId])
   @@index([tenantId, nome])
