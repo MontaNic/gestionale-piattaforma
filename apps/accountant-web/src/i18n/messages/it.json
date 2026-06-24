@@ -513,5 +513,56 @@
       "validationMismatch": "Le password non coincidono",
       "connectionError": "Errore di connessione al server"
     }
+  },
+  "inviti": {
+    "sectionTitle": "Inviti al portale",
+    "sectionSubtitle": "Invita i referenti del cliente ad accedere al portale.",
+    "newInvito": "Invita cliente",
+    "emailLabel": "Email",
+    "emailPlaceholder": "cliente@esempio.it",
+    "adminLabel": "Invita come amministratore dell'azienda",
+    "submit": "Invia invito",
+    "submitting": "Invio in corso…",
+    "cancel": "Annulla",
+    "loading": "Caricamento…",
+    "listEmpty": "Nessun invito in sospeso.",
+    "retry": "Riprova",
+    "validationEmail": "Email non valida",
+    "revoke": "Revoca",
+    "col": {
+      "email": "Email",
+      "ruolo": "Ruolo",
+      "scadenza": "Scadenza",
+      "invitatoDa": "Invitato da",
+      "azioni": "Azioni"
+    },
+    "ruolo": {
+      "admin": "Amministratore",
+      "utente": "Utente"
+    },
+    "confirm": {
+      "title": "Revoca invito",
+      "body": "Revocare l'invito per {email}?",
+      "confirmLabel": "Revoca",
+      "cancelLabel": "Annulla"
+    }
+  },
+  "acceptInvite": {
+    "title": "Completa la registrazione",
+    "description": "Imposta i tuoi dati per accedere al portale clienti.",
+    "firstNameLabel": "Nome",
+    "lastNameLabel": "Cognome",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
+    "confirmLabel": "Conferma password",
+    "submit": "Crea account e accedi",
+    "submitting": "Creazione in corso…",
+    "tokenMissing": "Link di invito non valido o incompleto. Chiedi un nuovo invito allo studio.",
+    "validationFirstName": "Nome obbligatorio",
+    "validationLastName": "Cognome obbligatorio",
+    "validationTooShort": "Password troppo corta (min 8 caratteri)",
+    "validationMismatch": "Le password non coincidono",
+    "connectionError": "Errore di connessione al server",
+    "goToLogin": "Vai al login"
   }
 }

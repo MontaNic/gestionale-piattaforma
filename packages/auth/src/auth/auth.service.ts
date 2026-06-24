@@ -715,6 +715,22 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------------
+  // ISSUE SESSION — emette tokens + sessione per un user già autenticato
+  // altrove (es. accept-invite: l'utente appena creato viene loggato).
+  // ---------------------------------------------------------------------------
+  // Wrapper pubblico su issueTokensAndCreateSession: consente a flussi esterni
+  // (InvitiService) di completare con un login pulito senza duplicare la logica
+  // JWT/sessione. Deve girare dentro il context RLS del tenant (ALS) come gli
+  // altri flussi auth.
+  async issueSessionForUser(
+    userId: string,
+    tenantId: string,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<AuthTokensPayload> {
+    return this.issueTokensAndCreateSession(userId, tenantId, meta);
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
