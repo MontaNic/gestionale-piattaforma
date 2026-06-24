@@ -5,8 +5,8 @@
   "description": "NestJS API per il verticale commercialisti (StudioDesk). Walking skeleton core-only (boot + auth/login + me); dominio in macro-task successivi.",
   "scripts": {
     "dev": "dotenv -e ../../.env -v PORT=3002 -v CORS_ORIGIN=http://localhost:3003 -- ts-node-dev --respawn --transpile-only src/main.ts",
-    "build": "nest build",
-    "start:prod": "dotenv -e ../../.env -- node dist/main.js",
+    "build": "nest build --builder swc",
+    "start:prod": "dotenv -e ../../.env -- node dist/src/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --project=unit --passWithNoTests",
@@ -41,6 +41,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.1.19",
+    "@swc/cli": "^0.8.1",
     "@swc/core": "^1.15.33",
     "@testcontainers/postgresql": "^11.14.0",
     "@testcontainers/redis": "^11.14.0",

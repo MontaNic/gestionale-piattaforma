@@ -2,6 +2,7 @@ import createNextIntlPlugin from 'next-intl/plugin';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   // @gestionale/ui (design system, passo 2), @gestionale/i18n (meccanismo i18n,
   // passo 4), @gestionale/api-client (client HTTP FE, passo 5a) e
