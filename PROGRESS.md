@@ -8,18 +8,6 @@
 **Aggiornamento 6 giugno 2026:** rename verticale ristorazione eseguito — `apps/api,web` → `apps/restaurant-api,restaurant-web` + package name `@gestionale/restaurant-*` (PR #68, `6e32528`); **TD-CC risolto**; doc allineati (apps/README, PROJECT_BRIEF, ADR-0027). `docs/handoff/HANDOFF.md` differito a riscrittura di fine sessione.
 **Fase corrente:** Foundation tecnica completa e **ora estratta nel core condiviso**. Macro-task costruiti (sessioni 1-21): Monorepo + stack dev + CI/CD + Husky + Prisma + typecheck Turbo + NestJS scaffold + D2a/D2b Auth (email/password + PIN POS) + D3a/D3b RLS (framework + activation) + D4 Tenant bootstrap + E1/E2 Next.js scaffold + Login UI + B1/B2a/B2b Auth E2E hardening (rate-limit + lockout + email + Testcontainers) + TD-2 multi-tenant routing + TD-4 Playwright E2E + RBAC enforcement Guard + TD-7 cross-tenant defense-in-depth. **Estrazione core ADR-0027 §D5 chiusa (passo 9)**: 9 `packages/` condivisi (api-client, auth, auth-web, db, eslint-config, i18n, platform, shared, ui); `apps/*` = verticale ristorazione **congelato a scaffold/boilerplate** (shell 8-nav, auth gating, i18n it/en, theme) per ADR-0025. **Test**: 142 unit + 13 task turbo verdi. **Prossimo scope:** avvio primo verticale reale (studi commercialisti).
 
-## [2026-06-25] Deploy applicativo + Onda 1 completa (#109-112)
-
-Deploy applicativo reale: Dockerfile api/web multi-stage, compose prod, Caddy reverse_proxy path-based (PR #109, `8a06f88`). App live su gestionale-test.
-
-Onda 1 — Sblocca l'uso reale:
-- Reset password (#110, `e67c5f9`): forgot/reset flow, token sha256 TTL 1h, no-oracle, logout globale.
-- Invito cliente (#111, `09e7998`): token sha256 TTL 7gg, auto-promote admin, auto-login post-accept, permesso `clienti.invitare` (50 permessi totali).
-- Superadmin minimale (#112, `6f7e0d2`): tenant `oneplatform`, PlatformGuard, lifecycle tenant (list/create/suspend/restore/delete), UI `/platform/tenants`.
-
-Ricognizione AI betadesk: subsistema Groq mappato, chiave ruotata, piano portare su NestJS (Onda 6).
-Prossimo: Onda 2 — identità visiva + homepage portale cliente + dashboard operatore differenziata.
-
 ## [2026-06-01] SVOLTA — da gestionale ristorazione a piattaforma a verticali con core condiviso
 Decisione registrata in ADR-0025. In sintesi:
 - La ristorazione NON è più il prodotto: diventa starter/boilerplate interno.
@@ -685,6 +673,18 @@ Primo dominio reale del 2° verticale (commercialisti): anagrafica clienti `azie
 **Deploy host:** `gestionale-test` allineato a `main` lato **sorgente** (migration `add_portale_cliente_identity` + `add_circolari_letture` applicate, seed 49, RLS verificata in DB). ⚠️ **Scoperto:** il tier applicativo NON è in esecuzione sull'host — Caddy serve un placeholder statico, quindi `/api/health` 200 è un **falso positivo** (stesso body su path inesistenti). Deploy app reale (build prod + container + Caddy `reverse_proxy`) = task infra separato da pianificare con STOP dedicato (ricognizione fatta: Dockerfile app assenti, stack live = `docker-compose.dev.yml` + override `prod.yml` solo-caddy).
 
 **Backlog livello 2 (non implementati):** destinatario `utente` (broadcast a singolo), storico circolari archiviate lato cliente, notifiche email/push alla pubblicazione, rendering HTML sanitizzato del body (TD-circolari-render), download allegati circolari, paginazione/export CSV del report.
+
+## [2026-06-25] Deploy applicativo + Onda 1 completa (#109-112)
+
+Deploy applicativo reale: Dockerfile api/web multi-stage, compose prod, Caddy reverse_proxy path-based (PR #109, `8a06f88`). App live su gestionale-test.
+
+Onda 1 — Sblocca l'uso reale:
+- Reset password (#110, `e67c5f9`): forgot/reset flow, token sha256 TTL 1h, no-oracle, logout globale.
+- Invito cliente (#111, `09e7998`): token sha256 TTL 7gg, auto-promote admin, auto-login post-accept, permesso `clienti.invitare` (50 permessi totali).
+- Superadmin minimale (#112, `6f7e0d2`): tenant `oneplatform`, PlatformGuard, lifecycle tenant (list/create/suspend/restore/delete), UI `/platform/tenants`.
+
+Ricognizione AI betadesk: subsistema Groq mappato, chiave ruotata, piano portare su NestJS (Onda 6).
+Prossimo: Onda 2 — identità visiva + homepage portale cliente + dashboard operatore differenziata.
 
 ---
 
