@@ -103,8 +103,8 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    ? 'bg-amber-900/40 text-amber-300 font-medium'
+                    : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-100',
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

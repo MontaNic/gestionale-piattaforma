@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 
 import './globals.css';
 
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-inter',
+});
+
 export const metadata: Metadata = {
   title: 'Gestionale',
-  description: 'Piattaforma SaaS gestionale per ristorazione',
+  description: 'Piattaforma SaaS gestionale per studi commercialisti',
 };
 
 // ADR-0018 Sub-DP-C: ThemeProvider a root (cross-tenant scope, user preference
@@ -20,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }): JSX.Element {
   return (
-    <html lang="it" suppressHydrationWarning>
+    <html lang="it" suppressHydrationWarning className={inter.variable}>
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           {children}
