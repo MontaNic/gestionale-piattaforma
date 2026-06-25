@@ -173,6 +173,18 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'mandati',
   },
 
+  // prestazioni.* (2) — timesheet su mandato (ADR-0053, Onda 3 Task 3)
+  {
+    code: 'prestazioni.visualizza',
+    description: 'Visualizzazione prestazioni/timesheet dei mandati',
+    category: 'prestazioni',
+  },
+  {
+    code: 'prestazioni.gestisci',
+    description: 'Registra/modifica/elimina prestazioni (ore) sui mandati in corso',
+    category: 'prestazioni',
+  },
+
   // comunicazioni.* (2) — verticale accountant (ADR-0043)
   {
     code: 'comunicazioni.visualizza',
@@ -422,6 +434,8 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'servizi.visualizza',
       'mandati.visualizza',
       'mandati.gestisci',
+      'prestazioni.visualizza',
+      'prestazioni.gestisci',
       'comunicazioni.visualizza',
       'comunicazioni.gestisci',
       'documenti.visualizza',
@@ -448,13 +462,18 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
   },
   {
     name: 'Praticante',
-    description: 'Sola visualizzazione clienti, preventivi, scadenze, comunicazioni e documenti.',
+    description:
+      'Visualizzazione clienti, preventivi, scadenze, comunicazioni e documenti + registrazione ore (timesheet).',
     permissionCodes: [
       'anagrafica.cliente.visualizza',
       'preventivi.visualizza',
       'scadenze.visualizza',
       'comunicazioni.visualizza',
       'documenti.visualizza',
+      // Il praticante registra le proprie ore sui mandati (ADR-0053), pur non
+      // gestendo lo stato dei mandati.
+      'prestazioni.visualizza',
+      'prestazioni.gestisci',
     ],
   },
   // [livello 2 — portale cliente, ADR-0046 §6] Ruolo degli utenti-portale
