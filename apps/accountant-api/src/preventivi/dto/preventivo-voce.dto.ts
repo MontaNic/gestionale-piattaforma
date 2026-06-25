@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -52,4 +53,11 @@ export class PreventivoVoceDto {
   @IsString({ message: 'E_PREVENTIVO_VOCE_NOTE_INVALID' })
   @MaxLength(255, { message: 'E_PREVENTIVO_VOCE_NOTE_TOO_LONG' })
   note?: string;
+
+  // Tracciabilità catalogo (ADR-0050): voce di catalogo da cui è stata
+  // pre-compilata. Opzionale, nullable, FK SetNull — NON vincola il prezzo
+  // (lo snapshot denormalizzato sopra resta sorgente di verità).
+  @IsOptional()
+  @IsUUID('all', { message: 'E_PREVENTIVO_VOCE_SERVIZIO_ID_INVALID' })
+  servizioId?: string;
 }

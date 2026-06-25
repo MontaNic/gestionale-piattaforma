@@ -155,6 +155,9 @@ export class PreventiviService {
               totaleRiga: totali.perVoce[i],
               ordine: v.ordine ?? i,
               note: v.note,
+              // Tracciabilità catalogo (ADR-0050): nullable, FK SetNull. Nessuna
+              // validazione FK esplicita — Prisma gestisce il vincolo/SetNull.
+              servizioId: v.servizioId ?? null,
             })),
           });
           const created = await tx.preventivo.findFirstOrThrow({
@@ -243,6 +246,7 @@ export class PreventiviService {
                 totaleRiga: totali.perVoce[i],
                 ordine: v.ordine ?? i,
                 note: v.note,
+                servizioId: v.servizioId ?? null,
               })),
             });
           }

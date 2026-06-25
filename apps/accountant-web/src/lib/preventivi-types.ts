@@ -50,6 +50,7 @@ export interface PreventivoVoce {
   totaleRiga: number;
   ordine: number;
   note: string | null;
+  servizioId: string | null;
 }
 
 export interface Preventivo {
@@ -86,6 +87,8 @@ export interface VoceInput {
   ivaAliquota: number;
   ordine?: number;
   note?: string;
+  // Tracciabilità catalogo (ADR-0050): voce sorgente; non vincola il prezzo.
+  servizioId?: string;
 }
 
 export interface CreatePreventivoInput {

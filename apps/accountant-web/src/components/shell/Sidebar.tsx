@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
+  BookOpen,
   Building2,
   CalendarDays,
   FileText,
@@ -35,6 +36,7 @@ interface NavItem {
     | 'dashboard'
     | 'clienti'
     | 'scadenze'
+    | 'catalogo'
     | 'comunicazioni'
     | 'documenti'
     | 'circolari'
@@ -50,6 +52,7 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'dashboard', icon: LayoutDashboard },
   { key: 'clienti', icon: Users },
   { key: 'scadenze', icon: CalendarDays },
+  { key: 'catalogo', icon: BookOpen },
   { key: 'comunicazioni', icon: MessageSquare },
   { key: 'documenti', icon: FileText },
   { key: 'circolari', icon: Megaphone },
