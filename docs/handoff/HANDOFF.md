@@ -1,7 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `6f7e0d2` (+1 commit docs(handoff) in arrivo via PR).
+> **Snapshot:** Main @ `de19e3b` (+1 commit docs(handoff) in arrivo via PR).
 > **Data:** 2026-06-25.
 
 ---
@@ -10,70 +10,53 @@
 
 ### Natura di questa sessione
 
-Sessione densa: **deploy applicativo reale** (tier app finalmente live su `gestionale-test`) + **Onda 1 completa** (reset password, invito cliente, superadmin minimale) + ricognizione AI/betadesk + pianificazione onde future.
+Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente + dashboard differenziata per permesso) + **Task 9 Onda 3 anticipato** (landing pubblica per-tenant stile Apple, ADR-0049).
 
 ### Dove siamo
 
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA**. Catalogo permessi: **50**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Task 9 Onda 3**. Catalogo permessi: **50**.
 
 ### NOVITÀ sessione 2026-06-25
 
-**1. Deploy applicativo reale (PR #109, `8a06f88`)**
+**1. Identità visiva — due iterazioni (PR #114, #115)**
 
-Il tier applicativo è ora **live e in esecuzione** su `gestionale-test`. Era il gap infra principale della sessione precedente.
+Prima iterazione: sidebar scura blu navy + accento ambra (PR #114, `b802754`). Dopo review visiva trovata "troppo classica". Seconda iterazione: sidebar chiara bianca, voce attiva `bg-blue-100 text-blue-900` ispirata a Brevo (PR #115, `e6f11ca`). Approvata come base solida.
 
-- Dockerfile multi-stage per `accountant-api` (SWC builder, pnpm workspace-aware, prisma generate in-container) e `accountant-web` (Next standalone).
-- Prerequisiti build: `tsconfig.build.json` api (SWC, `paths: {}`), `output: 'standalone'` web, `@swc/cli` devDep.
-- `docker-compose.prod.yml`: servizi `accountant-api` + `accountant-web` su `gestionale_network`.
-- Caddy: placeholder `respond 200` sostituito con `handle /api/* → reverse_proxy :3002` + `handle → reverse_proxy :3003`. Routing path-based same-origin.
-- Env: `DATABASE_URL_DOCKER` / `DIRECT_URL_DOCKER` (host=`postgres`) nel `.env` gitignored — su host pulito vanno ricreate.
-- Smoke test esterno: web 307 (Next), `/api/v1/health` ok, login cliente JWT emesso ✅.
-- ⚠️ Immagine api ~1.15GB (TD: ottimizzazione pnpm prune prod, futuro).
+Modifiche: `globals.css` (CSS variables + Inter font via `next/font/google`), `layout.tsx` (font variable), `Sidebar.tsx` (classi Tailwind dirette: `bg-blue-100 text-blue-900 font-semibold` su voce attiva, `text-gray-700 hover:bg-gray-100` su voci inattive, `bg-white border-r border-gray-200` su container nav).
 
-**2. Onda 1 — Task 1: Reset password (PR #110, `e67c5f9`)**
+**2. Homepage portale cliente — Task 5 Onda 2 (PR #116, `a4e7869`)**
 
-- Model `PasswordReset` (token sha256, TTL 1h, monouso, dedup, RLS flat FORCE).
-- `POST /auth/forgot-password` + `POST /auth/reset-password` (`@Public`).
-- No-oracle: risposta sempre 200 a prescindere dall'esistenza email.
-- Reset = logout globale (tutte le sessioni revocate in tx atomica).
-- `MailService.sendPasswordResetEmail` con link tenant-scoped `/t/<slug>/reset-password?token=`.
-- FE: pagine `forgot-password` + `reset-password` + link in login page. i18n it/en.
-- Bug trovato in verifica manuale (non dal gate statico): link senza slug tenant → corretto.
+Sostituisce il placeholder `portale/page.tsx` con homepage aggregata: comunicazioni non lette, circolari non lette, documenti recenti. Fetch parallelo via `Promise.allSettled` — errore su una sezione non blocca le altre. Pattern identico alle pagine portale esistenti (`useCallback` + `useEffect` + loading/error state).
 
-**3. Onda 1 — Task 2: Invito cliente (PR #111, `09e7998`)**
+**3. Dashboard operatore differenziata — Task 6 Onda 2 (PR #117, `bae6c4e`)**
 
-- Model `ClienteInvito` (token sha256, TTL 7gg, dedup upsert su `(tenantId,aziendaId,email)`, RLS flat FORCE).
-- Permesso `clienti.invitare` (→ 50 permessi, template Super Admin/Admin/Socio).
-- `POST /aziende/:id/inviti` + `GET` + `DELETE` (revoca via `usedAt`).
-- `POST /auth/accept-invite` (`@Public`): crea User cliente, auto-promote admin se azienda senza admin attivo, auto-login (ritorna `AuthTokensPayload`).
-- `AuthService.issueSessionForUser` esportato per riuso.
-- `MailService.sendInvitoClienteEmail`.
-- FE: pannello `InvitiSection` in dettaglio azienda + pagina pubblica `accept-invite`. i18n it/en.
+Aggiunta sezione "Scadenze imminenti (prossimi 7 giorni)" in `dashboard/page.tsx`, condizionata a `permissions.includes('scadenze.visualizza')`. Fetch parallelo con fetch stats esistente. Il Collaboratore ha `scadenze.visualizza` → vede la sezione. Sezione fuori dal fragment gated da `canView`. Guard `!isLoading` per evitare flash empty state.
 
-**4. Onda 1 — Task 3: Superadmin minimale (PR #112, `6f7e0d2`)**
+**4. Landing pubblica per-tenant — Task 9 Onda 3 anticipato (PR #118, `de19e3b`)**
 
-- Tenant di piattaforma `oneplatform` (id fisso `01900000-0000-7000-8000-000000000001`) seedato.
-- `PLATFORM_TENANT_ID` in `.env` + `.env.example`.
-- `PlatformGuard` path-scoped: verifica `tenantId === PLATFORM_TENANT_ID`, fail-closed.
-- `PlatformController` (`/platform/tenants`): list (cross-tenant via `withSystemContext`), create (riusa `TenantsService`), suspend, restore, soft-delete. Self-protection: vietato agire su `oneplatform` stesso.
-- FE: pagina `/t/oneplatform/platform/tenants` + voce sidebar visibile solo nel tenant oneplatform. i18n it/en.
-- Credenziali superadmin dev: `superadmin@oneplatform.local / Superadmin123!`.
+Slice FULL — ADR-0049. 6 superfici:
 
-**5. Ricognizione AI (betadesk)**
+- **Schema**: 6 campi nullable aggiunti a `Tenant` (`descrizione`, `indirizzo`, `telefono`, `emailContatto @map("email_contatto")`, `sitoWeb @map("sito_web")`, `logoUrl @map("logo_url")`). Migration `20260625124846_add_tenant_identity` applicata.
+- **`@gestionale/auth`**: `CreateTenantDto` (+6 opzionali, `@IsUrl` su sito/logo) + `TenantsService.createTenant` (persiste i 6, `undefined→null`).
+- **Endpoint pubblico**: nuovo `PublicModule/Controller/Service` in `accountant-api`. `GET /api/v1/public/tenants/:slug` (`@Public()`, no JWT). Sicurezza: `withSystemContext` per bypass RLS, select-allowlist 8 campi safe (mai `id/isActive/deletedAt`), filtro `isActive+deletedAt→null` → 404 su tenant sospesi/cancellati.
+- **Seed**: `studio-demo` = "Studio Ferretti & Lombardi — Commercialisti Associati", Milano, Via Montenapoleone 8, dati demo con dominio `.example` (RFC 2606, sicuro).
+- **FE**: `t/[slug]/page.tsx` nuova (landing pubblica), `public-tenant-api.ts`. Single-page stile Apple: hero centrato, whitespace generoso, sezioni servizi + contatti, CTA "Accedi" → `/t/[slug]/login`. Nessuna shell autenticata, fuori dal gruppo `(authenticated)`.
+- **ADR-0049**: decisioni di sicurezza endpoint pubblico documentate.
 
-Subsistema AI betadesk mappato:
+**5. Questionario portale (30 domande)**
 
-- Provider: Groq (`llama-3.3-70b-versatile`), layer astratto (`AIProvider` → `GroqProvider`).
-- `AIClient` factory/facade + audit su `ai_audit`. `AIService` KB-aware multi-turno (assistente cliente). `KBRevisorService` (revisione notturna FAQ). Governance `AIPolicy`: toggle per-tenant, pseudonimizzazione PII, rate-limit/budget, audit.
-- ⚠️ API key Groq era hardcoded in `master.php` → **chiave ruotata** (azione eseguita in sessione). Nuova chiave va inserita in `.env` quando implementeremo le feature AI.
-- Piano: portare `AIClient` + `AIPolicy` su NestJS con `AnthropicProvider` + `GroqProvider` intercambiabili via env. Fuori scope per ora.
+Product discovery completato in sessione. Priorità emerse:
 
-**6. Pianificazione onde future**
+- Upload documenti dal cliente (chiude il loop con download già esistente)
+- Notifiche email automatiche (MailService esiste, manca framework trigger)
+- Accettazione preventivi online con timestamp
+- 2FA obbligatorio clienti (documenti fiscali sensibili)
+- Più ruoli per cliente (titolare vs. contabile)
 
-Definita roadmap a 6 onde (vedi §Roadmap). Onda 1 completa; Onda 2 inizia dalla prossima sessione.
+Feature deferrate (dipendenze esterne o tenant pilota reale): firma digitale, pagamento parcelle online, password per documento.
 
 ### Visione del verticale — tre livelli StudioDesk
 
@@ -81,30 +64,26 @@ Definita roadmap a 6 onde (vedi §Roadmap). Onda 1 completa; Onda 2 inizia dalla
 2. **Cliente-dello-studio** ✅ COMPLETO (portale path-based)
 3. **Super-admin** ✅ MINIMALE (lifecycle tenant, `oneplatform`)
 
-### Prossimo task — Onda 2
+### Prossimo task — Onda 3 (residuo)
 
-**Task 4 — Identità visiva / design system**: colore primario, tipografia, CSS vars shadcn. Sessione dedicata con proposte concrete prima di toccare codice.
+**Task 7 — Email notifiche**: circolari pubblicate, comunicazioni ricevute. MailService esiste già, manca il framework di trigger (evento → template → invio).
 
-**Task 5 — Homepage portale cliente**: "cosa c'è di nuovo oggi" — circolari non lette, comunicazioni, documenti recenti.
-
-**Task 6 — Dashboard operatore differenziata per ruolo**.
+**Task 8 — Alert scadenze cron**: T-7 e T-1 via email, configurabile dallo studio.
 
 ### Fili aperti
 
-- **`STUDIO_DESK.md` extension** (task 0 di riferimento): aggiungere sezione AI, cron inventory, feature map per pannello (admin/superadmin/public → stato in gestionale). Da fare prima dell'Onda 3.
+- **`STUDIO_DESK.md` extension**: aggiungere sezione AI, cron inventory, feature map per pannello (admin/superadmin/public → stato in gestionale). Da fare prima dell'Onda 3 completa.
 - **Nuova chiave Groq** da inserire in `.env` quando si implementano feature AI.
 - **Subdomain routing** (`[slug].studiodesk.cloud` per portale cliente): task infra futuro.
+- **UI configurazione identità tenant**: oggi solo seed/superadmin. Quando uno studio pilota chiede di cambiare logo/descrizione, serve form in `/platform/tenants/[id]`.
+- **Template landing**: betadesk aveva 6 template con stili diversi. Deferred — costruire quando lo studio pilota lo chiede.
 - **Invito operatore** via email (oggi solo seed manuale): Onda 4.
 
 ### Tech debt aperti
 
-Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drift** · **`web` external one-time** · **TD-documenti-tipo-codice** · **TD-utente-enum-forward** · **TD-storage-gc** · **TD-moduleResolution-node10** · **TD-circolari-utente-forward** · **TD-portale-com-allegati** · **TD-portale-com-apertura** · **TD-portale-circolari-html**.
+Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drift** · **`web` external one-time** · **TD-documenti-tipo-codice** · **TD-utente-enum-forward** · **TD-storage-gc** · **TD-moduleResolution-node10** · **TD-circolari-utente-forward** · **TD-portale-com-allegati** · **TD-portale-com-apertura** · **TD-portale-circolari-html** · **TD-immagine-api**.
 
-Nuovi da questa sessione:
-
-- **TD-immagine-api**: immagine `accountant-api` ~1.15GB (pnpm store include devDeps). Ottimizzabile con `pnpm prune --prod` o revisitando il layout runner.
-
-### Roadmap onde
+### Roadmap onde (aggiornata)
 
 **Onda 1 — Sblocca l'uso reale** ✅ COMPLETA
 
@@ -112,13 +91,13 @@ Nuovi da questa sessione:
 2. ✅ Invito cliente (#111)
 3. ✅ Superadmin minimale (#112)
 
-**Onda 2 — Identità e percezione** 🔜 4. Identità visiva (colore primario, tipografia, CSS vars shadcn) 5. Homepage portale cliente ("cosa c'è di nuovo oggi") 6. Dashboard operatore differenziata per ruolo
+**Onda 2 — Identità e percezione** ✅ COMPLETA 4. ✅ Identità visiva (PR #114 + #115) 5. ✅ Homepage portale cliente (PR #116) 6. ✅ Dashboard operatore differenziata (PR #117)
 
-**Onda 3 — Valore operativo** 🔜 7. Email notifiche (circolari pubblicate, comunicazioni ricevute) 8. Alert scadenze cron (T-7 e T-1 via email) 9. Homepage studio pubblica (index.php equivalente, attivabile per tenant)
+**Onda 3 — Valore operativo** 🔜 (parziale) 7. 🔜 Email notifiche (circolari pubblicate, comunicazioni ricevute) 8. 🔜 Alert scadenze cron (T-7 e T-1 via email) 9. ✅ Landing pubblica studio (PR #118) — anticipato
 
-**Onda 4 — Piattaforma** 🔜 10. Superadmin monitoring (stato container, disk, memory — senza CLI) 11. Impersonation studio con banner 12. Invito operatore via email
+**Onda 4 — Piattaforma** 🔜 10. Superadmin monitoring (stato container, disk, memory) 11. Impersonation studio con banner 12. Invito operatore via email
 
-**Onda 5 — Completamento portale cliente** 🔜 13. Download allegati comunicazioni lato cliente 14. Upload allegati lato cliente 15. 2FA TOTP operatore (campo `totpSecret` già in schema)
+**Onda 5 — Completamento portale cliente** 🔜 13. Upload documenti dal cliente 14. 2FA TOTP 15. Accettazione preventivi online
 
 **Onda 6 — Futuro** 🔜 16. AI subsystem (assistente cliente KB-aware, `AIPolicy` governance) 17. Billing / FIC 18. Audit log UI 19. API pubbliche per-tenant 20. WhatsApp/Telegram notifiche
 
@@ -129,12 +108,13 @@ Nuovi da questa sessione:
 - Split commit per rischio (BE → STOP 2 → FE → STOP 2 → push).
 - Verifica runtime manuale (ruolo non-superuser) prima di ogni commit FE — regola permanente.
 - Empirical-first: mai asserire scope da deduzione.
+- Code non usa mai `ask_user_input` — strumento del chat, non suo.
 - `docs/studiodesk/` + `betadesk` READ-ONLY.
 
 ### Note operative host (aggiornate)
 
 - Repo: `/home/deploy/projects/gestionale`
-- Stack live: `docker-compose.dev.yml` + `docker-compose.prod.yml` (override Caddy + servizi app)
+- Stack live: `docker-compose.dev.yml` + `docker-compose.prod.yml`
 - Comando deploy: `docker compose -f docker-compose.dev.yml -f docker-compose.prod.yml up -d --build accountant-api accountant-web`
 - DB name: `gestionale`; seed: `db:seed`; container: `gestionale_postgres` / `gestionale_caddy`
 - Caddy routing: `/api/*` → `accountant-api:3002`, resto → `accountant-web:3003`
@@ -143,6 +123,8 @@ Nuovi da questa sessione:
 - `PLATFORM_TENANT_ID=01900000-0000-7000-8000-000000000001` nel `.env`
 - Nuova chiave Groq: da inserire in `.env` quando si implementano feature AI
 - SSH tunnel: `LocalForward 3003 localhost:3003` + `LocalForward 3002 localhost:3002`
+- Dev server porta: `next dev -p 3003` hardcoded in `package.json` accountant-web — per dev parallelo a prod usare porta diversa (es. 3010) modificando temporaneamente il flag
+- ⚠️ Conflitto editor/filesystem: se Code modifica un file aperto in VS Code, chiudi/ricarica il buffer prima di salvare
 
 ---
 
@@ -150,18 +132,20 @@ Nuovi da questa sessione:
 
 ### Git
 
-- **Main @ `6f7e0d2`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
-  - `6f7e0d2` feat(platform): superadmin minimale — lifecycle tenant, PlatformGuard (#112)
-  - `09e7998` feat(auth): invito cliente via token — onboarding portale (#111)
-  - `e67c5f9` feat(auth): reset password — forgot/reset flow, email token (#110)
-  - `8a06f88` feat(infra): deploy applicativo — Dockerfile api/web, compose prod, Caddy (#109)
-  - `b43aeb1` feat(accountant): circolari report letture lato studio — read_report (#107)
+- **Main @ `de19e3b`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `de19e3b` feat(tenant): landing pubblica per-tenant — identità studio, endpoint pubblico, homepage FE (#118)
+  - `bae6c4e` feat(dashboard): sezione scadenze imminenti — differenziazione per permesso (#117)
+  - `a4e7869` feat(portale): homepage cliente — comunicazioni, circolari e documenti recenti (#116)
+  - `e6f11ca` feat(accountant-web): sidebar chiara, voce attiva blu pastello — stile Brevo-inspired (#115)
+  - `b802754` feat(accountant-web): tema shell — sidebar scura, primary blu, nav attiva ambra, font Inter (#114)
 - **Working tree PULITO**, nessun branch pendente.
-- ADR in repo fino a **0048**.
+- ADR in repo fino a **0049**.
 
 ### Schema dominio accountant — aggiornato
 
 `Azienda` · `Referente` · `Preventivo` + `PreventivoVoce` · `Scadenza` + `ScadenzaCategoria` · `Comunicazione` + `ComMessaggio` + `ComAllegato` · `DocumentoTipo` + `Documento` · `Circolare` + `CircolareDestinatario` + `CircolareLettura` · `User` (con `UserTipo`, `ClienteRuolo`, `aziendaId`) · **`PasswordReset`** · **`ClienteInvito`**. CHECK constraint `chk_cliente_azienda_id`.
+
+`Tenant` aggiornato: +`descrizione`, +`indirizzo`, +`telefono`, +`emailContatto`, +`sitoWeb`, +`logoUrl` (tutti nullable, migration `20260625124846_add_tenant_identity`).
 
 ### Permessi (50 totali)
 
@@ -171,12 +155,14 @@ Template "Cliente" → 4 permessi portale.
 
 ### Stack & ambiente
 
-- NestJS 11, Next.js 15 (standalone), Prisma 6, PostgreSQL 16 (RLS), Redis, Vitest, Testcontainers, Playwright, Tailwind, shadcn/ui.
+- NestJS 11, Next.js 15 (standalone), Prisma 6, PostgreSQL 16 (RLS), Redis, Vitest, Testcontainers, Playwright, Tailwind, shadcn/ui, Inter font.
 - Server Hetzner `gestionale-test`. Docker Compose (`dev.yml` + `prod.yml`). Caddy custom (wildcard cert `*.studiodesk.cloud`, DNS-01 Cloudflare).
 - **App containerizzate e live**: `gestionale-accountant-api-1` + `gestionale-accountant-web-1`.
-- Tenant demo: `studio-demo` + `studio-acme` + **`oneplatform`** (superadmin piattaforma).
+- Tenant demo: `studio-demo` (= Studio Ferretti & Lombardi, dati identità popolati) + `studio-acme` + **`oneplatform`** (superadmin piattaforma).
+- Utenti demo: `admin@studio.local / Admin123!` · `collaboratore@studio.local / Collaboratore123!` · `cliente@studio-demo.local / Cliente123!` · `superadmin@oneplatform.local / Superadmin123!`.
+- Landing pubblica: `https://studiodesk.cloud/t/studio-demo` (no login richiesto).
 - Betadesk: `/home/deploy/projects/betadesk` — READ-ONLY, riferimento legacy.
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `6f7e0d2` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-25] per sessione (deploy #109 + Onda 1 #110-112).
+Working tree pulito, main @ `de19e3b` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-25] per sessione (Onda 2 #114-117 + Task 9 #118).
