@@ -1,8 +1,8 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `21081e2` (+1 commit docs(handoff) in arrivo via PR).
-> **Data:** 2026-06-25.
+> **Snapshot:** Main @ `f21a164` (+1 commit docs(handoff) in arrivo via PR).
+> **Data:** 2026-06-26.
 
 ---
 
@@ -17,7 +17,15 @@ Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 Task 1 (catalogo) + Task 9 (landing)**. Catalogo permessi: **52**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Task 9 (landing, anticipato)**. Catalogo permessi: **56**.
+
+**Onda 3 — pipeline cliente: COMPLETA** (preventivo → mandato → timesheet → margine):
+
+- Task 1: Catalogo servizi (#120, ADR-0050)
+- Task 2: Mandati/Incarichi (#122, ADR-0051)
+- Task 3: Timesheet/Prestazioni (#124, ADR-0053)
+- Task 4: Report margine (#125, ADR-0054)
+- (+ Processo: GATE checklist obbligatoria FE/BE/DB, #123, ADR-0052)
 
 ### NOVITÀ sessione 2026-06-25
 
@@ -71,17 +79,38 @@ Slice FULL — ADR-0050. Listino servizi dello studio riusabile nei preventivi. 
 
 Sub-DP (vedi ADR-0050): permessi reali **50→52** (non 55→57: `grep -c "code:"` sovrastima → memoria aggiornata); route FE senza `studio/`; update DTO manuali (no `@nestjs/mapped-types`); `truncateDatabase` e2e esteso con tabelle catalogo (righe platform `tenant_id NULL` fuori CASCADE); pagina catalogo IT hardcoded (TD i18n, da chiudere col namespace catalogo nei prossimi moduli).
 
+### NOVITÀ sessione 2026-06-26 — Onda 3 completata (#122–#125)
+
+Continuazione dell'arco Onda 3 (#120 catalogo già sopra). 5 PR mergiate (#122/#123/#124/#125 + questa PR doc), tutte con **GATE ADR-0052** completo dalla #124 in poi.
+
+**7. Mandati / Incarichi — Onda 3 Task 2 (PR #122, `87241b1`, ADR-0051)**
+
+Lettera d'incarico che nasce da un preventivo **accettato**. `Mandato` (RLS FORCE standard) + `RdlCounter` (counter per-tenant per-anno, pattern `ComCounter`) → codice `RDL-<anno>-<NNNN>`. Relazione **1:1** col preventivo: nuovo stato `convertito` su `StatoPreventivo` (alla creazione del mandato il preventivo `accettato → convertito`, guard atomico) + **partial-unique** `(preventivo_id) WHERE deleted_at IS NULL`. `importoConcordato` = snapshot `preventivo.totale`. Creazione come azione: `POST /preventivi/:id/mandato`. FE: pulsante "Crea mandato" sul preventivo accettato + pagine `/mandati` (lista) e `/mandati/:id` (dettaglio/edit). Permessi `mandati.*` → **54**, anche a Collaboratore.
+Sub-DP: `Preventivo.mandati` è `Mandato[]` a livello Prisma (il partial-unique soft-delete-aware non è esprimibile come `@@unique`; il service legge l'attivo con `findFirst({ preventivoId, deletedAt: null })`); `convertito` incluso nello schema Zod per type-match ma escluso dal select editing; badge/label `convertito` aggiunti (i18n it/en); `truncateDatabase` esteso con `mandati`/`rdl_counter`.
+
+**8. Dark mode + GATE checklist ADR-0052 (PR #123, `fbf8c83`, ADR-0052)**
+
+Fix dark mode Sidebar (regressione vista in prod): `border-gray-200 bg-white` → `border-border bg-background`, voce inattiva → `text-muted-foreground hover:bg-muted hover:text-foreground`, voce attiva blu Brevo + `dark:bg-blue-900/30 dark:text-blue-100`; badge stato mandati con varianti `dark:`. Parità i18n IT↔EN già allineata. **ADR-0052** introduce la **GATE checklist obbligatoria** (FE: dark mode / i18n parity / hardcoded IT / build / responsive / a11y; BE: RBAC minimo / soft-delete invisibility; DB: migrate deploy su DB pulito) — i check entrano nei prompt STOP 1 da qui in avanti e nel self-check report di ogni PR. Branch rebasato su `origin/main`.
+
+**9. Timesheet / Prestazioni — Onda 3 Task 3 (PR #124, `d71f89e`, ADR-0053)**
+
+Registrazione ore sui mandati (differito da ADR-0051 §8). `Prestazione` (RLS FORCE) nested: `GET/POST/PATCH/DELETE /mandati/:id/prestazioni`. Guard **create**: solo mandato `in_corso` → 400 `E_MANDATO_NOT_IN_CORSO` (update senza guard, correzioni a posteriori). `importo` manuale **nullable** (no tariffario), `ore` obbligatorio. `userId` = autore assegnato **server-side**; `voceId` opzionale validato vs il preventivo del mandato. Permessi **distinti** `prestazioni.*` → **56** (un praticante registra ore senza gestire i mandati): a Collaboratore **e Praticante**. FE: `PrestazioniSection` in `/mandati/:id` (lista + form + totali ore/importo). e2e suite **151**.
+Sub-DP: `voceId` omesso dal form FE (BE-supported); `AuthenticatedUser.id` (non `userId` esterno).
+
+**10. Report margine — Onda 3 Task 4 (PR #125, `f21a164`, ADR-0054)**
+
+Prima vista analitica di redditività. **Read-only puro** (nessuno schema/migration/seed). `GET /report/margine` (permesso **riusato** `report.operativo.visualizza`): per ogni mandato → `oreTotali` (Σ ore), `importoPrestazioni` (Σ importo non-null; **null** se nessun importo), `margine` (concordato − importoPrestazioni; **null** se importoPrestazioni null). Lista **flat** ordinata **margine ASC**, null in coda. Decimal→number server-side. FE: pagina `/report/margine` (margine verde/rosso/grigio) + nuovo **gruppo sidebar "Report"**. e2e suite **154**.
+Sub-DP: `importoPrestazioni null ≠ 0` (distingue assenza-dato da zero); Groq insights **deferiti** finché manca il tariffario.
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
 2. **Cliente-dello-studio** ✅ COMPLETO (portale path-based)
 3. **Super-admin** ✅ MINIMALE (lifecycle tenant, `oneplatform`)
 
-### Prossimo task — Onda 3 Task 2: Mandati / Incarichi
+### Prossimo — Onda 4 (da pianificare)
 
-**Prossimo**: modulo Mandati/Incarichi (lettere d'incarico studio↔cliente). Da scopare con STOP 0 empirico + sezione BRIEF applicabile prima di proporre lo scope.
-
-**Residuo Onda 3** (dopo Mandati): **Email notifiche** (circolari pubblicate, comunicazioni ricevute — MailService esiste, manca framework trigger evento→template→invio) · **Alert scadenze cron** (T-7 e T-1 via email, configurabile dallo studio).
+**Onda 3 COMPLETA.** L'Onda 4 va pianificata nella prossima sessione. Candidati emersi: **rebuild container da `main`** (deploy a blocco, vedi sopra), **Task 3b tariffario** (sblocca importi/margini completi + insight AI), superadmin monitoring, impersonation, invito operatore via email. Residui Onda 3 non implementati (email notifiche, alert scadenze cron) da riallocare/confermare.
 
 ### Fili aperti
 
@@ -95,7 +124,12 @@ Sub-DP (vedi ADR-0050): permessi reali **50→52** (non 55→57: `grep -c "code:
 ### Tech debt aperti
 
 Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drift** · **`web` external one-time** · **TD-documenti-tipo-codice** · **TD-utente-enum-forward** · **TD-storage-gc** · **TD-moduleResolution-node10** · **TD-circolari-utente-forward** · **TD-portale-com-allegati** · **TD-portale-com-apertura** · **TD-portale-circolari-html** · **TD-immagine-api**.
-Nuovo: **TD-catalogo-i18n** (pagina `/catalogo` in IT hardcoded — chiudere col namespace i18n catalogo nei prossimi moduli Onda 3, ADR-0050 DP-7).
+Nuovi Onda 3:
+
+- **TD-i18n-zod**: messaggi di validazione **zod** hardcoded IT in tutti i form (definiti fuori dal contesto React → non passano per `t()`). Da chiudere in una slice dedicata su tutti i form insieme (registrato in ADR-0052, nota sotto CHECK-FE-3).
+- **TD-i18n-cumulativo** (ex TD-catalogo-i18n): pagine `/catalogo`, `/mandati`, `/report/margine` + componenti prestazioni in **IT hardcoded** (le label nav/gruppi sono invece i18n it/en). Chiudere coi namespace i18n dedicati.
+- **TD-voceId-FE**: `voceId` omesso dal form prestazioni (BE-supported, FE-deferred) — si aggiunge il select-voce quando serve operativamente (ADR-0053 sub-DP).
+- **TD-tariffario**: importi prestazioni **parziali** senza un tariffario per ruolo/utente → `importoPrestazioni`/`margine` spesso null. Implementarlo (Task 3b) sblocca i margini completi e gli **insight AI margine** (deferiti, ADR-0054 §7).
 
 ### Roadmap onde (aggiornata)
 
@@ -107,7 +141,7 @@ Nuovo: **TD-catalogo-i18n** (pagina `/catalogo` in IT hardcoded — chiudere col
 
 **Onda 2 — Identità e percezione** ✅ COMPLETA 4. ✅ Identità visiva (PR #114 + #115) 5. ✅ Homepage portale cliente (PR #116) 6. ✅ Dashboard operatore differenziata (PR #117)
 
-**Onda 3 — Valore operativo** 🔜 (parziale) — T1. ✅ Catalogo servizi (PR #120, ADR-0050) · T2. 🔜 Mandati/Incarichi (prossimo) · Email notifiche (circolari pubblicate, comunicazioni ricevute) · Alert scadenze cron (T-7 e T-1 via email) · ✅ Landing pubblica studio (PR #118, anticipato)
+**Onda 3 — Pipeline cliente** ✅ COMPLETA — T1. ✅ Catalogo servizi (#120, ADR-0050) · T2. ✅ Mandati/Incarichi (#122, ADR-0051) · T3. ✅ Timesheet/Prestazioni (#124, ADR-0053) · T4. ✅ Report margine (#125, ADR-0054) · (+ GATE checklist ADR-0052, #123) · ✅ Landing pubblica studio (#118, anticipato). Residui riallocati: email notifiche, alert scadenze cron, Task 3b tariffario.
 
 **Onda 4 — Piattaforma** 🔜 10. Superadmin monitoring (stato container, disk, memory) 11. Impersonation studio con banner 12. Invito operatore via email
 
@@ -146,15 +180,15 @@ Nuovo: **TD-catalogo-i18n** (pagina `/catalogo` in IT hardcoded — chiudere col
 
 ### Git
 
-- **Main @ `21081e2`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
-  - `21081e2` feat(catalogo): catalogo servizi — schema, CRUD, collegamento preventivi (ADR-0050) (#120)
-  - `e6e4492` docs(handoff): aggiorna snapshot a de19e3b — Onda 2 completa + Task 9 (#114-118) (#119)
-  - `de19e3b` feat(tenant): landing pubblica per-tenant — identità studio, endpoint pubblico, homepage FE (#118)
-  - `bae6c4e` feat(dashboard): sezione scadenze imminenti — differenziazione per permesso (#117)
-  - `a4e7869` feat(portale): homepage cliente — comunicazioni, circolari e documenti recenti (#116)
+- **Main @ `f21a164`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `f21a164` feat(report): dashboard margine per mandato/azienda (ADR-0054) (#125)
+  - `d71f89e` feat(prestazioni): timesheet su mandato in corso + CRUD (ADR-0053) (#124)
+  - `fbf8c83` fix(accountant-web): dark mode sidebar + GATE checklist ADR-0052 (#123)
+  - `87241b1` feat(mandati): mandati/incarichi — da preventivo accettato + CRUD (ADR-0051) (#122)
+  - `21081e2` feat(catalogo): catalogo servizi (ADR-0050) (#120)
 - **Working tree PULITO**, nessun branch pendente.
-- ADR in repo fino a **0050**.
-- ⚠️ **Deploy posticipato**: `main` è avanti rispetto ai container in prod (su `de19e3b`). Rebuild rimandato a blocco quando Onda 3 è più avanzata. La migration `20260625193614_add_servizi_catalogo` è già applicata al DB condiviso (dev).
+- ADR in repo fino a **0054** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine).
+- ⚠️ **Deploy posticipato**: prod ferma a **`de19e3b`**; `main` è **6 PR avanti** (#120/#122/#123/#124/#125). **Rebuild container pianificato a inizio Onda 4** (`up -d --build accountant-api accountant-web` + reload Caddy). Migration `add_servizi_catalogo`/`add_mandati`/`add_prestazioni` già applicate al DB condiviso (dev).
 
 ### Schema dominio accountant — aggiornato
 
@@ -164,13 +198,15 @@ Nuovo: **TD-catalogo-i18n** (pagina `/catalogo` in IT hardcoded — chiudere col
 
 **Catalogo servizi (ADR-0050)**: `ServizioCategoria` + `ServizioCatalogo` (`tenantId` nullable platform/custom, no RLS) · enum `TipoRicorrenza` · `PreventivoVoce.servizioId` (FK SetNull) · partial unique index `(tenant_id, nome|codice) WHERE tenant_id IS NOT NULL`. Seed: 6 categorie + 20 voci piattaforma.
 
-### Permessi (52 totali)
+**Mandati/Prestazioni (ADR-0051/0053)**: `Mandato` (RLS FORCE, `importoConcordato` snapshot, partial-unique `preventivo_id WHERE deleted_at IS NULL`) + `RdlCounter` (counter per-tenant per-anno) + enum `StatoMandato` · `StatoPreventivo` esteso con `convertito` · `Prestazione` (RLS FORCE, `mandatoId` CASCADE, `voceId`/`userId` SetNull, `ore` req / `importo` nullable). Migration `add_mandati`, `add_prestazioni`. Report margine (ADR-0054): nessuno schema (aggregazione read-only).
 
-> Baseline = **52** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). NON usare `grep -c "code:"` (sovrastima).
+### Permessi (56 totali)
 
-Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · **`servizi.{visualizza,gestisci}`** · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
+> Baseline = **56** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). **NON usare `grep -c "code:"`** (sovrastima — conta match non-array). Regola anti-miscount in ADR-0052 / memoria `reference_permission_count_baseline`. Progressione Onda 3: 50 → 52 (`servizi.*`, #120) → 54 (`mandati.*`, #122) → 56 (`prestazioni.*`, #124).
+
+Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · **`servizi.{visualizza,gestisci}`** · **`mandati.{visualizza,gestisci}`** · **`prestazioni.{visualizza,gestisci}`** · `report.*` · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
 Namespace portale: `portale.documenti.visualizza` · `portale.comunicazioni.{visualizza,rispondi}` · `portale.circolari.visualizza`.
-Template "Cliente" → 4 permessi portale. `servizi.visualizza` anche al Collaboratore.
+Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `prestazioni.*` anche al Collaboratore; `prestazioni.*` anche al Praticante. Report margine riusa `report.operativo.visualizza` (nessun permesso nuovo).
 
 ### Stack & ambiente
 
@@ -184,4 +220,4 @@ Template "Cliente" → 4 permessi portale. `servizi.visualizza` anche al Collabo
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `21081e2` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-25] per sessione (Onda 2 #114-117 + Task 9 #118 + Onda 3 Task 1 catalogo #120).
+Working tree pulito, main @ `f21a164` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-26] per sessione (Onda 3 completa: #120/#122/#123/#124/#125).
