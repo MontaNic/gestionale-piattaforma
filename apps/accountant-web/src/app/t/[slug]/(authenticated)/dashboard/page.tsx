@@ -1,16 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { CalendarDays } from 'lucide-react';
 
 import { Alert, AlertDescription, Button } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { UltimiPreventivi } from '@/components/dashboard/UltimiPreventivi';
 import { getDashboardStats } from '@/lib/dashboard-api';
+import { getScadenze } from '@/lib/scadenze-api';
 import { messageForError } from '@/lib/error-codes';
 import type { DashboardStats } from '@/lib/dashboard-types';
+import type { Scadenza } from '@/lib/scadenze-types';
 
 // =============================================================================
 // dashboard/page.tsx — Home operatore-studio: card-grid KPI (STOP-dash1 ADR-0038)
@@ -29,26 +33,41 @@ export default function DashboardPage(): JSX.Element {
   const { slug } = params;
   const { user, permissions } = useAuth();
   const canView = permissions.includes('anagrafica.cliente.visualizza');
+  const canViewScadenze = permissions.includes('scadenze.visualizza');
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [scadenze, setScadenze] = useState<Scadenza[]>([]);
 
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      setStats(await getDashboardStats());
-    } catch (err) {
-      setLoadError(messageForError(err));
+      const oggi = new Date();
+      const fra7 = new Date(oggi);
+      fra7.setDate(oggi.getDate() + 7);
+      const toDateOnly = (d: Date) => d.toISOString().slice(0, 10);
+
+      const [statsRes, scadenzeRes] = await Promise.allSettled([
+        canView ? getDashboardStats() : Promise.resolve(null),
+        canViewScadenze
+          ? getScadenze({ attivo: true, da: toDateOnly(oggi), a: toDateOnly(fra7) })
+          : Promise.resolve([]),
+      ]);
+
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value);
+      else setLoadError(messageForError(statsRes.reason));
+
+      if (scadenzeRes.status === 'fulfilled') setScadenze(scadenzeRes.value);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [canView, canViewScadenze]);
 
   useEffect(() => {
-    if (canView) void load();
-  }, [canView, load]);
+    if (canView || canViewScadenze) void load();
+  }, [canView, canViewScadenze, load]);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -114,6 +133,34 @@ export default function DashboardPage(): JSX.Element {
 
           <UltimiPreventivi items={stats.preventivi.ultimi} slug={slug} />
         </>
+      )}
+
+      {canViewScadenze && !isLoading && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-medium">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Scadenze imminenti (prossimi 7 giorni)
+          </h2>
+          {scadenze.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nessuna scadenza nei prossimi 7 giorni.</p>
+          ) : (
+            <div className="overflow-hidden rounded-md border">
+              <ul className="divide-y">
+                {scadenze.map((s) => (
+                  <li key={s.id}>
+                    <Link
+                      href={`/t/${slug}/scadenze`}
+                      className="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-muted"
+                    >
+                      <span className="flex-1 font-medium">{s.titolo}</span>
+                      <span className="text-xs text-muted-foreground">{s.dataScadenza}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
