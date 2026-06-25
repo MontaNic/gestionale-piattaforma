@@ -85,7 +85,7 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
 
   return (
     <nav
-      className="flex h-full w-60 flex-col border-r border-gray-200 bg-white"
+      className="flex h-full w-60 flex-col border-r border-border bg-background"
       data-testid="sidebar"
       aria-label="Primary navigation"
     >
@@ -109,8 +109,8 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-blue-100 text-blue-900 font-semibold'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
+                    ? 'bg-blue-100 text-blue-900 font-semibold dark:bg-blue-900/30 dark:text-blue-100'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
