@@ -7,6 +7,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  FileSignature,
   FileText,
   LayoutDashboard,
   Megaphone,
@@ -37,6 +38,7 @@ interface NavItem {
     | 'clienti'
     | 'scadenze'
     | 'catalogo'
+    | 'mandati'
     | 'comunicazioni'
     | 'documenti'
     | 'circolari'
@@ -53,6 +55,7 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'clienti', icon: Users },
   { key: 'scadenze', icon: CalendarDays },
   { key: 'catalogo', icon: BookOpen },
+  { key: 'mandati', icon: FileSignature },
   { key: 'comunicazioni', icon: MessageSquare },
   { key: 'documenti', icon: FileText },
   { key: 'circolari', icon: Megaphone },

@@ -96,6 +96,8 @@ export async function truncateDatabase(databaseUrl: string): Promise<void> {
   await client.query(`
     TRUNCATE TABLE
       cliente_inviti,
+      mandati,
+      rdl_counter,
       servizi_catalogo,
       servizi_categorie,
       scadenze,
