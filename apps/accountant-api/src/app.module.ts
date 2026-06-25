@@ -30,6 +30,7 @@ import { DocumentiModule } from './documenti/documenti.module';
 import { CircolariModule } from './circolari/circolari.module';
 import { InvitiModule } from './inviti/inviti.module';
 import { PlatformModule } from './platform/platform.module';
+import { PublicModule } from './public/public.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -73,6 +74,8 @@ import { MeModule } from './me/me.module';
     InvitiModule,
     // Platform superadmin: gestione tenant (gated PlatformGuard, Task 3).
     PlatformModule,
+    // Public: superficie non autenticata tenant-facing (landing /t/<slug>, ADR-0049).
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [
