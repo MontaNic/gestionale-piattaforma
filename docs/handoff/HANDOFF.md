@@ -1,7 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `de19e3b` (+1 commit docs(handoff) in arrivo via PR).
+> **Snapshot:** Main @ `21081e2` (+1 commit docs(handoff) in arrivo via PR).
 > **Data:** 2026-06-25.
 
 ---
@@ -10,14 +10,14 @@
 
 ### Natura di questa sessione
 
-Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente + dashboard differenziata per permesso) + **Task 9 Onda 3 anticipato** (landing pubblica per-tenant stile Apple, ADR-0049).
+Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente + dashboard differenziata per permesso) + **Task 9 Onda 3 anticipato** (landing pubblica per-tenant stile Apple, ADR-0049) + **Onda 3 Task 1 — Catalogo servizi** (ADR-0050, slice FULL su 6 superfici).
 
 ### Dove siamo
 
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Task 9 Onda 3**. Catalogo permessi: **50**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 Task 1 (catalogo) + Task 9 (landing)**. Catalogo permessi: **52**.
 
 ### NOVITÀ sessione 2026-06-25
 
@@ -58,17 +58,30 @@ Product discovery completato in sessione. Priorità emerse:
 
 Feature deferrate (dipendenze esterne o tenant pilota reale): firma digitale, pagamento parcelle online, password per documento.
 
+**6. Catalogo servizi — Onda 3 Task 1 (PR #120, `21081e2`)**
+
+Slice FULL — ADR-0050. Listino servizi dello studio riusabile nei preventivi. Due commit (db fondazione + feature). 6 superfici:
+
+- **Schema**: `ServizioCategoria` + `ServizioCatalogo` (pattern `ScadenzaCategoria`: `tenantId` nullable, null = piattaforma condivisa, valorizzato = custom), enum `TipoRicorrenza`, `PreventivoVoce.servizioId` (FK SetNull, snapshot-safe). Migration `20260625193614_add_servizi_catalogo` + **partial unique index** raw SQL `(tenant_id, nome|codice) WHERE tenant_id IS NOT NULL`.
+- **No RLS** sui due modelli (righe platform `tenant_id NULL` incompatibili con policy tenant) → scoping applicativo esplicito `OR: [{tenantId:null},{tenantId}]`. Invariante: platform read-only → `assert*Owned()` lancia 403 `E_SERVIZIO_*_PLATFORM_READONLY`.
+- **Seed**: 6 categorie + 20 voci piattaforma (`tenant_id NULL`) + 2 permessi `servizi.{visualizza,gestisci}`.
+- **BE**: `CatalogoModule` (`/catalogo/categorie`, `/catalogo/servizi`) CRUD gated RBAC; `servizioId` opzionale in DTO/service preventivi voci.
+- **FE**: pagina `/t/[slug]/catalogo` (Servizi + Categorie, platform read-only badge), voce sidebar "Catalogo servizi", UX "Dal catalogo" nell'editor voci preventivi (pre-compila voce, snapshot-safe).
+- **e2e**: `catalogo-crud` 10 scenari (platform/custom scoping, 403 read-only, isolamento cross-tenant, RBAC viewer). Suite totale **131** (era 121).
+
+Sub-DP (vedi ADR-0050): permessi reali **50→52** (non 55→57: `grep -c "code:"` sovrastima → memoria aggiornata); route FE senza `studio/`; update DTO manuali (no `@nestjs/mapped-types`); `truncateDatabase` e2e esteso con tabelle catalogo (righe platform `tenant_id NULL` fuori CASCADE); pagina catalogo IT hardcoded (TD i18n, da chiudere col namespace catalogo nei prossimi moduli).
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
 2. **Cliente-dello-studio** ✅ COMPLETO (portale path-based)
 3. **Super-admin** ✅ MINIMALE (lifecycle tenant, `oneplatform`)
 
-### Prossimo task — Onda 3 (residuo)
+### Prossimo task — Onda 3 Task 2: Mandati / Incarichi
 
-**Task 7 — Email notifiche**: circolari pubblicate, comunicazioni ricevute. MailService esiste già, manca il framework di trigger (evento → template → invio).
+**Prossimo**: modulo Mandati/Incarichi (lettere d'incarico studio↔cliente). Da scopare con STOP 0 empirico + sezione BRIEF applicabile prima di proporre lo scope.
 
-**Task 8 — Alert scadenze cron**: T-7 e T-1 via email, configurabile dallo studio.
+**Residuo Onda 3** (dopo Mandati): **Email notifiche** (circolari pubblicate, comunicazioni ricevute — MailService esiste, manca framework trigger evento→template→invio) · **Alert scadenze cron** (T-7 e T-1 via email, configurabile dallo studio).
 
 ### Fili aperti
 
@@ -82,6 +95,7 @@ Feature deferrate (dipendenze esterne o tenant pilota reale): firma digitale, pa
 ### Tech debt aperti
 
 Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drift** · **`web` external one-time** · **TD-documenti-tipo-codice** · **TD-utente-enum-forward** · **TD-storage-gc** · **TD-moduleResolution-node10** · **TD-circolari-utente-forward** · **TD-portale-com-allegati** · **TD-portale-com-apertura** · **TD-portale-circolari-html** · **TD-immagine-api**.
+Nuovo: **TD-catalogo-i18n** (pagina `/catalogo` in IT hardcoded — chiudere col namespace i18n catalogo nei prossimi moduli Onda 3, ADR-0050 DP-7).
 
 ### Roadmap onde (aggiornata)
 
@@ -93,7 +107,7 @@ Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drif
 
 **Onda 2 — Identità e percezione** ✅ COMPLETA 4. ✅ Identità visiva (PR #114 + #115) 5. ✅ Homepage portale cliente (PR #116) 6. ✅ Dashboard operatore differenziata (PR #117)
 
-**Onda 3 — Valore operativo** 🔜 (parziale) 7. 🔜 Email notifiche (circolari pubblicate, comunicazioni ricevute) 8. 🔜 Alert scadenze cron (T-7 e T-1 via email) 9. ✅ Landing pubblica studio (PR #118) — anticipato
+**Onda 3 — Valore operativo** 🔜 (parziale) — T1. ✅ Catalogo servizi (PR #120, ADR-0050) · T2. 🔜 Mandati/Incarichi (prossimo) · Email notifiche (circolari pubblicate, comunicazioni ricevute) · Alert scadenze cron (T-7 e T-1 via email) · ✅ Landing pubblica studio (PR #118, anticipato)
 
 **Onda 4 — Piattaforma** 🔜 10. Superadmin monitoring (stato container, disk, memory) 11. Impersonation studio con banner 12. Invito operatore via email
 
@@ -132,14 +146,15 @@ Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drif
 
 ### Git
 
-- **Main @ `de19e3b`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+- **Main @ `21081e2`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `21081e2` feat(catalogo): catalogo servizi — schema, CRUD, collegamento preventivi (ADR-0050) (#120)
+  - `e6e4492` docs(handoff): aggiorna snapshot a de19e3b — Onda 2 completa + Task 9 (#114-118) (#119)
   - `de19e3b` feat(tenant): landing pubblica per-tenant — identità studio, endpoint pubblico, homepage FE (#118)
   - `bae6c4e` feat(dashboard): sezione scadenze imminenti — differenziazione per permesso (#117)
   - `a4e7869` feat(portale): homepage cliente — comunicazioni, circolari e documenti recenti (#116)
-  - `e6f11ca` feat(accountant-web): sidebar chiara, voce attiva blu pastello — stile Brevo-inspired (#115)
-  - `b802754` feat(accountant-web): tema shell — sidebar scura, primary blu, nav attiva ambra, font Inter (#114)
 - **Working tree PULITO**, nessun branch pendente.
-- ADR in repo fino a **0049**.
+- ADR in repo fino a **0050**.
+- ⚠️ **Deploy posticipato**: `main` è avanti rispetto ai container in prod (su `de19e3b`). Rebuild rimandato a blocco quando Onda 3 è più avanzata. La migration `20260625193614_add_servizi_catalogo` è già applicata al DB condiviso (dev).
 
 ### Schema dominio accountant — aggiornato
 
@@ -147,11 +162,15 @@ Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drif
 
 `Tenant` aggiornato: +`descrizione`, +`indirizzo`, +`telefono`, +`emailContatto`, +`sitoWeb`, +`logoUrl` (tutti nullable, migration `20260625124846_add_tenant_identity`).
 
-### Permessi (50 totali)
+**Catalogo servizi (ADR-0050)**: `ServizioCategoria` + `ServizioCatalogo` (`tenantId` nullable platform/custom, no RLS) · enum `TipoRicorrenza` · `PreventivoVoce.servizioId` (FK SetNull) · partial unique index `(tenant_id, nome|codice) WHERE tenant_id IS NOT NULL`. Seed: 6 categorie + 20 voci piattaforma.
 
-Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
+### Permessi (52 totali)
+
+> Baseline = **52** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). NON usare `grep -c "code:"` (sovrastima).
+
+Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · **`servizi.{visualizza,gestisci}`** · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
 Namespace portale: `portale.documenti.visualizza` · `portale.comunicazioni.{visualizza,rispondi}` · `portale.circolari.visualizza`.
-Template "Cliente" → 4 permessi portale.
+Template "Cliente" → 4 permessi portale. `servizi.visualizza` anche al Collaboratore.
 
 ### Stack & ambiente
 
@@ -165,4 +184,4 @@ Template "Cliente" → 4 permessi portale.
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `de19e3b` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-25] per sessione (Onda 2 #114-117 + Task 9 #118).
+Working tree pulito, main @ `21081e2` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-25] per sessione (Onda 2 #114-117 + Task 9 #118 + Onda 3 Task 1 catalogo #120).
