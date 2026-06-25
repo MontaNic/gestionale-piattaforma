@@ -35,6 +35,7 @@ import { PlatformModule } from './platform/platform.module';
 import { PublicModule } from './public/public.module';
 import { CatalogoModule } from './catalogo/catalogo.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ReportModule } from './report/report.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -79,6 +80,8 @@ import { MeModule } from './me/me.module';
     CircolariModule,
     // Dashboard KPI aggregati tenant-level (read-only, STOP-dash1).
     DashboardModule,
+    // Report analitici: margine per mandato/azienda (read-only, ADR-0054).
+    ReportModule,
     // Inviti cliente: onboarding utenti-portale via token email (feat/invito-cliente).
     InvitiModule,
     // Platform superadmin: gestione tenant (gated PlatformGuard, Task 3).

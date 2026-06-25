@@ -10,7 +10,11 @@
       "documenti": "Documenti",
       "fatture": "Fatture",
       "circolari": "Circolari",
+      "margine": "Margine",
       "platform": "Piattaforma"
+    },
+    "navGroups": {
+      "report": "Report"
     },
     "topbar": {
       "openMenu": "Apri menu",
