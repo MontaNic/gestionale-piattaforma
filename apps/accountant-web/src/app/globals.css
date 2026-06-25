@@ -48,16 +48,6 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 213 74% 55%;
   }
-
-  /* Sidebar scura — scoped al nav element, indipendente dal tema pagina.
-     Le voci nav (attive e non) sono colorate da utility Tailwind hardcoded
-     in Sidebar.tsx (amber/slate); qui restano solo le var ancora consumate:
-     --background (bg nav), --foreground (header), --border (bordi). */
-  [data-testid='sidebar'] {
-    --background: 220 24% 12%;
-    --foreground: 0 0% 90%;
-    --border: 220 24% 18%;
-  }
 }
 
 @layer base {
