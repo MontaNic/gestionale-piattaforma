@@ -36,10 +36,21 @@ datasource db {
 // =============================================================================
 
 model Tenant {
-  id        String    @id
-  name      String
-  slug      String    @unique
-  isActive  Boolean   @default(true) @map("is_active")
+  id       String  @id
+  name     String
+  slug     String  @unique
+  isActive Boolean @default(true) @map("is_active")
+
+  // Identità pubblica dello studio (ADR-0049). Mostrata sulla landing pubblica
+  // /t/<slug> via GET /public/tenants/:slug (@Public, nessun campo segreto).
+  // Tutti nullable: popolati in onboarding/seed, assenza = sezione omessa nella UI.
+  descrizione   String?
+  indirizzo     String?
+  telefono      String?
+  emailContatto String? @map("email_contatto")
+  sitoWeb       String? @map("sito_web")
+  logoUrl       String? @map("logo_url")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")

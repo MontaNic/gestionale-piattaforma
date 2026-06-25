@@ -17,6 +17,7 @@ import {
   IsNotIn,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
   MinLength,
@@ -92,4 +93,37 @@ export class CreateTenantDto {
   @IsString()
   @Matches(/^\d{5}$/, { message: 'E_SEDE_POSTAL_CODE_INVALID' })
   sedePostalCode?: string;
+
+  // ---------------------------------------------------------------------------
+  // Identità pubblica dello studio (opzionale, ADR-0049)
+  // ---------------------------------------------------------------------------
+  // Campi mostrati sulla landing pubblica /t/<slug> (GET /public/tenants/:slug).
+  // Nullable in schema: undefined → null in TenantsService.createTenant.
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: 'E_TENANT_DESCRIZIONE_TOO_LONG' })
+  descrizione?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: 'E_TENANT_INDIRIZZO_TOO_LONG' })
+  indirizzo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30, { message: 'E_TENANT_TELEFONO_TOO_LONG' })
+  telefono?: string;
+
+  @IsOptional()
+  @IsEmail({}, { message: 'E_TENANT_EMAIL_CONTATTO_INVALID' })
+  emailContatto?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true }, { message: 'E_TENANT_SITO_WEB_INVALID' })
+  sitoWeb?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true }, { message: 'E_TENANT_LOGO_URL_INVALID' })
+  logoUrl?: string;
 }

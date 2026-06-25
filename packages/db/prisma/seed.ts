@@ -457,7 +457,18 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
 export const PLATFORM_TENANT_ID = '01900000-0000-7000-8000-000000000001';
 
 interface SeedDevTenantParams {
-  tenant: { slug: string; name: string; id?: string };
+  // Identità pubblica (ADR-0049): campi opzionali mostrati sulla landing /t/<slug>.
+  tenant: {
+    slug: string;
+    name: string;
+    id?: string;
+    descrizione?: string;
+    indirizzo?: string;
+    telefono?: string;
+    emailContatto?: string;
+    sitoWeb?: string;
+    logoUrl?: string;
+  };
   sede: { name: string; address: string; city: string; postalCode: string };
   user: { email: string; password: string; firstName: string; lastName: string };
   superAdminTplId: string;
@@ -480,8 +491,23 @@ async function seedDevTenant(
       name: tenantInfo.name,
       slug: tenantInfo.slug,
       isActive: true,
+      descrizione: tenantInfo.descrizione ?? null,
+      indirizzo: tenantInfo.indirizzo ?? null,
+      telefono: tenantInfo.telefono ?? null,
+      emailContatto: tenantInfo.emailContatto ?? null,
+      sitoWeb: tenantInfo.sitoWeb ?? null,
+      logoUrl: tenantInfo.logoUrl ?? null,
     },
-    update: { name: tenantInfo.name, isActive: true },
+    update: {
+      name: tenantInfo.name,
+      isActive: true,
+      descrizione: tenantInfo.descrizione ?? null,
+      indirizzo: tenantInfo.indirizzo ?? null,
+      telefono: tenantInfo.telefono ?? null,
+      emailContatto: tenantInfo.emailContatto ?? null,
+      sitoWeb: tenantInfo.sitoWeb ?? null,
+      logoUrl: tenantInfo.logoUrl ?? null,
+    },
   });
   console.log(`  Tenant '${tenantInfo.slug}': ${tenant.id}`);
 
@@ -1525,7 +1551,18 @@ async function main(): Promise<void> {
     // Isola lo skeleton accountant-api dalla ristorazione: NESSUN seedDevMenu
     // (zero dominio). Idempotente come demo/acme.
     const studio = await seedDevTenant({
-      tenant: { slug: 'studio-demo', name: 'Studio Demo Commercialisti' },
+      // Identità pubblica demo (ADR-0049): landing /t/studio-demo.
+      tenant: {
+        slug: 'studio-demo',
+        name: 'Studio Ferretti & Lombardi',
+        descrizione:
+          'Studio di commercialisti e consulenti del lavoro. Assistenza fiscale, contabile e societaria per imprese e professionisti dal 1998.',
+        indirizzo: 'Via Manzoni 14, 20121 Milano (MI)',
+        telefono: '+39 02 1234 5678',
+        emailContatto: 'info@ferrettilombardi.it',
+        sitoWeb: 'https://www.ferrettilombardi.it',
+        logoUrl: 'https://placehold.co/240x240/1e3a5f/ffffff/png?text=F%26L',
+      },
       sede: {
         name: 'Sede Studio',
         address: 'Via Roma 1',

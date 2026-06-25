@@ -67,9 +67,20 @@ export class TenantsService {
         });
       }
 
-      // 2.2 Tenant
+      // 2.2 Tenant (+ identità pubblica opzionale ADR-0049: undefined → null)
       const tenant = await tx.tenant.create({
-        data: { id: id(), name: dto.name, slug: dto.slug, isActive: true },
+        data: {
+          id: id(),
+          name: dto.name,
+          slug: dto.slug,
+          isActive: true,
+          descrizione: dto.descrizione ?? null,
+          indirizzo: dto.indirizzo ?? null,
+          telefono: dto.telefono ?? null,
+          emailContatto: dto.emailContatto ?? null,
+          sitoWeb: dto.sitoWeb ?? null,
+          logoUrl: dto.logoUrl ?? null,
+        },
       });
 
       // 2.3 Sede
