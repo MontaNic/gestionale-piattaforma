@@ -149,6 +149,7 @@ export type {
   PreventivoVoce,
   Mandato,
   RdlCounter,
+  Prestazione,
   ServizioCategoria,
   ServizioCatalogo,
   Scadenza,

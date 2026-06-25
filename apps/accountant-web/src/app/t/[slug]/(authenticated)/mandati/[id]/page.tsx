@@ -9,6 +9,7 @@ import { Alert, AlertDescription, Button, Input } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 
 import { messageForError } from '@/lib/error-codes';
+import { PrestazioniSection } from '@/components/mandati/PrestazioniSection';
 import {
   deleteMandato,
   getMandato,
@@ -214,6 +215,9 @@ export default function MandatoDetailPage(): JSX.Element {
               </div>
             )}
           </div>
+
+          {/* Timesheet (ADR-0053) — prestazioni sul mandato */}
+          <PrestazioniSection mandatoId={mandato.id} mandatoStato={mandato.stato} />
         </>
       )}
     </div>

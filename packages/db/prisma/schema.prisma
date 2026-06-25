@@ -86,6 +86,7 @@ model Tenant {
   clienteInviti        ClienteInvito[]
   mandati              Mandato[]
   rdlCounters          RdlCounter[]
+  prestazioni          Prestazione[]
 
   @@map("tenants")
 }
@@ -190,6 +191,8 @@ model User {
   passwordResets         PasswordReset[]
   // Inviti cliente creati da questo operatore (invitatoDa).
   clienteInvitiCreati    ClienteInvito[]    @relation("ClienteInvitoInvitatoDa")
+  // Prestazioni/timesheet svolte da questo utente (ADR-0053).
+  prestazioni            Prestazione[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -859,9 +862,10 @@ model PreventivoVoce {
   // sorgente di verità (i prezzi storici NON mutano se il catalogo cambia).
   servizioId     String?     @map("servizio_id")
 
-  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  preventivo Preventivo        @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
-  servizio   ServizioCatalogo? @relation(fields: [servizioId], references: [id], onDelete: SetNull)
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  preventivo  Preventivo        @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
+  servizio    ServizioCatalogo? @relation(fields: [servizioId], references: [id], onDelete: SetNull)
+  prestazioni Prestazione[]
 
   @@index([tenantId])
   @@index([preventivoId, ordine])
@@ -1311,9 +1315,10 @@ model Mandato {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  azienda    Azienda    @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
-  preventivo Preventivo @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  azienda     Azienda       @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
+  preventivo  Preventivo    @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
+  prestazioni Prestazione[]
 
   // NB: unicità 1:1 su preventivo_id via PARTIAL unique index raw SQL
   // (WHERE deleted_at IS NULL, Pattern 42) nella migration — non @@unique qui.
@@ -1334,4 +1339,40 @@ model RdlCounter {
 
   @@id([tenantId, anno])
   @@map("rdl_counter")
+}
+
+// =============================================================================
+// Prestazioni / Timesheet (ADR-0053, Onda 3 Task 3)
+// =============================================================================
+// Ore svolte su un mandato (origine legacy rapporti_prestazioni). Dato puro-tenant
+// → RLS FORCE standard (pattern Mandato). Si aggiungono SOLO a mandati in_corso
+// (guard al create nel service). `importo` manuale nullable (nessun calcolo
+// automatico: il tariffario è Task 3b/4). `userId` = autore (assegnato server-side).
+// `voceId` opzionale → voce del preventivo del mandato (SetNull). Hook fatturazione
+// (fatturato_at/fattura_id) DEFER Task 4 — non presenti.
+// =============================================================================
+model Prestazione {
+  id          String    @id
+  tenantId    String    @map("tenant_id")
+  mandatoId   String    @map("mandato_id")
+  voceId      String?   @map("voce_id")
+  userId      String?   @map("user_id")
+  data        DateTime  @db.Date
+  ore         Decimal   @db.Decimal(5, 2)
+  descrizione String    @db.VarChar(500)
+  fatturabile Boolean   @default(true)
+  importo     Decimal?  @db.Decimal(10, 2)
+  note        String?
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mandato Mandato         @relation(fields: [mandatoId], references: [id], onDelete: Cascade)
+  voce    PreventivoVoce? @relation(fields: [voceId], references: [id], onDelete: SetNull)
+  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([mandatoId, data])
+  @@map("prestazioni")
 }
