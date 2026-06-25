@@ -10,7 +10,9 @@
 // `<select>`, senza dipendere da @gestionale/db (convenzione aziende/referenti).
 // =============================================================================
 
-export type StatoPreventivo = 'bozza' | 'inviato' | 'accettato' | 'rifiutato';
+export type StatoPreventivo = 'bozza' | 'inviato' | 'accettato' | 'rifiutato' | 'convertito';
+// `convertito` (ADR-0051) NON è selezionabile a mano: lo imposta il backend alla
+// creazione del mandato. Escluso da STATI_PREVENTIVO (select editing preventivo).
 export const STATI_PREVENTIVO: readonly StatoPreventivo[] = [
   'bozza',
   'inviato',

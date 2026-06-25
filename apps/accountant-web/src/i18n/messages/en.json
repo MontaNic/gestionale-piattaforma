@@ -5,6 +5,7 @@
       "clienti": "Clients",
       "scadenze": "Deadlines",
       "catalogo": "Service catalog",
+      "mandati": "Engagements",
       "comunicazioni": "Messages",
       "documenti": "Documents",
       "fatture": "Invoices",
@@ -201,7 +202,8 @@
       "bozza": "Draft",
       "inviato": "Sent",
       "accettato": "Accepted",
-      "rifiutato": "Rejected"
+      "rifiutato": "Rejected",
+      "convertito": "Converted"
     },
     "um": {
       "forfait": "Flat rate",

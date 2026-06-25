@@ -161,6 +161,18 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'servizi',
   },
 
+  // mandati.* (2) — mandati/incarichi (ADR-0051, Onda 3 Task 2)
+  {
+    code: 'mandati.visualizza',
+    description: 'Visualizzazione mandati/incarichi',
+    category: 'mandati',
+  },
+  {
+    code: 'mandati.gestisci',
+    description: 'Crea (da preventivo accettato) / modifica / elimina mandati',
+    category: 'mandati',
+  },
+
   // comunicazioni.* (2) — verticale accountant (ADR-0043)
   {
     code: 'comunicazioni.visualizza',
@@ -408,6 +420,8 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'scadenze.visualizza',
       'scadenze.gestisci',
       'servizi.visualizza',
+      'mandati.visualizza',
+      'mandati.gestisci',
       'comunicazioni.visualizza',
       'comunicazioni.gestisci',
       'documenti.visualizza',

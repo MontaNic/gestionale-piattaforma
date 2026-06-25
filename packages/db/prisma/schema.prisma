@@ -84,6 +84,8 @@ model Tenant {
   circolariLetture     CircolareLettura[]
   passwordResets       PasswordReset[]
   clienteInviti        ClienteInvito[]
+  mandati              Mandato[]
+  rdlCounters          RdlCounter[]
 
   @@map("tenants")
 }
@@ -732,6 +734,7 @@ model Azienda {
   tenant               Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   referenti            Referente[]
   preventivi           Preventivo[]
+  mandati              Mandato[]
   scadenze             Scadenza[]
   comunicazioni        Comunicazione[]
   documenti            Documento[]
@@ -778,6 +781,14 @@ enum StatoPreventivo {
   inviato
   accettato
   rifiutato
+  convertito // accettato → convertito in mandato (ADR-0051, 1:1 con Mandato)
+}
+
+enum StatoMandato {
+  in_corso
+  sospeso
+  concluso
+  annullato
 }
 
 enum UnitaMisura {
@@ -814,6 +825,11 @@ model Preventivo {
   tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   azienda Azienda          @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
   voci    PreventivoVoce[]
+  // 1:1 effettivo via partial-unique (preventivo_id WHERE deleted_at IS NULL) +
+  // state-machine `convertito` (ADR-0051). A livello Prisma è una lista perché il
+  // partial-unique non è esprimibile come @@unique. Il service legge il mandato
+  // attivo con findFirst({ preventivoId, deletedAt: null }).
+  mandati Mandato[]
 
   @@index([tenantId])
   @@index([aziendaId])
@@ -1265,4 +1281,57 @@ model ServizioCatalogo {
   @@index([tenantId])
   @@index([categoriaId])
   @@map("servizi_catalogo")
+}
+
+// =============================================================================
+// Mandati / Incarichi (ADR-0051, Onda 3 Task 2)
+// =============================================================================
+// La "lettera d'incarico" che nasce da un preventivo ACCETTATO (origine legacy
+// rapporti_lavoro). Dato puro-tenant → RLS FORCE standard (pattern Preventivo).
+// Relazione 1:1 col preventivo: alla creazione il preventivo passa a stato
+// `convertito` (guard: solo da `accettato`) + partial-unique su preventivo_id
+// (soft-delete-aware, Pattern 42). `importoConcordato` = snapshot preventivo.totale.
+// codice RDL-<anno>-<NNNN> via counter per-tenant per-anno (RdlCounter, pattern
+// ComCounter). Timesheet/prestazioni + hook fatturazione: DEFER Task 3/4.
+// =============================================================================
+
+model Mandato {
+  id                String       @id
+  tenantId          String       @map("tenant_id")
+  preventivoId      String       @map("preventivo_id")
+  aziendaId         String       @map("azienda_id")
+  codice            String       @db.VarChar(32)
+  stato             StatoMandato @default(in_corso)
+  inizio            DateTime?    @db.Date
+  finePrevista      DateTime?    @map("fine_prevista") @db.Date
+  fineEffettiva     DateTime?    @map("fine_effettiva") @db.Date
+  note              String?
+  importoConcordato Decimal      @default(0) @map("importo_concordato") @db.Decimal(12, 2)
+  deletedAt         DateTime?    @map("deleted_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  azienda    Azienda    @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
+  preventivo Preventivo @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
+
+  // NB: unicità 1:1 su preventivo_id via PARTIAL unique index raw SQL
+  // (WHERE deleted_at IS NULL, Pattern 42) nella migration — non @@unique qui.
+  @@index([tenantId])
+  @@index([aziendaId])
+  @@index([tenantId, stato])
+  @@map("mandati")
+}
+
+// Counter per-tenant per-anno per il codice RDL-<anno>-<NNNN> (pattern ComCounter,
+// ma chiave composta tenant+anno → progressivo che riparte ogni anno).
+model RdlCounter {
+  tenantId   String @map("tenant_id")
+  anno       Int
+  lastNumber Int    @default(0) @map("last_number")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anno])
+  @@map("rdl_counter")
 }

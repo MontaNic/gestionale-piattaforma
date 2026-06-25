@@ -5,6 +5,7 @@
       "clienti": "Clienti",
       "scadenze": "Scadenze",
       "catalogo": "Catalogo servizi",
+      "mandati": "Mandati",
       "comunicazioni": "Comunicazioni",
       "documenti": "Documenti",
       "fatture": "Fatture",
@@ -201,7 +202,8 @@
       "bozza": "Bozza",
       "inviato": "Inviato",
       "accettato": "Accettato",
-      "rifiutato": "Rifiutato"
+      "rifiutato": "Rifiutato",
+      "convertito": "Convertito"
     },
     "um": {
       "forfait": "Forfait",

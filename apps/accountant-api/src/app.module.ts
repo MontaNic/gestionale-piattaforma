@@ -24,6 +24,7 @@ import { AppController } from './app.controller';
 import { AziendeModule } from './aziende/aziende.module';
 import { ReferentiModule } from './referenti/referenti.module';
 import { PreventiviModule } from './preventivi/preventivi.module';
+import { MandatiModule } from './mandati/mandati.module';
 import { ScadenzeModule } from './scadenze/scadenze.module';
 import { ComunicazioniModule } from './comunicazioni/comunicazioni.module';
 import { DocumentiModule } from './documenti/documenti.module';
@@ -63,6 +64,8 @@ import { MeModule } from './me/me.module';
     PreventiviModule,
     // Catalogo servizi: listino studio (platform + custom), riuso nei preventivi (ADR-0050).
     CatalogoModule,
+    // Mandati/incarichi: lettera d'incarico da preventivo accettato (ADR-0051).
+    MandatiModule,
     // Scadenze (calendario fiscale) + categorie piattaforma/custom (STOP-scad1).
     ScadenzeModule,
     // Comunicazioni: thread 1:1 studio↔cliente + allegati (ADR-0043).

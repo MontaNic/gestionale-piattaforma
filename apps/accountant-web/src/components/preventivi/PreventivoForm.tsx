@@ -63,7 +63,9 @@ const testataSchema = z.object({
     .trim()
     .min(1, "L'oggetto è obbligatorio")
     .max(200, "L'oggetto non può superare 200 caratteri"),
-  stato: z.enum(['bozza', 'inviato', 'accettato', 'rifiutato']),
+  // `convertito` (ADR-0051) incluso per type-match con StatoPreventivo (lo
+  // imposta il backend); NON è nel select (STATI_PREVENTIVO ha solo i 4 manuali).
+  stato: z.enum(['bozza', 'inviato', 'accettato', 'rifiutato', 'convertito']),
   validoFino: z.string().trim(),
   coverLetter: z.string().trim(),
   noteInterne: z.string().trim(),
