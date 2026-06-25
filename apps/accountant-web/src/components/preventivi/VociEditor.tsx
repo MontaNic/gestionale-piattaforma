@@ -1,12 +1,18 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Trash2 } from 'lucide-react';
 
 import { Button, Input, Textarea } from '@gestionale/ui';
 import { computeTotali, computeVoce } from '@/lib/preventivi-totali';
 import { UNITA_MISURA, type UnitaMisura, type VoceInput } from '@/lib/preventivi-types';
+import {
+  getCatalogoCategorie,
+  getCatalogoServizi,
+  type ServizioCatalogo,
+  type ServizioCategoria,
+} from '@/lib/catalogo-api';
 
 // =============================================================================
 // VociEditor.tsx — Editor righe preventivo, totali live (STOP-e2 ADR-0037)
@@ -36,6 +42,9 @@ export interface VoceRow {
   scontoPct: string;
   ivaAliquota: string;
   note: string;
+  // Tracciabilità catalogo (ADR-0050): valorizzato se la voce è stata
+  // pre-compilata da una voce di catalogo. Non blocca l'editing successivo.
+  servizioId?: string;
 }
 
 let rowSeq = 0;
@@ -66,6 +75,7 @@ export function rowFromVoce(v: {
   scontoPct: number;
   ivaAliquota: number;
   note: string | null;
+  servizioId?: string | null;
 }): VoceRow {
   rowSeq += 1;
   return {
@@ -78,6 +88,7 @@ export function rowFromVoce(v: {
     scontoPct: String(v.scontoPct),
     ivaAliquota: String(v.ivaAliquota),
     note: v.note ?? '',
+    servizioId: v.servizioId ?? undefined,
   };
 }
 
@@ -107,6 +118,7 @@ export function rowToVoceInput(r: VoceRow, index: number): VoceInput {
     ivaAliquota: toNum(r.ivaAliquota),
     ordine: index,
     note: r.note.trim() === '' ? undefined : r.note.trim(),
+    servizioId: r.servizioId,
   };
 }
 
@@ -146,15 +158,123 @@ export function VociEditor({ rows, onChange, disabled = false }: VociEditorProps
     onChange(rows.filter((_, i) => i !== index));
   }
 
+  // ── Picker "Dal catalogo" (ADR-0050) ──────────────────────────────────────────
+  // Pannello inline (no Dialog primitive in @gestionale/ui). Carica i servizi
+  // attivi (platform + custom) al primo apertura. Click su un servizio →
+  // pre-compila una nuova voce (snapshot: prezzo/iva/um copiati, editabili dopo)
+  // tracciando servizioId.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [catalogoLoaded, setCatalogoLoaded] = useState(false);
+  const [catalogoErr, setCatalogoErr] = useState(false);
+  const [servizi, setServizi] = useState<ServizioCatalogo[]>([]);
+  const [categorie, setCategorie] = useState<ServizioCategoria[]>([]);
+  const [catFilter, setCatFilter] = useState('');
+
+  async function togglePicker(): Promise<void> {
+    const next = !pickerOpen;
+    setPickerOpen(next);
+    if (next && !catalogoLoaded) {
+      setCatalogoErr(false);
+      try {
+        const [svc, cat] = await Promise.all([
+          getCatalogoServizi({ attivo: true }),
+          getCatalogoCategorie(),
+        ]);
+        setServizi(svc);
+        setCategorie(cat);
+        setCatalogoLoaded(true);
+      } catch {
+        setCatalogoErr(true);
+      }
+    }
+  }
+
+  function addFromServizio(s: ServizioCatalogo): void {
+    const base = emptyRow();
+    onChange([
+      ...rows,
+      {
+        ...base,
+        nome: s.nome,
+        unitaMisura: s.unitaMisura,
+        prezzoUnitario: String(s.prezzoBase),
+        ivaAliquota: String(s.ivaAliquota),
+        servizioId: s.id,
+      },
+    ]);
+  }
+
+  const serviziFiltrati = catFilter ? servizi.filter((s) => s.categoriaId === catFilter) : servizi;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-semibold">{t('voci.title')}</h3>
-        <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
-          <Plus className="h-4 w-4" />
-          {t('voci.add')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void togglePicker()}
+            disabled={disabled}
+          >
+            <BookOpen className="h-4 w-4" />
+            Dal catalogo
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
+            <Plus className="h-4 w-4" />
+            {t('voci.add')}
+          </Button>
+        </div>
       </div>
+
+      {pickerOpen && (
+        <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">Scegli un servizio dal catalogo</span>
+            <select
+              className={SELECT_CLASS + ' max-w-[14rem]'}
+              value={catFilter}
+              onChange={(e) => setCatFilter(e.target.value)}
+            >
+              <option value="">Tutte le categorie</option>
+              {categorie.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {catalogoErr ? (
+            <p className="text-sm text-destructive">Impossibile caricare il catalogo.</p>
+          ) : !catalogoLoaded ? (
+            <p className="text-sm text-muted-foreground">Caricamento catalogo…</p>
+          ) : serviziFiltrati.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nessun servizio disponibile.</p>
+          ) : (
+            <ul className="max-h-64 divide-y overflow-y-auto rounded-md border bg-background">
+              {serviziFiltrati.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => addFromServizio(s)}
+                    disabled={disabled}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    <span className="font-mono text-xs text-muted-foreground">{s.codice}</span>
+                    <span className="flex-1 font-medium">{s.nome}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {t(`um.${s.unitaMisura}`)}
+                    </span>
+                    <span className="font-medium">€ {eur(s.prezzoBase)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">

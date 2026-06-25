@@ -838,9 +838,14 @@ model PreventivoVoce {
   totaleRiga     Decimal     @default(0) @map("totale_riga") @db.Decimal(12, 2)
   ordine         Int         @default(0)
   note           String?     @db.VarChar(255)
+  // Tracciabilità catalogo (ADR-0050): da quale voce di catalogo è stata
+  // pre-compilata. NULLABLE + SetNull: lo snapshot denormalizzato sopra resta
+  // sorgente di verità (i prezzi storici NON mutano se il catalogo cambia).
+  servizioId     String?     @map("servizio_id")
 
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  preventivo Preventivo @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  preventivo Preventivo        @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
+  servizio   ServizioCatalogo? @relation(fields: [servizioId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([preventivoId, ordine])
@@ -1198,4 +1203,66 @@ model CircolareLettura {
   @@index([tenantId])
   @@index([userId])
   @@map("circolari_letture")
+}
+
+// =============================================================================
+// Catalogo servizi (ADR-0050, Onda 3 Task 1)
+// =============================================================================
+// Listino servizi dello studio commercialista, riusabile nei preventivi.
+// Pattern platform/custom identico a ScadenzaCategoria/DocumentoTipo:
+//   - tenantId NULLABLE: null = riga di piattaforma (catalogo standard condiviso,
+//     seedato una volta), valorizzato = voce custom dello studio.
+//   - NESSUNA RLS su questi due modelli (le righe platform hanno tenant_id NULL,
+//     incompatibili con la policy tenant_isolation): scoping ESPLICITO nel
+//     service via OR: [{ tenantId: null }, { tenantId }].
+//   - Unicità via PARTIAL UNIQUE INDEX raw SQL (Prisma 6 non li esprime):
+//     (tenant_id, nome) e (tenant_id, codice) WHERE tenant_id IS NOT NULL →
+//     le righe custom sono uniche per-tenant, le platform non vincolate fra loro.
+// =============================================================================
+
+enum TipoRicorrenza {
+  una_tantum
+  mensile
+  annuale
+}
+
+model ServizioCategoria {
+  id          String   @id
+  tenantId    String?  @map("tenant_id")
+  nome        String
+  descrizione String?
+  colore      String   @default("#6366f1")
+  ordine      Int      @default(0)
+  attivo      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  servizi ServizioCatalogo[]
+
+  @@index([tenantId])
+  @@map("servizi_categorie")
+}
+
+model ServizioCatalogo {
+  id             String         @id
+  tenantId       String?        @map("tenant_id")
+  codice         String
+  nome           String
+  descrizione    String?
+  categoriaId    String?        @map("categoria_id")
+  unitaMisura    UnitaMisura    @default(forfait) @map("unita_misura")
+  prezzoBase     Decimal        @default(0) @map("prezzo_base") @db.Decimal(10, 2)
+  ivaAliquota    Decimal        @default(22) @map("iva_aliquota") @db.Decimal(5, 2)
+  tipoRicorrenza TipoRicorrenza @default(una_tantum) @map("tipo_ricorrenza")
+  attivo         Boolean        @default(true)
+  ordine         Int            @default(0)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  categoria      ServizioCategoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  preventivoVoci PreventivoVoce[]
+
+  @@index([tenantId])
+  @@index([categoriaId])
+  @@map("servizi_catalogo")
 }

@@ -46,6 +46,7 @@ interface RawVoce {
   totaleRiga: string;
   ordine: number;
   note: string | null;
+  servizioId: string | null;
 }
 
 interface RawPreventivo {
@@ -87,6 +88,7 @@ function mapVoce(r: RawVoce): PreventivoVoce {
     totaleRiga: Number(r.totaleRiga),
     ordine: r.ordine,
     note: r.note,
+    servizioId: r.servizioId,
   };
 }
 

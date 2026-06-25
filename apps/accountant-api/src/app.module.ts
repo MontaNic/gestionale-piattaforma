@@ -31,6 +31,7 @@ import { CircolariModule } from './circolari/circolari.module';
 import { InvitiModule } from './inviti/inviti.module';
 import { PlatformModule } from './platform/platform.module';
 import { PublicModule } from './public/public.module';
+import { CatalogoModule } from './catalogo/catalogo.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
@@ -60,6 +61,8 @@ import { MeModule } from './me/me.module';
     ReferentiModule,
     // Preventivi (testata + voci, business logic + tx atomica, STOP-e1).
     PreventiviModule,
+    // Catalogo servizi: listino studio (platform + custom), riuso nei preventivi (ADR-0050).
+    CatalogoModule,
     // Scadenze (calendario fiscale) + categorie piattaforma/custom (STOP-scad1).
     ScadenzeModule,
     // Comunicazioni: thread 1:1 studio↔cliente + allegati (ADR-0043).

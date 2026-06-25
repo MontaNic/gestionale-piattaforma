@@ -30,6 +30,7 @@ import {
   RuoloReferente,
   StatoPreventivo,
   TipoCliente,
+  TipoRicorrenza,
   UnitaMisura,
   UserTipo,
   withSystemContext,
@@ -146,6 +147,18 @@ const PERMISSIONS: PermissionSeed[] = [
     code: 'scadenze.gestisci',
     description: 'Crea/modifica/elimina scadenze e categorie custom',
     category: 'scadenze',
+  },
+
+  // servizi.* (2) — catalogo servizi (ADR-0050, Onda 3 Task 1)
+  {
+    code: 'servizi.visualizza',
+    description: 'Visualizzazione catalogo servizi',
+    category: 'servizi',
+  },
+  {
+    code: 'servizi.gestisci',
+    description: 'Crea/modifica/elimina servizi e categorie catalogo custom',
+    category: 'servizi',
   },
 
   // comunicazioni.* (2) — verticale accountant (ADR-0043)
@@ -394,6 +407,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'preventivi.gestisci',
       'scadenze.visualizza',
       'scadenze.gestisci',
+      'servizi.visualizza',
       'comunicazioni.visualizza',
       'comunicazioni.gestisci',
       'documenti.visualizza',
@@ -1374,6 +1388,263 @@ async function seedDocumentiTipi(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Catalogo servizi piattaforma (ADR-0050) — tenant_id NULL, condivisi a tutti i
+// tenant. 6 categorie + 20 voci. Idempotente: upsert su `id` fisso well-known
+// (i servizi referenziano le categorie per id). Le righe platform non sono
+// vincolate dal partial-unique (che copre solo le custom tenant_id NOT NULL).
+// ─────────────────────────────────────────────────────────────────────────────
+const CATALOGO_CATEGORIE_PIATTAFORMA = [
+  { id: '01900000-0001-7000-8000-000000000001', nome: 'Contabilità', colore: '#6366f1', ordine: 1 },
+  {
+    id: '01900000-0001-7000-8000-000000000002',
+    nome: 'Dichiarazioni fiscali',
+    colore: '#f59e0b',
+    ordine: 2,
+  },
+  {
+    id: '01900000-0001-7000-8000-000000000003',
+    nome: 'Lavoro e paghe',
+    colore: '#10b981',
+    ordine: 3,
+  },
+  {
+    id: '01900000-0001-7000-8000-000000000004',
+    nome: 'Societario e legale',
+    colore: '#3b82f6',
+    ordine: 4,
+  },
+  { id: '01900000-0001-7000-8000-000000000005', nome: 'Consulenza', colore: '#8b5cf6', ordine: 5 },
+  { id: '01900000-0001-7000-8000-000000000006', nome: 'Altro', colore: '#6b7280', ordine: 6 },
+];
+
+interface CatalogoServizioSeed {
+  id: string;
+  codice: string;
+  nome: string;
+  categoriaId: string;
+  unitaMisura: UnitaMisura;
+  prezzoBase: number;
+  tipoRicorrenza: TipoRicorrenza;
+}
+
+const CATALOGO_SERVIZI_PIATTAFORMA: CatalogoServizioSeed[] = [
+  // Contabilità
+  {
+    id: '01900000-0002-7000-8000-000000000001',
+    codice: 'CONT-01',
+    nome: 'Tenuta contabilità ordinaria',
+    categoriaId: '01900000-0001-7000-8000-000000000001',
+    unitaMisura: UnitaMisura.mese,
+    prezzoBase: 150,
+    tipoRicorrenza: TipoRicorrenza.mensile,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000002',
+    codice: 'CONT-02',
+    nome: 'Tenuta contabilità semplificata',
+    categoriaId: '01900000-0001-7000-8000-000000000001',
+    unitaMisura: UnitaMisura.mese,
+    prezzoBase: 80,
+    tipoRicorrenza: TipoRicorrenza.mensile,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000003',
+    codice: 'CONT-03',
+    nome: 'Registrazione fatture (forfait mensile)',
+    categoriaId: '01900000-0001-7000-8000-000000000001',
+    unitaMisura: UnitaMisura.mese,
+    prezzoBase: 60,
+    tipoRicorrenza: TipoRicorrenza.mensile,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000004',
+    codice: 'CONT-04',
+    nome: 'Chiusura bilancio annuale',
+    categoriaId: '01900000-0001-7000-8000-000000000001',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 800,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  // Dichiarazioni fiscali
+  {
+    id: '01900000-0002-7000-8000-000000000005',
+    codice: 'FISC-01',
+    nome: 'Dichiarazione redditi persone fisiche (730)',
+    categoriaId: '01900000-0001-7000-8000-000000000002',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 120,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000006',
+    codice: 'FISC-02',
+    nome: 'Dichiarazione redditi società (Redditi SC)',
+    categoriaId: '01900000-0001-7000-8000-000000000002',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 600,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000007',
+    codice: 'FISC-03',
+    nome: 'Dichiarazione IVA annuale',
+    categoriaId: '01900000-0001-7000-8000-000000000002',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 180,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000008',
+    codice: 'FISC-04',
+    nome: 'Liquidazione IVA periodica',
+    categoriaId: '01900000-0001-7000-8000-000000000002',
+    unitaMisura: UnitaMisura.mese,
+    prezzoBase: 40,
+    tipoRicorrenza: TipoRicorrenza.mensile,
+  },
+  // Lavoro e paghe
+  {
+    id: '01900000-0002-7000-8000-000000000009',
+    codice: 'LAV-01',
+    nome: 'Elaborazione busta paga',
+    categoriaId: '01900000-0001-7000-8000-000000000003',
+    unitaMisura: UnitaMisura.dipendente,
+    prezzoBase: 25,
+    tipoRicorrenza: TipoRicorrenza.mensile,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000010',
+    codice: 'LAV-02',
+    nome: 'Assunzione / cessazione dipendente',
+    categoriaId: '01900000-0001-7000-8000-000000000003',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 80,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000011',
+    codice: 'LAV-03',
+    nome: 'CU dipendenti / autonomi',
+    categoriaId: '01900000-0001-7000-8000-000000000003',
+    unitaMisura: UnitaMisura.documento,
+    prezzoBase: 15,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000012',
+    codice: 'LAV-04',
+    nome: "770 sostituti d'imposta",
+    categoriaId: '01900000-0001-7000-8000-000000000003',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 200,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  // Societario e legale
+  {
+    id: '01900000-0002-7000-8000-000000000013',
+    codice: 'SOC-01',
+    nome: 'Costituzione società',
+    categoriaId: '01900000-0001-7000-8000-000000000004',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 1200,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000014',
+    codice: 'SOC-02',
+    nome: 'Deposito bilancio CCIAA',
+    categoriaId: '01900000-0001-7000-8000-000000000004',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 150,
+    tipoRicorrenza: TipoRicorrenza.annuale,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000015',
+    codice: 'SOC-03',
+    nome: 'Verbale assemblea soci',
+    categoriaId: '01900000-0001-7000-8000-000000000004',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 200,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  // Consulenza
+  {
+    id: '01900000-0002-7000-8000-000000000016',
+    codice: 'CONS-01',
+    nome: 'Consulenza oraria',
+    categoriaId: '01900000-0001-7000-8000-000000000005',
+    unitaMisura: UnitaMisura.ora,
+    prezzoBase: 90,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000017',
+    codice: 'CONS-02',
+    nome: 'Piano industriale / business plan',
+    categoriaId: '01900000-0001-7000-8000-000000000005',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 1500,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000018',
+    codice: 'CONS-03',
+    nome: 'Due diligence contabile',
+    categoriaId: '01900000-0001-7000-8000-000000000005',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 2000,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  // Altro
+  {
+    id: '01900000-0002-7000-8000-000000000019',
+    codice: 'ALTRO-01',
+    nome: 'Visura camerale / catastale',
+    categoriaId: '01900000-0001-7000-8000-000000000006',
+    unitaMisura: UnitaMisura.documento,
+    prezzoBase: 20,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+  {
+    id: '01900000-0002-7000-8000-000000000020',
+    codice: 'ALTRO-02',
+    nome: 'Pratiche SUAP / SCIA',
+    categoriaId: '01900000-0001-7000-8000-000000000006',
+    unitaMisura: UnitaMisura.forfait,
+    prezzoBase: 300,
+    tipoRicorrenza: TipoRicorrenza.una_tantum,
+  },
+];
+
+async function seedCatalogoServizi(): Promise<void> {
+  console.log(
+    `Catalogo (piattaforma): ${CATALOGO_CATEGORIE_PIATTAFORMA.length} categorie + ${CATALOGO_SERVIZI_PIATTAFORMA.length} voci attese`,
+  );
+  for (const cat of CATALOGO_CATEGORIE_PIATTAFORMA) {
+    await prisma.servizioCategoria.upsert({
+      where: { id: cat.id },
+      update: { nome: cat.nome, colore: cat.colore, ordine: cat.ordine },
+      create: { ...cat, tenantId: null },
+    });
+  }
+  for (const s of CATALOGO_SERVIZI_PIATTAFORMA) {
+    await prisma.servizioCatalogo.upsert({
+      where: { id: s.id },
+      update: { nome: s.nome, prezzoBase: s.prezzoBase, tipoRicorrenza: s.tipoRicorrenza },
+      create: {
+        ...s,
+        tenantId: null,
+        ivaAliquota: 22,
+        attivo: true,
+      },
+    });
+  }
+  console.log(
+    `  -> ${CATALOGO_CATEGORIE_PIATTAFORMA.length} categorie + ${CATALOGO_SERVIZI_PIATTAFORMA.length} voci affermate\n`,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Seed runner
 // ─────────────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
@@ -1484,6 +1755,9 @@ async function main(): Promise<void> {
 
   // Tipi documento piattaforma (tenant_id NULL) — reference data globale (ADR-0044).
   await seedDocumentiTipi();
+
+  // Catalogo servizi piattaforma (tenant_id NULL) — reference data globale (ADR-0050).
+  await seedCatalogoServizi();
 
   // ───────────────────────────────────────────────────────────────────────────
   // Dev tenants + admin (opt-out via NODE_ENV=production)
