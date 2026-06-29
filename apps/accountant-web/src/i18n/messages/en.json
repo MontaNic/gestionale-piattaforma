@@ -400,6 +400,11 @@
       "invia": "Send",
       "inviaNota": "Add note"
     },
+    "ai": {
+      "suggerisci": "Suggest reply",
+      "caricamento": "Generating…",
+      "errore": "Generation failed. Please try again."
+    },
     "lato": {
       "studio": "Firm",
       "cliente": "Client",

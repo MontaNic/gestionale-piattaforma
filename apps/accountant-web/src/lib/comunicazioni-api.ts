@@ -93,6 +93,21 @@ export async function deleteComunicazione(id: string): Promise<void> {
   await apiDelete<Wrapped<{ id: string; deleted: true }>>(`/comunicazioni/${id}`, authOptions());
 }
 
+/** Stato feature AI (pubblico, no auth). Decide se mostrare il bottone bozza. */
+export async function getAiStatus(): Promise<{ aiEnabled: boolean }> {
+  return apiGet<{ aiEnabled: boolean }>('/ai/status');
+}
+
+/** Bozza AI di risposta operatore (ADR-0056). Non persiste nulla. */
+export async function suggerisciRisposta(id: string): Promise<{ bozza: string }> {
+  const res = await apiPost<Wrapped<{ bozza: string }>>(
+    `/comunicazioni/${id}/suggerisci`,
+    {},
+    authOptions(),
+  );
+  return res.data;
+}
+
 export async function addMessaggio(
   comunicazioneId: string,
   input: CreateComMessaggioInput,

@@ -15,6 +15,7 @@ import {
   addMessaggio,
   deleteComunicazione,
   downloadAllegato,
+  getAiStatus,
   getComunicazione,
   marcaLetto,
   prendiInCarico,
@@ -47,6 +48,7 @@ export default function ComunicazioneThreadPage(): JSX.Element {
   const canManage = permissions.includes('comunicazioni.gestisci');
 
   const [thread, setThread] = useState<ComunicazioneThread | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -66,7 +68,13 @@ export default function ComunicazioneThreadPage(): JSX.Element {
     setIsLoading(true);
     setLoadError(null);
     try {
-      setThread(await getComunicazione(id));
+      // Status AI in parallelo al thread; un suo errore non deve bloccare il load.
+      const [com, ai] = await Promise.all([
+        getComunicazione(id),
+        getAiStatus().catch(() => ({ aiEnabled: false })),
+      ]);
+      setThread(com);
+      setAiEnabled(ai.aiEnabled);
     } catch (err) {
       setLoadError(messageForError(err));
     } finally {
@@ -222,7 +230,9 @@ export default function ComunicazioneThreadPage(): JSX.Element {
         ))}
       </div>
 
-      {canManage && !thread.chiusa && <MessaggioComposer onSend={handleSend} />}
+      {canManage && !thread.chiusa && (
+        <MessaggioComposer comunicazioneId={id} aiEnabled={aiEnabled} onSend={handleSend} />
+      )}
       {thread.chiusa && <p className="text-sm text-muted-foreground">{t('chiusaHint')}</p>}
     </div>
   );

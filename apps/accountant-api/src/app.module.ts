@@ -37,6 +37,7 @@ import { PublicModule } from './public/public.module';
 import { CatalogoModule } from './catalogo/catalogo.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportModule } from './report/report.module';
+import { AiModule } from './ai/ai.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -75,6 +76,8 @@ import { MeModule } from './me/me.module';
     TariffeModule,
     // Scadenze (calendario fiscale) + categorie piattaforma/custom (STOP-scad1).
     ScadenzeModule,
+    // AI: feature trasversale (GroqService + /ai/status), feature-flag su GROQ_API_KEY (ADR-0056).
+    AiModule,
     // Comunicazioni: thread 1:1 studio↔cliente + allegati (ADR-0043).
     ComunicazioniModule,
     // Documenti: scambio documenti studio↔cliente + tipi platform/custom (ADR-0044).

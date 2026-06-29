@@ -27,6 +27,8 @@ import {
 import { DbService } from '@gestionale/db/nest';
 import { catchUniqueViolation, StorageService } from '@gestionale/platform';
 
+import { GroqService } from '../ai/groq.service';
+
 import type { CreateComunicazioneDto } from './dto/create-comunicazione.dto';
 import type { CreateComMessaggioDto } from './dto/create-com-messaggio.dto';
 import type { ReplyClienteDto } from './dto/reply-cliente.dto';
@@ -93,6 +95,7 @@ export class ComunicazioniService {
   constructor(
     @Inject(DbService) private readonly db: DbService,
     @Inject(StorageService) private readonly storage: StorageService,
+    @Inject(GroqService) private readonly groq: GroqService,
   ) {}
 
   // ── Thread (testata) ─────────────────────────────────────────────────────────
@@ -130,6 +133,19 @@ export class ComunicazioniService {
       });
     }
     return com;
+  }
+
+  // Bozza AI di risposta operatore (ADR-0056). Carica il thread, esclude le note
+  // interne (lato='interno', mai parte della conversazione col cliente) e delega
+  // a GroqService. Nessuna persistenza: la bozza torna al FE che popola la
+  // textarea del composer. 503 se la feature è disabilitata (no GROQ_API_KEY).
+  async suggerisciRisposta(tenantId: string, comunicazioneId: string): Promise<{ bozza: string }> {
+    const com = await this.getById(tenantId, comunicazioneId);
+    const messaggi = com.messaggi
+      .filter((m) => m.lato !== ComLato.interno)
+      .map((m) => ({ lato: m.lato as 'studio' | 'cliente', testo: m.testo }));
+    const bozza = await this.groq.suggerisciRisposta({ oggetto: com.oggetto, messaggi });
+    return { bozza };
   }
 
   async create(
