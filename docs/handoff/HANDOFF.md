@@ -1,7 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `4be2a3a` (+1 commit docs(handoff) in arrivo via PR).
+> **Snapshot:** Main @ `75476fc` (+1 commit docs(handoff) in arrivo via PR).
 > **Data:** 2026-06-29.
 
 ---
@@ -17,7 +17,7 @@ Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **picker voce timesheet (#132)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
 
 **Onda 3 — pipeline cliente: COMPLETA** (preventivo → mandato → timesheet → margine):
 
@@ -127,6 +127,17 @@ Chiude il **TD-i18n-cumulativo**. Esternalizza in **next-intl** le stringhe hard
 
 Sub-DP: per la verifica creato mandato di test `RDL-2026-0002` + 2 prestazioni nel DB dev (lasciati, utili per riuso). Resta aperto il **TD-i18n-zod** (messaggi validazione zod fuori dal contesto React).
 
+### NOVITÀ sessione 2026-06-29 — picker voce di preventivo nel timesheet (PR #132, `75476fc`)
+
+Chiude il **TD-voceId-FE** (ADR-0053 sub-DP). `voceId` era già supportato a BE (DTO + validazione `assertVoceDelMandato`) e nei tipi/api-client FE: mancava solo il campo nel form. **Solo FE** (nessuno schema/migration/permesso/endpoint).
+
+- **`mandati/[id]/page.tsx`**: carica le voci del preventivo d'origine via `getPreventivo(aziendaId, preventivoId)` (il `Mandato` espone entrambi) e le passa a `PrestazioniSection`. Fetch in `try/catch` → un ruolo senza `preventivi.visualizza` non blocca la pagina (`voceId` resta opzionale, picker vuoto). Rischio 403 comunque assente: tutti i ruoli con `prestazioni.*` hanno anche `preventivi.visualizza` → niente endpoint dedicato.
+- **`PrestazioniSection.tsx`**: select "Voce di preventivo (opzionale)" nel form (default "Nessuna voce") + nuova **colonna "Voce"** in tabella (lookup `voceId→nome`).
+- **i18n**: `prestazioni.fields.voce`/`voceNone` + `col.voce` (it/en) → **580 chiavi** in parità.
+- **GATE**: parità i18n + risoluzione chiavi, typecheck/eslint/prettier, CI #132 verde. **Verifica runtime** come non-superuser su `RDL-2026-0002` (preventivo con 2 voci), IT+EN, **0 errori**: picker popolato, salvataggio con `voceId`, colonna "Voce" valorizzata.
+
+Sub-DP: lasciata una prestazione di test ("Test voce picker") nel DB dev. Restano deferiti: **TD-i18n-zod**.
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
@@ -153,7 +164,7 @@ Nuovi Onda 3:
 
 - **TD-i18n-zod**: messaggi di validazione **zod** hardcoded IT in tutti i form (definiti fuori dal contesto React → non passano per `t()`). Da chiudere in una slice dedicata su tutti i form insieme (registrato in ADR-0052, nota sotto CHECK-FE-3).
 - ~~**TD-i18n-cumulativo**~~ ✅ **RISOLTO** (#129): pagine `/catalogo`, `/mandati`, `/report/margine` + timesheet `PrestazioniSection` ora i18n it/en (namespace `catalogo`/`mandati`/`report`/`prestazioni`, 577 chiavi in parità). Resta solo il TD-i18n-zod.
-- **TD-voceId-FE**: `voceId` omesso dal form prestazioni (BE-supported, FE-deferred) — si aggiunge il select-voce quando serve operativamente (ADR-0053 sub-DP).
+- ~~**TD-voceId-FE**~~ ✅ **RISOLTO** (#132): select "Voce di preventivo" nel form prestazioni + colonna "Voce" in tabella (ADR-0053 sub-DP). Riusa `getPreventivo` per le opzioni, nessun endpoint nuovo.
 - ~~**TD-tariffario**~~ ✅ **RISOLTO** (#127, ADR-0055): tariffario per ruolo/utente → `Prestazione.importo` derivato (`ore × tariffa`). Restano sbloccati gli **insight AI margine** (Groq, deferiti ADR-0054 §7).
 
 ### Roadmap onde (aggiornata)
@@ -205,15 +216,15 @@ Nuovi Onda 3:
 
 ### Git
 
-- **Main @ `4be2a3a`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+- **Main @ `75476fc`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `75476fc` feat(prestazioni): picker voce di preventivo nel timesheet + colonna Voce (#132)
+  - `89c9f5c` docs(readme): refresh framing — StudioDesk verticale attivo (#131)
+  - `42f1b13` docs: aggiorna HANDOFF + PROGRESS — i18n superfici operatore (#129) (#130)
   - `4be2a3a` feat(i18n): traduzione IT/EN pagine operatore catalogo/mandati/report + timesheet (#129)
-  - `2c7bf68` docs: aggiorna HANDOFF + PROGRESS — Onda 4 Task 3b tariffario (#127, ADR-0055) (#128)
   - `01aaea8` feat(tariffario): listino tariffe orarie + derivazione importo prestazioni (ADR-0055) (#127)
-  - `b1abe71` docs(handoff): aggiorna snapshot a f21a164 — Onda 3 completa (#120-125) (#126)
-  - `f21a164` feat(report): dashboard margine per mandato/azienda (ADR-0054) (#125)
-- **Working tree PULITO**, nessun branch pendente (branch `feature/i18n-operatore-pages-catalogo-mandati-report` mergiato + eliminato).
-- ADR in repo fino a **0055** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · **0055 tariffario orario**). L'i18n #129 è una chiusura TD, senza ADR.
-- ⚠️ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono a **`b1abe71`** (Onda 3 completa); health `ok`/`db:connected`. Le migration Onda 3 e **`add_tariffe_orarie`** sono **applicate al DB condiviso**. ⚠️ Il container è **2 PR indietro** dal `main` (tariffario #127 + i18n #129): serve un nuovo `up -d --build accountant-api accountant-web` per servirli (la migration tariffario è già a posto → `migrate:deploy` no-op; l'i18n è solo FE).
+- **Working tree PULITO**, nessun branch pendente (branch `feature/prestazioni-voce-picker` mergiato + eliminato).
+- ADR in repo fino a **0055** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · **0055 tariffario orario**). i18n #129 e voce-picker #132 sono chiusure TD, senza ADR.
+- ✅ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono stati **rebuildati da `main` in chiusura sessione** → allineati a **`75476fc`** (tariffario #127 + i18n #129 + voce-picker #132); health `ok`/`db:connected`. Le migration Onda 3 e **`add_tariffe_orarie`** sono **applicate al DB condiviso** (nessuna nuova migration da #129/#132 — slice FE-only).
 
 ### Schema dominio accountant — aggiornato
 
@@ -247,4 +258,4 @@ Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `4be2a3a` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-29] (i18n superfici operatore, #129).
+Working tree pulito, main @ `75476fc` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-29] (picker voce timesheet, #132). Container prod rebuildati a `75476fc`.
