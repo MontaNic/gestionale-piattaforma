@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,19 +21,24 @@ import { messageForErrorCode } from '@/lib/error-codes';
 // useParams(). Middleware (src/middleware.ts) ha gia' validato il formato
 // + reserved list prima di arrivare qui — il valore e' safe-to-use.
 
-const loginSchema = z.object({
-  email: z.string().email('Email non valida'),
-  password: z.string().min(8, 'Password troppo corta (min 8 caratteri)'),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
-
 export default function LoginPage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const tenantSlug = params.slug;
   const tAuth = useTranslations('auth.login');
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Schema dentro il componente per tradurre i messaggi via `tAuth`; memoizzato su [tAuth].
+  const loginSchema = useMemo(
+    () =>
+      z.object({
+        email: z.string().email(tAuth('validationEmail')),
+        password: z.string().min(8, tAuth('validationPassword')),
+      }),
+    [tAuth],
+  );
+
+  type LoginFormValues = z.infer<typeof loginSchema>;
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
