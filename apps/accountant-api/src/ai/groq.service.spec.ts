@@ -9,7 +9,7 @@
 import type { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GroqService, type ThreadPerBozza } from './groq.service';
+import { GroqService, type MargineRigaInsight, type ThreadPerBozza } from './groq.service';
 
 const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
 
@@ -115,5 +115,107 @@ describe('GroqService — generazione', () => {
     const svc = new GroqService(makeConfig({ GROQ_API_KEY: 'gsk_test' }));
     const err = await caught(svc.suggerisciRisposta(THREAD));
     expect(errorCodeOf(err)).toBe('E_AI_UPSTREAM');
+  });
+});
+
+const MARGINE_ROWS: MargineRigaInsight[] = [
+  {
+    codice: 'M-001',
+    aziendaNome: 'Alfa Srl',
+    importoConcordato: 1000,
+    importoPrestazioni: 600,
+    margine: 400,
+    oreTotali: 12,
+  },
+  {
+    codice: 'M-002',
+    aziendaNome: 'Beta Spa',
+    importoConcordato: 2000,
+    importoPrestazioni: null, // mancante/parziale: dev'essere segnalata nel prompt
+    margine: null,
+    oreTotali: 8,
+  },
+];
+
+describe('GroqService — complete() generico', () => {
+  it('lancia 503 E_AI_DISABLED senza key, senza chiamare il provider', async () => {
+    const svc = new GroqService(makeConfig({}));
+    const err = await caught(svc.complete('sys', 'user'));
+    expect(errorCodeOf(err)).toBe('E_AI_DISABLED');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('usa i default (temperature 0.4, max_tokens 400) e ritorna il testo trimmato', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '  ok  ' } }] });
+    const svc = new GroqService(makeConfig({ GROQ_API_KEY: 'gsk_test' }));
+
+    const out = await svc.complete('SYS', 'USER');
+
+    expect(out).toBe('ok');
+    const arg = (mockCreate.mock.calls[0]?.[0] ?? {}) as {
+      temperature: number;
+      max_tokens: number;
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(arg.temperature).toBe(0.4);
+    expect(arg.max_tokens).toBe(400);
+    expect(arg.messages[0]).toEqual({ role: 'system', content: 'SYS' });
+    expect(arg.messages[1]).toEqual({ role: 'user', content: 'USER' });
+  });
+
+  it('rispetta temperature/maxTokens passati in opts', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'ok' } }] });
+    const svc = new GroqService(makeConfig({ GROQ_API_KEY: 'gsk_test' }));
+    await svc.complete('s', 'u', { temperature: 0.1, maxTokens: 123 });
+    const arg = (mockCreate.mock.calls[0]?.[0] ?? {}) as {
+      temperature: number;
+      max_tokens: number;
+    };
+    expect(arg.temperature).toBe(0.1);
+    expect(arg.max_tokens).toBe(123);
+  });
+
+  it('mappa risposta vuota su 503 E_AI_EMPTY', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '   ' } }] });
+    const svc = new GroqService(makeConfig({ GROQ_API_KEY: 'gsk_test' }));
+    expect(errorCodeOf(await caught(svc.complete('s', 'u')))).toBe('E_AI_EMPTY');
+  });
+
+  it('mappa errore SDK su 503 E_AI_UPSTREAM', async () => {
+    mockCreate.mockRejectedValue(new Error('boom'));
+    const svc = new GroqService(makeConfig({ GROQ_API_KEY: 'gsk_test' }));
+    expect(errorCodeOf(await caught(svc.complete('s', 'u')))).toBe('E_AI_UPSTREAM');
+  });
+});
+
+describe('GroqService — analizzaMargine() (ADR-0057)', () => {
+  it('lancia 503 E_AI_DISABLED senza key', async () => {
+    const svc = new GroqService(makeConfig({}));
+    const err = await caught(svc.analizzaMargine(MARGINE_ROWS));
+    expect(errorCodeOf(err)).toBe('E_AI_DISABLED');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('usa temperature 0.2 e serializza le righe segnalando importoPrestazioni null', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'sintesi' } }] });
+    const svc = new GroqService(makeConfig({ GROQ_API_KEY: 'gsk_test' }));
+
+    const out = await svc.analizzaMargine(MARGINE_ROWS);
+
+    expect(out).toBe('sintesi');
+    const arg = (mockCreate.mock.calls[0]?.[0] ?? {}) as {
+      temperature: number;
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(arg.temperature).toBe(0.2);
+    const userPrompt = arg.messages[1]?.content ?? '';
+    // Riga completa: importo serializzato. Riga parziale: marcata, non un numero.
+    expect(userPrompt).toContain('Alfa Srl (mandato M-001)');
+    expect(userPrompt).toContain('prestazioni 600.00');
+    expect(userPrompt).toContain('Beta Spa (mandato M-002)');
+    expect(userPrompt).toContain('MANCANTE/PARZIALE');
+    // Il system prompt vieta caveat fantasma su mandati non presenti nei dati.
+    expect(arg.messages[0]?.content).toContain('Analizza SOLO i mandati elencati');
+    expect(arg.messages[0]?.content).toContain('Non commentare in alcun modo cosa manca');
   });
 });

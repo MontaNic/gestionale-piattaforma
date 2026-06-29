@@ -769,6 +769,15 @@
       "sospeso": "Sospeso",
       "concluso": "Concluso",
       "annullato": "Annullato"
+    },
+    "ai": {
+      "titolo": "Analisi margine",
+      "analizza": "Analizza con AI",
+      "caricamento": "Analisi in corso…",
+      "errore": "Errore nell'analisi. Riprova.",
+      "copertura": "{conPrestazioni} mandati su {totali} con prestazioni valorizzate",
+      "nessunMandato": "Nessun mandato con dati di margine disponibili.",
+      "singoloMandato": "Un solo mandato disponibile: {nome} — margine {margine}. Servono più mandati per un'analisi comparativa."
     }
   },
   "prestazioni": {

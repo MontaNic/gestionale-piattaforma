@@ -2,22 +2,34 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { TrendingUp } from 'lucide-react';
+import { Loader2, Sparkles, TrendingUp } from 'lucide-react';
 
-import { Alert, AlertDescription } from '@gestionale/ui';
+import { Alert, AlertDescription, Button } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 
 import { messageForError } from '@/lib/error-codes';
-import { getMargine, type MargineRow } from '@/lib/report-api';
+import { getAiStatus } from '@/lib/comunicazioni-api';
+import {
+  getMargine,
+  getMargineInsight,
+  type MargineInsight,
+  type MargineRow,
+} from '@/lib/report-api';
 import type { StatoMandato } from '@/lib/mandati-api';
 
 // =============================================================================
-// report/margine/page.tsx — Report margine per mandato/azienda (ADR-0054)
+// report/margine/page.tsx — Report margine per mandato/azienda (ADR-0054, ADR-0057)
 // =============================================================================
 // Vista analitica read-only: ricavo concordato vs costo stimato (Σ importo
 // prestazioni). Lista flat ordinata per margine ASC (peggiori prima, null in
 // coda). Margine colorato: verde > 0, rosso < 0, grigio se null. Gating
 // report.operativo.visualizza. Dark-safe + stringhe i18n (namespace `report`).
+//
+// Insight AI (ADR-0057): se la feature è attiva (GET /ai/status), un bottone
+// genera una sintesi AI dei margini, resa in un box sopra la tabella. Un
+// disclaimer di copertura (mandati con prestazioni valorizzate vs totali) è
+// sempre visibile quando i dati sono parziali — preventivo, derivato dalle
+// righe già caricate, indipendente dall'AI.
 // =============================================================================
 
 const STATO_BADGE: Record<StatoMandato, string> = {
@@ -47,12 +59,24 @@ export default function ReportMarginePage(): JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [insight, setInsight] = useState<MargineInsight | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [insightError, setInsightError] = useState<string | null>(null);
+
   const load = useCallback(async (): Promise<void> => {
     if (!canView) return;
     setIsLoading(true);
     setLoadError(null);
     try {
-      setRows(await getMargine());
+      // Dati + stato AI in parallelo (pattern comunicazioni). Lo stato AI è
+      // best-effort: un suo errore non deve impedire il caricamento del report.
+      const [margine, status] = await Promise.all([
+        getMargine(),
+        getAiStatus().catch(() => ({ aiEnabled: false })),
+      ]);
+      setRows(margine);
+      setAiEnabled(status.aiEnabled);
     } catch (err) {
       setLoadError(messageForError(err));
     } finally {
@@ -63,6 +87,36 @@ export default function ReportMarginePage(): JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const analizza = useCallback(async (): Promise<void> => {
+    setAnalyzing(true);
+    setInsightError(null);
+    try {
+      setInsight(await getMargineInsight());
+    } catch {
+      setInsightError(t('ai.errore'));
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [t]);
+
+  // Copertura derivata dai dati già caricati: il disclaimer è preventivo
+  // (visibile prima dell'insight, indipendente dall'AI). Il campo `copertura`
+  // della risposta serve al prompt server-side, non a questo avviso (ADR-0057).
+  const totaliMandati = rows.length;
+  const conPrestazioni = rows.filter((r) => r.importoPrestazioni !== null).length;
+  const coperturaParziale = totaliMandati > 0 && conPrestazioni < totaliMandati;
+
+  // Corpo del box insight: prosa AI quando aiGenerated, altrimenti stringa
+  // deterministica localizzata FE (path < 2 mandati, ADR-0057). Per il singolo
+  // mandato i dati di interpolazione vengono dalle righe già caricate.
+  function insightBody(data: MargineInsight): string {
+    if (data.aiGenerated) return data.insight ?? '';
+    if (data.copertura.totali === 0) return t('ai.nessunMandato');
+    const r = rows[0];
+    const margine = r && r.margine !== null ? eur(r.margine) : '—';
+    return t('ai.singoloMandato', { nome: r?.aziendaNome ?? '', margine });
+  }
 
   if (!canView) {
     return (
@@ -88,6 +142,43 @@ export default function ReportMarginePage(): JSX.Element {
         <Alert variant="destructive">
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
+      )}
+
+      {!isLoading && coperturaParziale && (
+        <Alert>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            {t('ai.copertura', { conPrestazioni, totali: totaliMandati })}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {aiEnabled && !isLoading && rows.length > 0 && (
+        <section className="space-y-3">
+          <Button variant="outline" size="sm" onClick={() => void analizza()} disabled={analyzing}>
+            {analyzing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            {analyzing ? t('ai.caricamento') : t('ai.analizza')}
+          </Button>
+
+          {insightError && (
+            <Alert variant="destructive">
+              <AlertDescription>{insightError}</AlertDescription>
+            </Alert>
+          )}
+
+          {insight && (
+            <div className="space-y-2 rounded-md border bg-muted/30 p-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                {t('ai.titolo')}
+              </h2>
+              <p className="whitespace-pre-line text-sm text-foreground">{insightBody(insight)}</p>
+            </div>
+          )}
+        </section>
       )}
 
       {isLoading ? (

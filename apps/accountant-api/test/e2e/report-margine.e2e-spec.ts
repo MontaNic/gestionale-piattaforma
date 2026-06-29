@@ -39,6 +39,10 @@ const PREV_VOCI = [
   },
 ];
 const MARGINE = '/api/v1/report/margine';
+const INSIGHT = '/api/v1/report/margine/insight';
+// La sintesi AI richiede una key reale: in CI è assente → l'endpoint risponde
+// 503 E_AI_DISABLED (testato sempre). L'happy-path gira solo con key (pattern #136).
+const HAS_GROQ_KEY = (process.env.GROQ_API_KEY ?? '').trim() !== '';
 
 interface MargineRow {
   mandatoId: string;
@@ -189,4 +193,73 @@ describe('Report margine E2E — /api/v1/report/margine', () => {
       .expect(200);
     expect(res.body.data.length).toBe(0);
   });
+
+  // ── Insight AI (ADR-0057) ──────────────────────────────────────────────────
+
+  it('4. insight RBAC: senza report.operativo.visualizza → 403', async () => {
+    await request(app.getHttpServer())
+      .post(INSIGHT)
+      .set('Authorization', `Bearer ${noAccessJwt}`)
+      .expect(403);
+  });
+
+  it('5. guard < 2 mandati: 0 mandati → 200 deterministico (aiGenerated false), niente AI', async () => {
+    // Nessun mandato seedato in questo test → path deterministico, indipendente
+    // dalla key (la guard short-circuita prima di Groq).
+    const res = await request(app.getHttpServer())
+      .post(INSIGHT)
+      .set('Authorization', `Bearer ${adminAJwt}`)
+      .expect(200);
+    expect(res.body.data.aiGenerated).toBe(false);
+    expect(res.body.data.insight).toBeNull();
+    expect(res.body.data.copertura).toEqual({ totali: 0, conPrestazioni: 0 });
+  });
+
+  it('6. guard < 2 mandati: 1 mandato → 200 deterministico (aiGenerated false), niente AI', async () => {
+    await createMandato(adminAJwt, aziendaId, 'PREV-1M');
+    const res = await request(app.getHttpServer())
+      .post(INSIGHT)
+      .set('Authorization', `Bearer ${adminAJwt}`)
+      .expect(200);
+    expect(res.body.data.aiGenerated).toBe(false);
+    expect(res.body.data.insight).toBeNull();
+    expect(res.body.data.copertura.totali).toBe(1);
+  });
+
+  it.skipIf(HAS_GROQ_KEY)(
+    '7. ≥2 mandati con AI disabilitata (no key) → 503 E_AI_DISABLED',
+    async () => {
+      await createMandato(adminAJwt, aziendaId, 'PREV-A1');
+      await createMandato(adminAJwt, aziendaId, 'PREV-A2');
+      const res = await request(app.getHttpServer())
+        .post(INSIGHT)
+        .set('Authorization', `Bearer ${adminAJwt}`)
+        .expect(503);
+      expect(res.body.errorCode).toBe('E_AI_DISABLED');
+    },
+  );
+
+  it.skipIf(!HAS_GROQ_KEY)(
+    '8. happy-path (key reale, ≥2 mandati) → 200 con insight AI + copertura',
+    async () => {
+      const m1 = await createMandato(adminAJwt, aziendaId, 'PREV-AI1');
+      await addPrestazione(adminAJwt, m1, {
+        data: '2026-06-26',
+        ore: 2,
+        descrizione: 'a',
+        importo: 100,
+      });
+      await createMandato(adminAJwt, aziendaId, 'PREV-AI2'); // 2° mandato, prestazioni assenti
+
+      const res = await request(app.getHttpServer())
+        .post(INSIGHT)
+        .set('Authorization', `Bearer ${adminAJwt}`)
+        .expect(200);
+      expect(res.body.data.aiGenerated).toBe(true);
+      expect(typeof res.body.data.insight).toBe('string');
+      expect(res.body.data.insight.length).toBeGreaterThan(0);
+      expect(res.body.data.copertura.totali).toBe(2);
+      expect(res.body.data.copertura.conPrestazioni).toBe(1);
+    },
+  );
 });
