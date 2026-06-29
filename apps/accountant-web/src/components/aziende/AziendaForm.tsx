@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -37,41 +37,6 @@ const SELECT_CLASS =
 // Validazione email "opzionale": '' ammessa, altrimenti formato + lunghezza.
 // Mantiene il tipo string in/out (no preprocess) per inferenza zodResolver pulita.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-function optionalEmail(label: string) {
-  return z
-    .string()
-    .trim()
-    .max(255, `${label}: massimo 255 caratteri`)
-    .refine((v) => v === '' || EMAIL_RE.test(v), `${label} non valida`);
-}
-
-const aziendaFormSchema = z.object({
-  codice: z
-    .string()
-    .trim()
-    .min(1, 'Il codice è obbligatorio')
-    .max(20, 'Il codice non può superare 20 caratteri'),
-  nome: z
-    .string()
-    .trim()
-    .min(1, 'Il nome è obbligatorio')
-    .max(200, 'Il nome non può superare 200 caratteri'),
-  tipoCliente: z.enum(['azienda', 'persona_fisica']),
-  partitaIva: z.string().trim().max(20, 'Massimo 20 caratteri'),
-  codiceFiscale: z.string().trim().max(20, 'Massimo 20 caratteri'),
-  codiceAteco: z.string().trim().max(20, 'Massimo 20 caratteri'),
-  email: optionalEmail('Email'),
-  emailOperativa: optionalEmail('Email operativa'),
-  pec: optionalEmail('PEC'),
-  sitoWeb: z.string().trim().max(255, 'Massimo 255 caratteri'),
-  telefono: z.string().trim().max(40, 'Massimo 40 caratteri'),
-  telefono2: z.string().trim().max(40, 'Massimo 40 caratteri'),
-  indirizzo: z.string().trim().max(255, 'Massimo 255 caratteri'),
-  noteOperative: z.string().trim(),
-  attivo: z.boolean(),
-});
-
-type AziendaFormValues = z.infer<typeof aziendaFormSchema>;
 
 interface AziendaFormProps {
   /** Azienda esistente → modalità edit; assente → modalità create. */
@@ -89,6 +54,66 @@ function clean(v: string): string | undefined {
 export function AziendaForm({ azienda, onSubmit, onCancel }: AziendaFormProps): JSX.Element {
   const t = useTranslations('aziende');
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Schema dentro il componente per tradurre i messaggi via `t`; memoizzato su
+  // [t] (stabile per locale) → identità resolver stabile, nessun re-render churn.
+  const aziendaFormSchema = useMemo(() => {
+    const optionalEmail = (label: string) =>
+      z
+        .string()
+        .trim()
+        .max(255, t('validation.emailMaxLength', { label, max: 255 }))
+        .refine((v) => v === '' || EMAIL_RE.test(v), t('validation.emailInvalid', { label }));
+
+    return z.object({
+      codice: z
+        .string()
+        .trim()
+        .min(1, t('validation.codiceRequired'))
+        .max(20, t('validation.codiceMaxLength', { max: 20 })),
+      nome: z
+        .string()
+        .trim()
+        .min(1, t('validation.nomeRequired'))
+        .max(200, t('validation.nomeMaxLength', { max: 200 })),
+      tipoCliente: z.enum(['azienda', 'persona_fisica']),
+      partitaIva: z
+        .string()
+        .trim()
+        .max(20, t('validation.maxLength', { max: 20 })),
+      codiceFiscale: z
+        .string()
+        .trim()
+        .max(20, t('validation.maxLength', { max: 20 })),
+      codiceAteco: z
+        .string()
+        .trim()
+        .max(20, t('validation.maxLength', { max: 20 })),
+      email: optionalEmail(t('fields.email')),
+      emailOperativa: optionalEmail(t('fields.emailOperativa')),
+      pec: optionalEmail(t('fields.pec')),
+      sitoWeb: z
+        .string()
+        .trim()
+        .max(255, t('validation.maxLength', { max: 255 })),
+      telefono: z
+        .string()
+        .trim()
+        .max(40, t('validation.maxLength', { max: 40 })),
+      telefono2: z
+        .string()
+        .trim()
+        .max(40, t('validation.maxLength', { max: 40 })),
+      indirizzo: z
+        .string()
+        .trim()
+        .max(255, t('validation.maxLength', { max: 255 })),
+      noteOperative: z.string().trim(),
+      attivo: z.boolean(),
+    });
+  }, [t]);
+
+  type AziendaFormValues = z.infer<typeof aziendaFormSchema>;
 
   const form = useForm<AziendaFormValues>({
     resolver: zodResolver(aziendaFormSchema),

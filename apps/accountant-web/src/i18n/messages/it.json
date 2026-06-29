@@ -119,6 +119,15 @@
       "noteOperative": "Note operative",
       "attivo": "Attivo"
     },
+    "validation": {
+      "codiceRequired": "Il codice è obbligatorio",
+      "codiceMaxLength": "Il codice non può superare {max} caratteri",
+      "nomeRequired": "Il nome è obbligatorio",
+      "nomeMaxLength": "Il nome non può superare {max} caratteri",
+      "maxLength": "Massimo {max} caratteri",
+      "emailMaxLength": "{label}: massimo {max} caratteri",
+      "emailInvalid": "{label} non valida"
+    },
     "confirm": {
       "title": "Elimina cliente",
       "body": "Vuoi eliminare \"{name}\"? L'azienda verrà rimossa dall'elenco.",
@@ -163,6 +172,13 @@
       "note": "Note",
       "attivo": "Attivo"
     },
+    "validation": {
+      "nomeRequired": "Il nome è obbligatorio",
+      "nomeMaxLength": "Il nome non può superare {max} caratteri",
+      "emailMaxLength": "Email: massimo {max} caratteri",
+      "emailInvalid": "Email non valida",
+      "maxLength": "Massimo {max} caratteri"
+    },
     "confirm": {
       "title": "Elimina referente",
       "body": "Vuoi eliminare \"{name}\"? Il referente verrà rimosso dall'elenco.",
@@ -202,6 +218,12 @@
       "validoFino": "Valido fino",
       "coverLetter": "Lettera di accompagnamento",
       "noteInterne": "Note interne"
+    },
+    "validation": {
+      "codiceRequired": "Il codice è obbligatorio",
+      "codiceMaxLength": "Il codice non può superare {max} caratteri",
+      "oggettoRequired": "L'oggetto è obbligatorio",
+      "oggettoMaxLength": "L'oggetto non può superare {max} caratteri"
     },
     "stato": {
       "bozza": "Bozza",
@@ -305,6 +327,12 @@
       "aziendaPlaceholder": "— Seleziona azienda —",
       "attivo": "Attiva"
     },
+    "validation": {
+      "titoloRequired": "Il titolo è obbligatorio",
+      "titoloMaxLength": "Il titolo non può superare {max} caratteri",
+      "dataRequired": "La data è obbligatoria",
+      "aziendaRequiredForVisibility": "Seleziona un'azienda quando la visibilità è «Per azienda»"
+    },
     "confirm": {
       "title": "Elimina scadenza",
       "body": "Vuoi eliminare «{titolo}»? La scadenza verrà rimossa dall'elenco.",
@@ -320,6 +348,11 @@
       "fields": {
         "nome": "Nome",
         "colore": "Colore"
+      },
+      "validation": {
+        "nomeRequired": "Il nome è obbligatorio",
+        "nomeMaxLength": "Il nome non può superare {max} caratteri",
+        "coloreInvalid": "Colore non valido"
       }
     }
   },
@@ -489,7 +522,9 @@
   },
   "auth": {
     "login": {
-      "forgotPasswordLink": "Password dimenticata?"
+      "forgotPasswordLink": "Password dimenticata?",
+      "validationEmail": "Email non valida",
+      "validationPassword": "Password troppo corta (min 8 caratteri)"
     },
     "forgotPassword": {
       "title": "Reimposta la password",

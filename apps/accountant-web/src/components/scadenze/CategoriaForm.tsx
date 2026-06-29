@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -33,19 +33,6 @@ import type { CreateScadenzaCategoriaInput } from '@/lib/scadenze-types';
 
 const DEFAULT_COLORE = '#3b82f6';
 
-const categoriaFormSchema = z.object({
-  nome: z
-    .string()
-    .trim()
-    .min(1, 'Il nome è obbligatorio')
-    .max(100, 'Il nome non può superare 100 caratteri'),
-  // input type="color" garantisce sempre #rrggbb; il regex è backstop coerente
-  // col DTO backend (Matches /^#[0-9a-fA-F]{6}$/).
-  colore: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colore non valido'),
-});
-
-type CategoriaFormValues = z.infer<typeof categoriaFormSchema>;
-
 interface CategoriaFormProps {
   onSubmit: (payload: CreateScadenzaCategoriaInput) => Promise<void>;
   onCancel: () => void;
@@ -54,6 +41,24 @@ interface CategoriaFormProps {
 export function CategoriaForm({ onSubmit, onCancel }: CategoriaFormProps): JSX.Element {
   const t = useTranslations('scadenze');
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Schema dentro il componente per tradurre i messaggi via `t`; memoizzato su [t].
+  const categoriaFormSchema = useMemo(
+    () =>
+      z.object({
+        nome: z
+          .string()
+          .trim()
+          .min(1, t('categorie.validation.nomeRequired'))
+          .max(100, t('categorie.validation.nomeMaxLength', { max: 100 })),
+        // input type="color" garantisce sempre #rrggbb; il regex è backstop coerente
+        // col DTO backend (Matches /^#[0-9a-fA-F]{6}$/).
+        colore: z.string().regex(/^#[0-9a-fA-F]{6}$/, t('categorie.validation.coloreInvalid')),
+      }),
+    [t],
+  );
+
+  type CategoriaFormValues = z.infer<typeof categoriaFormSchema>;
 
   const form = useForm<CategoriaFormValues>({
     resolver: zodResolver(categoriaFormSchema),

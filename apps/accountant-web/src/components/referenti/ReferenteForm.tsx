@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -36,25 +36,6 @@ const SELECT_CLASS =
 // Validazione email "opzionale": '' ammessa, altrimenti formato + lunghezza.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const referenteFormSchema = z.object({
-  nome: z
-    .string()
-    .trim()
-    .min(1, 'Il nome è obbligatorio')
-    .max(150, 'Il nome non può superare 150 caratteri'),
-  ruolo: z.enum(['legale_rappresentante', 'amministrativo', 'tecnico', 'altro']),
-  email: z
-    .string()
-    .trim()
-    .max(255, 'Email: massimo 255 caratteri')
-    .refine((v) => v === '' || EMAIL_RE.test(v), 'Email non valida'),
-  telefono: z.string().trim().max(40, 'Massimo 40 caratteri'),
-  note: z.string().trim().max(255, 'Massimo 255 caratteri'),
-  attivo: z.boolean(),
-});
-
-type ReferenteFormValues = z.infer<typeof referenteFormSchema>;
-
 interface ReferenteFormProps {
   /** Referente esistente → modalità edit; assente → modalità create. */
   referente?: Referente;
@@ -71,6 +52,36 @@ function clean(v: string): string | undefined {
 export function ReferenteForm({ referente, onSubmit, onCancel }: ReferenteFormProps): JSX.Element {
   const t = useTranslations('referenti');
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Schema dentro il componente per tradurre i messaggi via `t`; memoizzato su [t].
+  const referenteFormSchema = useMemo(
+    () =>
+      z.object({
+        nome: z
+          .string()
+          .trim()
+          .min(1, t('validation.nomeRequired'))
+          .max(150, t('validation.nomeMaxLength', { max: 150 })),
+        ruolo: z.enum(['legale_rappresentante', 'amministrativo', 'tecnico', 'altro']),
+        email: z
+          .string()
+          .trim()
+          .max(255, t('validation.emailMaxLength', { max: 255 }))
+          .refine((v) => v === '' || EMAIL_RE.test(v), t('validation.emailInvalid')),
+        telefono: z
+          .string()
+          .trim()
+          .max(40, t('validation.maxLength', { max: 40 })),
+        note: z
+          .string()
+          .trim()
+          .max(255, t('validation.maxLength', { max: 255 })),
+        attivo: z.boolean(),
+      }),
+    [t],
+  );
+
+  type ReferenteFormValues = z.infer<typeof referenteFormSchema>;
 
   const form = useForm<ReferenteFormValues>({
     resolver: zodResolver(referenteFormSchema),

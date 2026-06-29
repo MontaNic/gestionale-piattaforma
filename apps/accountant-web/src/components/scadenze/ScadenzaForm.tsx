@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -46,32 +46,6 @@ import {
 const SELECT_CLASS =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
-const scadenzaFormSchema = z
-  .object({
-    titolo: z
-      .string()
-      .trim()
-      .min(1, 'Il titolo è obbligatorio')
-      .max(255, 'Il titolo non può superare 255 caratteri'),
-    descrizione: z.string().trim(),
-    dataScadenza: z.string().min(1, 'La data è obbligatoria'),
-    categoriaId: z.string(),
-    visibilita: z.enum(['tutti', 'azienda', 'utente']),
-    aziendaId: z.string(),
-    attivo: z.boolean(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.visibilita === 'azienda' && v.aziendaId.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['aziendaId'],
-        message: "Seleziona un'azienda quando la visibilità è «Per azienda»",
-      });
-    }
-  });
-
-type ScadenzaFormValues = z.infer<typeof scadenzaFormSchema>;
-
 interface ScadenzaFormProps {
   /** Scadenza esistente → modalità edit; assente → modalità create. */
   scadenza?: Scadenza;
@@ -96,6 +70,37 @@ export function ScadenzaForm({
 }: ScadenzaFormProps): JSX.Element {
   const t = useTranslations('scadenze');
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Schema dentro il componente per tradurre i messaggi via `t`; memoizzato su [t].
+  const scadenzaFormSchema = useMemo(
+    () =>
+      z
+        .object({
+          titolo: z
+            .string()
+            .trim()
+            .min(1, t('validation.titoloRequired'))
+            .max(255, t('validation.titoloMaxLength', { max: 255 })),
+          descrizione: z.string().trim(),
+          dataScadenza: z.string().min(1, t('validation.dataRequired')),
+          categoriaId: z.string(),
+          visibilita: z.enum(['tutti', 'azienda', 'utente']),
+          aziendaId: z.string(),
+          attivo: z.boolean(),
+        })
+        .superRefine((v, ctx) => {
+          if (v.visibilita === 'azienda' && v.aziendaId.trim() === '') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['aziendaId'],
+              message: t('validation.aziendaRequiredForVisibility'),
+            });
+          }
+        }),
+    [t],
+  );
+
+  type ScadenzaFormValues = z.infer<typeof scadenzaFormSchema>;
 
   const form = useForm<ScadenzaFormValues>({
     resolver: zodResolver(scadenzaFormSchema),

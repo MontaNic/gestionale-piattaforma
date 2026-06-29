@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -52,27 +52,6 @@ import {
 const SELECT_CLASS =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
-const testataSchema = z.object({
-  codice: z
-    .string()
-    .trim()
-    .min(1, 'Il codice è obbligatorio')
-    .max(32, 'Il codice non può superare 32 caratteri'),
-  oggetto: z
-    .string()
-    .trim()
-    .min(1, "L'oggetto è obbligatorio")
-    .max(200, "L'oggetto non può superare 200 caratteri"),
-  // `convertito` (ADR-0051) incluso per type-match con StatoPreventivo (lo
-  // imposta il backend); NON è nel select (STATI_PREVENTIVO ha solo i 4 manuali).
-  stato: z.enum(['bozza', 'inviato', 'accettato', 'rifiutato', 'convertito']),
-  validoFino: z.string().trim(),
-  coverLetter: z.string().trim(),
-  noteInterne: z.string().trim(),
-});
-
-type TestataValues = z.infer<typeof testataSchema>;
-
 /** '' → undefined per i campi stringa opzionali. */
 function clean(v: string): string | undefined {
   const t = v.trim();
@@ -104,6 +83,32 @@ export function PreventivoForm({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const detailHref = `/t/${slug}/clienti/${aziendaId}`;
+
+  // Schema testata dentro il componente per tradurre i messaggi via `t`; memoizzato su [t].
+  const testataSchema = useMemo(
+    () =>
+      z.object({
+        codice: z
+          .string()
+          .trim()
+          .min(1, t('validation.codiceRequired'))
+          .max(32, t('validation.codiceMaxLength', { max: 32 })),
+        oggetto: z
+          .string()
+          .trim()
+          .min(1, t('validation.oggettoRequired'))
+          .max(200, t('validation.oggettoMaxLength', { max: 200 })),
+        // `convertito` (ADR-0051) incluso per type-match con StatoPreventivo (lo
+        // imposta il backend); NON è nel select (STATI_PREVENTIVO ha solo i 4 manuali).
+        stato: z.enum(['bozza', 'inviato', 'accettato', 'rifiutato', 'convertito']),
+        validoFino: z.string().trim(),
+        coverLetter: z.string().trim(),
+        noteInterne: z.string().trim(),
+      }),
+    [t],
+  );
+
+  type TestataValues = z.infer<typeof testataSchema>;
 
   const form = useForm<TestataValues>({
     resolver: zodResolver(testataSchema),

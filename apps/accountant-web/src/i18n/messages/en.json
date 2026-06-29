@@ -119,6 +119,15 @@
       "noteOperative": "Operational notes",
       "attivo": "Active"
     },
+    "validation": {
+      "codiceRequired": "Code is required",
+      "codiceMaxLength": "Code cannot exceed {max} characters",
+      "nomeRequired": "Name is required",
+      "nomeMaxLength": "Name cannot exceed {max} characters",
+      "maxLength": "Maximum {max} characters",
+      "emailMaxLength": "{label}: maximum {max} characters",
+      "emailInvalid": "{label} is not valid"
+    },
     "confirm": {
       "title": "Delete client",
       "body": "Delete \"{name}\"? The client will be removed from the list.",
@@ -163,6 +172,13 @@
       "note": "Notes",
       "attivo": "Active"
     },
+    "validation": {
+      "nomeRequired": "Name is required",
+      "nomeMaxLength": "Name cannot exceed {max} characters",
+      "emailMaxLength": "Email: maximum {max} characters",
+      "emailInvalid": "Email is not valid",
+      "maxLength": "Maximum {max} characters"
+    },
     "confirm": {
       "title": "Delete contact",
       "body": "Delete \"{name}\"? The contact will be removed from the list.",
@@ -202,6 +218,12 @@
       "validoFino": "Valid until",
       "coverLetter": "Cover letter",
       "noteInterne": "Internal notes"
+    },
+    "validation": {
+      "codiceRequired": "Code is required",
+      "codiceMaxLength": "Code cannot exceed {max} characters",
+      "oggettoRequired": "Subject is required",
+      "oggettoMaxLength": "Subject cannot exceed {max} characters"
     },
     "stato": {
       "bozza": "Draft",
@@ -305,6 +327,12 @@
       "aziendaPlaceholder": "— Select client —",
       "attivo": "Active"
     },
+    "validation": {
+      "titoloRequired": "Title is required",
+      "titoloMaxLength": "Title cannot exceed {max} characters",
+      "dataRequired": "Date is required",
+      "aziendaRequiredForVisibility": "Select a client when visibility is «Per client»"
+    },
     "confirm": {
       "title": "Delete deadline",
       "body": "Delete “{titolo}”? The deadline will be removed from the list.",
@@ -320,6 +348,11 @@
       "fields": {
         "nome": "Name",
         "colore": "Color"
+      },
+      "validation": {
+        "nomeRequired": "Name is required",
+        "nomeMaxLength": "Name cannot exceed {max} characters",
+        "coloreInvalid": "Invalid color"
       }
     }
   },
@@ -489,7 +522,9 @@
   },
   "auth": {
     "login": {
-      "forgotPasswordLink": "Forgot password?"
+      "forgotPasswordLink": "Forgot password?",
+      "validationEmail": "Invalid email",
+      "validationPassword": "Password too short (min 8 characters)"
     },
     "forgotPassword": {
       "title": "Reset your password",
