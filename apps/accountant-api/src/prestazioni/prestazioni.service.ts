@@ -17,12 +17,17 @@ import { DbService } from '@gestionale/db/nest';
 
 import type { CreatePrestazioneDto } from './dto/create-prestazione.dto';
 import type { UpdatePrestazioneDto } from './dto/update-prestazione.dto';
+import { round2 } from '../common/money.util';
+import { TariffeService } from '../tariffe/tariffe.service';
 
 @Injectable()
 export class PrestazioniService {
   private readonly logger = new Logger(PrestazioniService.name);
 
-  constructor(@Inject(DbService) private readonly db: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly db: DbService,
+    @Inject(TariffeService) private readonly tariffe: TariffeService,
+  ) {}
 
   async create(
     tenantId: string,
@@ -55,6 +60,10 @@ export class PrestazioniService {
       await this.assertVoceDelMandato(tenantId, mandato.preventivoId, dto.voceId);
     }
 
+    // 4. Importo (ADR-0055): se non fornito a mano, lo deriva dal tariffario
+    //    (ore × tariffa risolta per l'autore). Nessuna tariffa → null (invariato).
+    const importo = await this.resolveImporto(tenantId, userId, dto.ore, dto.importo);
+
     const prestazione = await this.db.prisma.prestazione.create({
       data: {
         id: id(),
@@ -66,7 +75,7 @@ export class PrestazioniService {
         ore: dto.ore,
         descrizione: dto.descrizione,
         fatturabile: dto.fatturabile ?? undefined,
-        importo: dto.importo ?? null,
+        importo,
         note: dto.note ?? null,
       },
     });
@@ -103,13 +112,22 @@ export class PrestazioniService {
     prestazioneId: string,
     dto: UpdatePrestazioneDto,
   ): Promise<Prestazione> {
-    await this.findOne(tenantId, mandatoId, prestazioneId); // ownership + 404
+    const existing = await this.findOne(tenantId, mandatoId, prestazioneId); // ownership + 404
     if (dto.voceId) {
       const mandato = await this.db.prisma.mandato.findFirst({
         where: { id: mandatoId, tenantId },
         select: { preventivoId: true },
       });
       if (mandato) await this.assertVoceDelMandato(tenantId, mandato.preventivoId, dto.voceId);
+    }
+
+    // Importo (ADR-0055): un valore esplicito vince sempre. Se non fornito ma le
+    // ore cambiano, ricalcola dal tariffario (autore = existing.userId). Nessuna
+    // tariffa / autore assente → resta invariato (undefined → Prisma no-op).
+    let importo: number | undefined = dto.importo;
+    if (dto.importo === undefined && dto.ore !== undefined && existing.userId) {
+      const rate = await this.tariffe.resolveTariffaOraria(tenantId, existing.userId);
+      if (rate !== null) importo = round2(dto.ore * rate);
     }
 
     const updated = await this.db.prisma.prestazione.update({
@@ -119,7 +137,7 @@ export class PrestazioniService {
         ore: dto.ore,
         descrizione: dto.descrizione,
         fatturabile: dto.fatturabile,
-        importo: dto.importo,
+        importo,
         voceId: dto.voceId,
         note: dto.note,
       },
@@ -143,6 +161,22 @@ export class PrestazioniService {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Importo della prestazione (ADR-0055). Un `importoInput` esplicito vince
+   * sempre (input manuale); altrimenti deriva `ore × tariffa` risolta per
+   * l'autore, o `null` se nessuna tariffa è applicabile (comportamento odierno).
+   */
+  private async resolveImporto(
+    tenantId: string,
+    userId: string,
+    ore: number,
+    importoInput: number | undefined,
+  ): Promise<number | null> {
+    if (importoInput !== undefined) return importoInput;
+    const rate = await this.tariffe.resolveTariffaOraria(tenantId, userId);
+    return rate === null ? null : round2(ore * rate);
+  }
 
   private async assertMandatoInScope(tenantId: string, mandatoId: string): Promise<void> {
     const mandato = await this.db.prisma.mandato.findFirst({

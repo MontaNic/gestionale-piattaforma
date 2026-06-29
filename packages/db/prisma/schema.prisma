@@ -87,6 +87,7 @@ model Tenant {
   mandati              Mandato[]
   rdlCounters          RdlCounter[]
   prestazioni          Prestazione[]
+  tariffeOrarie        TariffaOraria[]
 
   @@map("tenants")
 }
@@ -193,6 +194,8 @@ model User {
   clienteInvitiCreati    ClienteInvito[]    @relation("ClienteInvitoInvitatoDa")
   // Prestazioni/timesheet svolte da questo utente (ADR-0053).
   prestazioni            Prestazione[]
+  // Tariffario orario per-utente (ADR-0055): override del costo orario di ruolo.
+  tariffeOrarie          TariffaOraria[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -266,9 +269,11 @@ model Role {
   deletedAt   DateTime? @map("deleted_at")
 
   // Relations
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  permissions RolePermission[]
-  userRoles   UserRole[]
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions   RolePermission[]
+  userRoles     UserRole[]
+  // Tariffario orario per-ruolo (ADR-0055): costo orario default del ruolo.
+  tariffeOrarie TariffaOraria[]
 
   // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
   // `(tenant_id, name) WHERE deleted_at IS NULL` (vedi migration td_bz_partial_
@@ -1375,4 +1380,36 @@ model Prestazione {
   @@index([tenantId])
   @@index([mandatoId, data])
   @@map("prestazioni")
+}
+
+// =============================================================================
+// Tariffario orario (ADR-0055, Onda 4 Task 3b): COSTO orario interno per ruolo
+// (default) o utente (override). Alla create/update della prestazione risolve:
+//   1) tariffa-utente (override) se presente; altrimenti
+//   2) tariffa-ruolo: la PIU' ALTA tra i ruoli dell'utente (tie-break confermato);
+//   3) nessuna → importo resta NULL (comportamento odierno invariato).
+// Popola Prestazione.importo (= ore x tariffaOraria) → sblocca report margine.
+// Scope esclusivo (roleId XOR userId) via CHECK + partial-unique soft-delete-aware
+// in migration raw SQL (Prisma 6 non esprime CHECK/partial index nel DSL).
+// =============================================================================
+model TariffaOraria {
+  id            String    @id
+  tenantId      String    @map("tenant_id")
+  roleId        String?   @map("role_id") // scope=ruolo (default) ⟺ user_id NULL
+  userId        String?   @map("user_id") // scope=utente (override) ⟺ role_id NULL
+  tariffaOraria Decimal   @map("tariffa_oraria") @db.Decimal(10, 2)
+  attivo        Boolean   @default(true)
+  note          String?
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role   Role?  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([roleId])
+  @@index([userId])
+  @@map("tariffe_orarie")
 }
