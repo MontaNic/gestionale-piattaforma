@@ -716,6 +716,20 @@ Resta aperto il **TD-i18n-zod** (messaggi validazione zod fuori dal contesto Rea
 
 ---
 
+## [2026-06-29] Picker voce di preventivo nel timesheet + colonna Voce (#132)
+
+Chiude il **TD-voceId-FE** (ADR-0053 sub-DP). `voceId` era già supportato a BE (DTO + `assertVoceDelMandato`) e nei tipi/api-client FE: mancava solo il campo nel form. **Solo FE**: nessuno schema/migration/permesso/endpoint.
+
+- **`mandati/[id]/page.tsx`**: carica le voci del preventivo d'origine (`getPreventivo(aziendaId, preventivoId)` — il `Mandato` espone entrambi) e le passa a `PrestazioniSection`; fetch in `try/catch` (degradazione graceful). Nessun endpoint nuovo: tutti i ruoli con `prestazioni.*` hanno anche `preventivi.visualizza`.
+- **`PrestazioniSection.tsx`**: select "Voce di preventivo (opzionale)" nel form + colonna "Voce" in tabella (lookup `voceId→nome`).
+- **i18n**: `prestazioni.fields.voce`/`voceNone` + `col.voce` (it/en) → **580 chiavi** in parità.
+- **GATE**: parità + risoluzione chiavi, typecheck/eslint/prettier, CI #132 verde. **Verifica runtime** non-superuser su `RDL-2026-0002` (2 voci), IT+EN, **0 errori**: picker popolato, salvataggio con `voceId`, colonna "Voce" valorizzata. Lasciata prestazione di test "Test voce picker" nel DB dev.
+- **Deploy**: container prod rebuildati da `main` a fine sessione → allineati a `75476fc`.
+
+Prossimo: Onda 4 (superadmin monitoring / impersonation / invito operatore via email).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].
