@@ -150,6 +150,7 @@ export type {
   Mandato,
   RdlCounter,
   Prestazione,
+  TariffaOraria,
   ServizioCategoria,
   ServizioCatalogo,
   Scadenza,

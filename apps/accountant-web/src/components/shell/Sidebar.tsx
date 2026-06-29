@@ -7,6 +7,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  Coins,
   FileSignature,
   FileText,
   LayoutDashboard,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@gestionale/ui';
+import { useAuth } from '@gestionale/auth-web';
 import { PLATFORM_SLUG } from '@/lib/platform-types';
 
 // =============================================================================
@@ -39,6 +41,7 @@ interface NavItem {
     | 'clienti'
     | 'scadenze'
     | 'catalogo'
+    | 'tariffario'
     | 'mandati'
     | 'comunicazioni'
     | 'documenti'
@@ -50,6 +53,9 @@ interface NavItem {
   path?: string;
   href: string;
   icon: LucideIcon;
+  // Se valorizzato, la voce compare solo se l'utente ha il permesso (gating UX;
+  // il BE rinforza con i guard). Voci senza requiredPermission sono sempre visibili.
+  requiredPermission?: string;
 }
 
 const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
@@ -57,6 +63,8 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'clienti', icon: Users },
   { key: 'scadenze', icon: CalendarDays },
   { key: 'catalogo', icon: BookOpen },
+  // Dati di costo sensibili → visibile solo a chi può leggere il tariffario.
+  { key: 'tariffario', icon: Coins, requiredPermission: 'tariffario.visualizza' },
   { key: 'mandati', icon: FileSignature },
   { key: 'comunicazioni', icon: MessageSquare },
   { key: 'documenti', icon: FileText },
@@ -85,11 +93,16 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
   const pathname = usePathname();
   const t = useTranslations('shell.nav');
   const tg = useTranslations('shell.navGroups');
+  const { permissions } = useAuth();
   const slug = params.slug;
 
   // La voce Piattaforma compare solo nel tenant oneplatform (gating UX; il BE
   // rinforza con PlatformGuard).
-  const items = slug === PLATFORM_SLUG ? [...NAV_ITEMS, PLATFORM_NAV_ITEM] : NAV_ITEMS;
+  const base = slug === PLATFORM_SLUG ? [...NAV_ITEMS, PLATFORM_NAV_ITEM] : NAV_ITEMS;
+  // Filtra le voci con requiredPermission in base ai permessi dell'utente.
+  const items = base.filter(
+    (i) => !i.requiredPermission || permissions.includes(i.requiredPermission),
+  );
 
   function renderItem(item: Omit<NavItem, 'href'>): JSX.Element {
     const href = `/t/${slug}/${item.path ?? item.key}`;

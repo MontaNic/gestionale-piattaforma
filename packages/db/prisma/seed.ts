@@ -185,6 +185,18 @@ const PERMISSIONS: PermissionSeed[] = [
     category: 'prestazioni',
   },
 
+  // tariffario.* (2) — listino tariffe orarie di COSTO (ADR-0055, Onda 4 Task 3b)
+  {
+    code: 'tariffario.visualizza',
+    description: 'Visualizzazione listino tariffe orarie (costo per ruolo/utente)',
+    category: 'tariffario',
+  },
+  {
+    code: 'tariffario.gestisci',
+    description: 'Crea/modifica/elimina tariffe orarie di costo (per ruolo/utente)',
+    category: 'tariffario',
+  },
+
   // comunicazioni.* (2) — verticale accountant (ADR-0043)
   {
     code: 'comunicazioni.visualizza',

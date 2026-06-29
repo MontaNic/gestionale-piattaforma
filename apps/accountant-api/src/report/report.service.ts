@@ -15,6 +15,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type StatoMandato } from '@gestionale/db';
 import { DbService } from '@gestionale/db/nest';
 
+import { round2 } from '../common/money.util';
+
 export interface MargineRow {
   mandatoId: string;
   codice: string;
@@ -26,8 +28,6 @@ export interface MargineRow {
   importoPrestazioni: number | null;
   margine: number | null;
 }
-
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 @Injectable()
 export class ReportService {

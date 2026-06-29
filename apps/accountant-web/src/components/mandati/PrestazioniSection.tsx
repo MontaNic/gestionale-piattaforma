@@ -206,9 +206,13 @@ export function PrestazioniSection({
               <span>Importo (opzionale)</span>
               <Input
                 inputMode="decimal"
+                placeholder="Calcolato dal tariffario se vuoto"
                 value={form.importo}
                 onChange={(e) => setForm((f) => ({ ...f, importo: e.target.value }))}
               />
+              <span className="text-[11px] text-muted-foreground/80">
+                Lascia vuoto per derivarlo automaticamente (ore × tariffa oraria).
+              </span>
             </label>
             <label className="flex items-center gap-2 self-end text-sm">
               <input
