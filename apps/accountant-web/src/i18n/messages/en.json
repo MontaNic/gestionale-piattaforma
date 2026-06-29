@@ -754,11 +754,14 @@
       "importoPlaceholder": "Calculated from the rate card if empty",
       "importoHint": "Leave empty to derive it automatically (hours × hourly rate).",
       "fatturabile": "Billable",
-      "note": "Notes"
+      "note": "Notes",
+      "voce": "Quote line (optional)",
+      "voceNone": "— No line —"
     },
     "col": {
       "data": "Date",
       "descrizione": "Description",
+      "voce": "Line",
       "ore": "Hours",
       "fatturabile": "Bill.",
       "importo": "Amount"
