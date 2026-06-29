@@ -686,6 +686,21 @@ Onda 1 — Sblocca l'uso reale:
 Ricognizione AI betadesk: subsistema Groq mappato, chiave ruotata, piano portare su NestJS (Onda 6).
 Prossimo: Onda 2 — identità visiva + homepage portale cliente + dashboard operatore differenziata.
 
+> **Nota log:** il dettaglio macro-task delle **Onde 2–3** (#114–#125) non è ripreso qui ma è tracciato in `docs/handoff/HANDOFF.md` (snapshot rolling, fonte di verità per le sessioni recenti). La voce qui sotto riallinea il log all'Onda 4.
+
+## [2026-06-29] Onda 4 Task 3b — Tariffario orario (#127, ADR-0055)
+
+Chiude il **TD-tariffario** di Onda 3. La tariffa è il **costo orario interno** per ruolo (default) o utente (override) da cui deriva automaticamente `Prestazione.importo` (`ore × tariffa`) → sblocca `importoPrestazioni`/`margine` del report (ADR-0054) e gli insight AI margine (deferiti).
+
+- **Schema**: `TariffaOraria` (`tariffe_orarie`, RLS FORCE), scope esclusivo `roleId` XOR `userId` via CHECK raw SQL + 2 partial-unique soft-delete-aware. Migration `20260629090933_add_tariffe_orarie` applicata al DB condiviso.
+- **BE**: `TariffeModule` CRUD `/tariffe` + lookup `/tariffe/{roles,users}`; `resolveTariffaOraria` (override-utente → tariffa-ruolo più alta → null); derivazione importo in `PrestazioniService` su create/update (precedenza manuale > derivato > null); `round2` estratto in `common/money.util`.
+- **Permessi** `tariffario.{visualizza,gestisci}` → **58** (56→58), riservati a Socio/Admin (dati sensibili); la derivazione è server-side e non li richiede.
+- **FE**: pagina `/tariffario` (CRUD, picker scope ruolo/utente, scope immutabile in modifica), voce sidebar gated per-permesso, hint importo prestazione.
+- **GATE**: typecheck/lint/build (api+web), unit 26, **e2e 175** (+25), CI verde, verifica runtime manuale come non-superuser ✅. ADR-0055.
+- **Deploy**: container prod rebuildati a inizio sessione da `main` (a `b1abe71`, Onda 3); il codice tariffario (#127) richiede un ulteriore rebuild (migration già applicata).
+
+Prossimo: Onda 4 — superadmin monitoring / impersonation / invito operatore via email; insight AI margine ora sbloccati.
+
 ---
 
 ## 📌 Contesto rapido

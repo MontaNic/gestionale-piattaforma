@@ -1,8 +1,8 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `f21a164` (+1 commit docs(handoff) in arrivo via PR).
-> **Data:** 2026-06-26.
+> **Snapshot:** Main @ `01aaea8` (+1 commit docs(handoff) in arrivo via PR).
+> **Data:** 2026-06-29.
 
 ---
 
@@ -17,7 +17,7 @@ Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Task 9 (landing, anticipato)**. Catalogo permessi: **56**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
 
 **Onda 3 — pipeline cliente: COMPLETA** (preventivo → mandato → timesheet → margine):
 
@@ -102,15 +102,29 @@ Sub-DP: `voceId` omesso dal form FE (BE-supported); `AuthenticatedUser.id` (non 
 Prima vista analitica di redditività. **Read-only puro** (nessuno schema/migration/seed). `GET /report/margine` (permesso **riusato** `report.operativo.visualizza`): per ogni mandato → `oreTotali` (Σ ore), `importoPrestazioni` (Σ importo non-null; **null** se nessun importo), `margine` (concordato − importoPrestazioni; **null** se importoPrestazioni null). Lista **flat** ordinata **margine ASC**, null in coda. Decimal→number server-side. FE: pagina `/report/margine` (margine verde/rosso/grigio) + nuovo **gruppo sidebar "Report"**. e2e suite **154**.
 Sub-DP: `importoPrestazioni null ≠ 0` (distingue assenza-dato da zero); Groq insights **deferiti** finché manca il tariffario.
 
+### NOVITÀ sessione 2026-06-29 — Onda 4 Task 3b: Tariffario orario (PR #127, `01aaea8`, ADR-0055)
+
+Chiude il **TD-tariffario**. Tariffa = **costo orario interno** per ruolo (default) o utente (override), da cui deriva automaticamente `Prestazione.importo` (`ore × tariffa`) → sblocca `importoPrestazioni`/`margine` del report (ADR-0054) e, a valle, gli insight AI margine.
+
+- **Schema**: `TariffaOraria` (`tariffe_orarie`, RLS FORCE). Scope esclusivo `roleId` XOR `userId` via **CHECK** raw SQL `(role_id IS NOT NULL) <> (user_id IS NOT NULL)`; **2 partial-unique** soft-delete-aware `(tenant_id, role_id|user_id) WHERE ... IS NOT NULL AND deleted_at IS NULL`. Migration `20260629090933_add_tariffe_orarie` (applicata al DB condiviso).
+- **Risoluzione** (`TariffeService.resolveTariffaOraria`): override-utente → tariffa-ruolo (la **più alta** se l'utente ha più ruoli con tariffa, tie-break confermato; warning loggato) → `null` (importo resta null, comportamento odierno).
+- **Derivazione** in `PrestazioniService` su create + update-quando-`ore`-cambia. Precedenza **manuale > derivato > null**. Nessuna modifica a `Prestazione` né all'endpoint report. `round2` estratto in `common/money.util`.
+- **BE**: `TariffeModule` — CRUD `/tariffe` (`tariffario.{visualizza,gestisci}`) + lookup `/tariffe/{roles,users}` (gated `gestisci`, dichiarati prima di `:id`). Error code `E_TARIFFA_SCOPE_INVALID`/`_ROLE_NOT_FOUND`/`_USER_NOT_FOUND`/`_DUPLICATA` (409)/`_NOT_FOUND`.
+- **Permessi** `tariffario.{visualizza,gestisci}` → **58** (56→58). Dati di costo sensibili → solo `ALL_PERMISSION_CODES` (Super Admin/Admin sede/Socio); **non** a Collaboratore/Segreteria/Praticante. La derivazione è server-side e non richiede il permesso.
+- **FE**: pagina `/tariffario` (CRUD con picker scope ruolo/utente, scope immutabile in modifica), **voce sidebar gated per-permesso** (nuovo `requiredPermission`), hint "calcolato dal tariffario se vuoto" sul campo importo prestazione.
+- **e2e suite 175** (+25: CRUD/RBAC/scope-XOR/duplicata/cross-tenant/derivazione/tie-break/lookup). Verifica runtime manuale come non-superuser ✅ (RBAC 403, derivazione live 3×40=120, override manuale, render pagina).
+
+Sub-DP: niente **backfill** storico (manca lo snapshot ruolo-all'epoca → solo prestazioni nuove/update-ore); scope tariffa immutabile in modifica (cambio = soft-delete + ricrea); i lookup roles/users vivono nel TariffeModule (nessuna area RBAC esistente).
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
 2. **Cliente-dello-studio** ✅ COMPLETO (portale path-based)
 3. **Super-admin** ✅ MINIMALE (lifecycle tenant, `oneplatform`)
 
-### Prossimo — Onda 4 (da pianificare)
+### Prossimo — Onda 4 (in corso)
 
-**Onda 3 COMPLETA.** L'Onda 4 va pianificata nella prossima sessione. Candidati emersi: **rebuild container da `main`** (deploy a blocco, vedi sopra), **Task 3b tariffario** (sblocca importi/margini completi + insight AI), superadmin monitoring, impersonation, invito operatore via email. Residui Onda 3 non implementati (email notifiche, alert scadenze cron) da riallocare/confermare.
+**Onda 3 COMPLETA. Onda 4 avviata: Task 3b tariffario ✅ (#127).** All'avvio sessione i container prod sono stati **rebuildati da `main`** (a `b1abe71` = Onda 3) — vedi nota deploy. Candidati Onda 4 restanti: superadmin monitoring (stato container/disk/memory), impersonation studio con banner, invito operatore via email. Sbloccati ora dal tariffario: **insight AI margine** (Groq, ADR-0054 §7). Residui Onda 3 non implementati (email notifiche, alert scadenze cron) da riallocare/confermare.
 
 ### Fili aperti
 
@@ -129,7 +143,7 @@ Nuovi Onda 3:
 - **TD-i18n-zod**: messaggi di validazione **zod** hardcoded IT in tutti i form (definiti fuori dal contesto React → non passano per `t()`). Da chiudere in una slice dedicata su tutti i form insieme (registrato in ADR-0052, nota sotto CHECK-FE-3).
 - **TD-i18n-cumulativo** (ex TD-catalogo-i18n): pagine `/catalogo`, `/mandati`, `/report/margine` + componenti prestazioni in **IT hardcoded** (le label nav/gruppi sono invece i18n it/en). Chiudere coi namespace i18n dedicati.
 - **TD-voceId-FE**: `voceId` omesso dal form prestazioni (BE-supported, FE-deferred) — si aggiunge il select-voce quando serve operativamente (ADR-0053 sub-DP).
-- **TD-tariffario**: importi prestazioni **parziali** senza un tariffario per ruolo/utente → `importoPrestazioni`/`margine` spesso null. Implementarlo (Task 3b) sblocca i margini completi e gli **insight AI margine** (deferiti, ADR-0054 §7).
+- ~~**TD-tariffario**~~ ✅ **RISOLTO** (#127, ADR-0055): tariffario per ruolo/utente → `Prestazione.importo` derivato (`ore × tariffa`). Restano sbloccati gli **insight AI margine** (Groq, deferiti ADR-0054 §7).
 
 ### Roadmap onde (aggiornata)
 
@@ -143,7 +157,7 @@ Nuovi Onda 3:
 
 **Onda 3 — Pipeline cliente** ✅ COMPLETA — T1. ✅ Catalogo servizi (#120, ADR-0050) · T2. ✅ Mandati/Incarichi (#122, ADR-0051) · T3. ✅ Timesheet/Prestazioni (#124, ADR-0053) · T4. ✅ Report margine (#125, ADR-0054) · (+ GATE checklist ADR-0052, #123) · ✅ Landing pubblica studio (#118, anticipato). Residui riallocati: email notifiche, alert scadenze cron, Task 3b tariffario.
 
-**Onda 4 — Piattaforma** 🔜 10. Superadmin monitoring (stato container, disk, memory) 11. Impersonation studio con banner 12. Invito operatore via email
+**Onda 4 — Piattaforma** 🔄 IN CORSO — ✅ Task 3b Tariffario orario (#127, ADR-0055) · 🔜 10. Superadmin monitoring (stato container, disk, memory) 11. Impersonation studio con banner 12. Invito operatore via email
 
 **Onda 5 — Completamento portale cliente** 🔜 13. Upload documenti dal cliente 14. 2FA TOTP 15. Accettazione preventivi online
 
@@ -180,15 +194,15 @@ Nuovi Onda 3:
 
 ### Git
 
-- **Main @ `f21a164`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+- **Main @ `01aaea8`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `01aaea8` feat(tariffario): listino tariffe orarie + derivazione importo prestazioni (ADR-0055) (#127)
+  - `b1abe71` docs(handoff): aggiorna snapshot a f21a164 — Onda 3 completa (#120-125) (#126)
   - `f21a164` feat(report): dashboard margine per mandato/azienda (ADR-0054) (#125)
   - `d71f89e` feat(prestazioni): timesheet su mandato in corso + CRUD (ADR-0053) (#124)
-  - `fbf8c83` fix(accountant-web): dark mode sidebar + GATE checklist ADR-0052 (#123)
   - `87241b1` feat(mandati): mandati/incarichi — da preventivo accettato + CRUD (ADR-0051) (#122)
-  - `21081e2` feat(catalogo): catalogo servizi (ADR-0050) (#120)
-- **Working tree PULITO**, nessun branch pendente.
-- ADR in repo fino a **0054** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine).
-- ⚠️ **Deploy posticipato**: prod ferma a **`de19e3b`**; `main` è **6 PR avanti** (#120/#122/#123/#124/#125). **Rebuild container pianificato a inizio Onda 4** (`up -d --build accountant-api accountant-web` + reload Caddy). Migration `add_servizi_catalogo`/`add_mandati`/`add_prestazioni` già applicate al DB condiviso (dev).
+- **Working tree PULITO**, nessun branch pendente (branch `feature/tariffario-orario` mergiato + eliminato).
+- ADR in repo fino a **0055** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · **0055 tariffario orario**).
+- ⚠️ **Stato deploy**: a inizio sessione i container prod (`accountant-api`/`-web`) sono stati **rebuildati da `main`** → ora a **`b1abe71`** (Onda 3 completa); health `ok`/`db:connected`. Le migration Onda 3 e **`add_tariffe_orarie`** sono **applicate al DB condiviso**. ⚠️ Il container è **1 PR indietro** dal codice tariffario (#127): serve un nuovo `up -d --build accountant-api accountant-web` per servirlo (la migration è già a posto → `migrate:deploy` no-op).
 
 ### Schema dominio accountant — aggiornato
 
@@ -200,13 +214,15 @@ Nuovi Onda 3:
 
 **Mandati/Prestazioni (ADR-0051/0053)**: `Mandato` (RLS FORCE, `importoConcordato` snapshot, partial-unique `preventivo_id WHERE deleted_at IS NULL`) + `RdlCounter` (counter per-tenant per-anno) + enum `StatoMandato` · `StatoPreventivo` esteso con `convertito` · `Prestazione` (RLS FORCE, `mandatoId` CASCADE, `voceId`/`userId` SetNull, `ore` req / `importo` nullable). Migration `add_mandati`, `add_prestazioni`. Report margine (ADR-0054): nessuno schema (aggregazione read-only).
 
-### Permessi (56 totali)
+**Tariffario (ADR-0055)**: `TariffaOraria` (`tariffe_orarie`, RLS FORCE) — `roleId?`/`userId?` (scope XOR via CHECK `tariffe_orarie_scope_xor`), `tariffaOraria Decimal(10,2)`, `attivo`, soft-delete; **2 partial-unique** `(tenant_id, role_id|user_id) WHERE ... IS NOT NULL AND deleted_at IS NULL`; FK tenant/role/user CASCADE. Migration `20260629090933_add_tariffe_orarie`. Deriva `Prestazione.importo` (nessuna colonna nuova su `Prestazione`).
 
-> Baseline = **56** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). **NON usare `grep -c "code:"`** (sovrastima — conta match non-array). Regola anti-miscount in ADR-0052 / memoria `reference_permission_count_baseline`. Progressione Onda 3: 50 → 52 (`servizi.*`, #120) → 54 (`mandati.*`, #122) → 56 (`prestazioni.*`, #124).
+### Permessi (58 totali)
 
-Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · **`servizi.{visualizza,gestisci}`** · **`mandati.{visualizza,gestisci}`** · **`prestazioni.{visualizza,gestisci}`** · `report.*` · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
+> Baseline = **58** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). **NON usare `grep -c "code:"`** (sovrastima — conta match non-array). Regola anti-miscount in ADR-0052 / memoria `reference_permission_count_baseline`. Progressione: 50 → 52 (`servizi.*`, #120) → 54 (`mandati.*`, #122) → 56 (`prestazioni.*`, #124) → **58 (`tariffario.*`, #127)**.
+
+Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · **`servizi.{visualizza,gestisci}`** · **`mandati.{visualizza,gestisci}`** · **`prestazioni.{visualizza,gestisci}`** · **`tariffario.{visualizza,gestisci}`** · `report.*` · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
 Namespace portale: `portale.documenti.visualizza` · `portale.comunicazioni.{visualizza,rispondi}` · `portale.circolari.visualizza`.
-Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `prestazioni.*` anche al Collaboratore; `prestazioni.*` anche al Praticante. Report margine riusa `report.operativo.visualizza` (nessun permesso nuovo).
+Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `prestazioni.*` anche al Collaboratore; `prestazioni.*` anche al Praticante. `tariffario.*` **solo** ai ruoli con `ALL_PERMISSION_CODES` (Super Admin/Admin sede/Socio — dati di costo sensibili). Report margine riusa `report.operativo.visualizza` (nessun permesso nuovo).
 
 ### Stack & ambiente
 
@@ -220,4 +236,4 @@ Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `f21a164` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-26] per sessione (Onda 3 completa: #120/#122/#123/#124/#125).
+Working tree pulito, main @ `01aaea8` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-29] (Onda 4 Task 3b — tariffario, #127).
