@@ -1,7 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `01aaea8` (+1 commit docs(handoff) in arrivo via PR).
+> **Snapshot:** Main @ `4be2a3a` (+1 commit docs(handoff) in arrivo via PR).
 > **Data:** 2026-06-29.
 
 ---
@@ -17,7 +17,7 @@ Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
 
 **Onda 3 — pipeline cliente: COMPLETA** (preventivo → mandato → timesheet → margine):
 
@@ -116,6 +116,17 @@ Chiude il **TD-tariffario**. Tariffa = **costo orario interno** per ruolo (defau
 
 Sub-DP: niente **backfill** storico (manca lo snapshot ruolo-all'epoca → solo prestazioni nuove/update-ore); scope tariffa immutabile in modifica (cambio = soft-delete + ricrea); i lookup roles/users vivono nel TariffeModule (nessuna area RBAC esistente).
 
+### NOVITÀ sessione 2026-06-29 — i18n superfici operatore (PR #129, `4be2a3a`)
+
+Chiude il **TD-i18n-cumulativo**. Esternalizza in **next-intl** le stringhe hardcoded IT delle ultime superfici operatore-studio rimaste in IT. **Solo FE** (nessuno schema/migration/permesso/endpoint).
+
+- **4 nuovi namespace** in parità IT↔EN: `catalogo` (riusa `preventivi.um` per le unità di misura), `mandati` (lista + dettaglio), `report` (margine), `prestazioni` (timesheet embedded in `mandati/[id]`). Totale **577 chiavi** bilanciate.
+- **5 superfici** cablate: `catalogo/page.tsx`, `mandati/page.tsx`, `mandati/[id]/page.tsx`, `report/margine/page.tsx`, `components/mandati/PrestazioniSection.tsx`. Le label nav/gruppi erano già i18n. Valori da DB (nomi servizi/categorie/clienti) restano in lingua d'origine.
+- **Enum** (`StatoMandato`, `TipoRicorrenza`, unità di misura, Sì/No) tradotti via chiave dinamica (`t(\`stato.${s}\`)`ecc.); rimosse le`Record` di label hardcoded module-level.
+- **GATE**: CHECK-FE-2 parità bidirezionale (577), CHECK-FE-3 zero hardcoded residui, risoluzione di tutte le chiavi referenziate (incl. dinamiche), typecheck/eslint/prettier. **Verifica runtime** su dev server come non-superuser (`admin@studio.local` full studio + `collaboratore@studio.local` ristretto) in IT ed EN, **0 errori console**: gating e i18n corretti su tutte le superfici (catalogo lista+form, mandati lista, dettaglio+timesheet, report table, stringa forbidden tradotta). CI #129 verde.
+
+Sub-DP: per la verifica creato mandato di test `RDL-2026-0002` + 2 prestazioni nel DB dev (lasciati, utili per riuso). Resta aperto il **TD-i18n-zod** (messaggi validazione zod fuori dal contesto React).
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
@@ -141,7 +152,7 @@ Invariati: **TD-BV** · **TD-CB** · **TD-PATCH-null-FK** · **TD-blocklist-drif
 Nuovi Onda 3:
 
 - **TD-i18n-zod**: messaggi di validazione **zod** hardcoded IT in tutti i form (definiti fuori dal contesto React → non passano per `t()`). Da chiudere in una slice dedicata su tutti i form insieme (registrato in ADR-0052, nota sotto CHECK-FE-3).
-- **TD-i18n-cumulativo** (ex TD-catalogo-i18n): pagine `/catalogo`, `/mandati`, `/report/margine` + componenti prestazioni in **IT hardcoded** (le label nav/gruppi sono invece i18n it/en). Chiudere coi namespace i18n dedicati.
+- ~~**TD-i18n-cumulativo**~~ ✅ **RISOLTO** (#129): pagine `/catalogo`, `/mandati`, `/report/margine` + timesheet `PrestazioniSection` ora i18n it/en (namespace `catalogo`/`mandati`/`report`/`prestazioni`, 577 chiavi in parità). Resta solo il TD-i18n-zod.
 - **TD-voceId-FE**: `voceId` omesso dal form prestazioni (BE-supported, FE-deferred) — si aggiunge il select-voce quando serve operativamente (ADR-0053 sub-DP).
 - ~~**TD-tariffario**~~ ✅ **RISOLTO** (#127, ADR-0055): tariffario per ruolo/utente → `Prestazione.importo` derivato (`ore × tariffa`). Restano sbloccati gli **insight AI margine** (Groq, deferiti ADR-0054 §7).
 
@@ -194,15 +205,15 @@ Nuovi Onda 3:
 
 ### Git
 
-- **Main @ `01aaea8`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+- **Main @ `4be2a3a`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `4be2a3a` feat(i18n): traduzione IT/EN pagine operatore catalogo/mandati/report + timesheet (#129)
+  - `2c7bf68` docs: aggiorna HANDOFF + PROGRESS — Onda 4 Task 3b tariffario (#127, ADR-0055) (#128)
   - `01aaea8` feat(tariffario): listino tariffe orarie + derivazione importo prestazioni (ADR-0055) (#127)
   - `b1abe71` docs(handoff): aggiorna snapshot a f21a164 — Onda 3 completa (#120-125) (#126)
   - `f21a164` feat(report): dashboard margine per mandato/azienda (ADR-0054) (#125)
-  - `d71f89e` feat(prestazioni): timesheet su mandato in corso + CRUD (ADR-0053) (#124)
-  - `87241b1` feat(mandati): mandati/incarichi — da preventivo accettato + CRUD (ADR-0051) (#122)
-- **Working tree PULITO**, nessun branch pendente (branch `feature/tariffario-orario` mergiato + eliminato).
-- ADR in repo fino a **0055** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · **0055 tariffario orario**).
-- ⚠️ **Stato deploy**: a inizio sessione i container prod (`accountant-api`/`-web`) sono stati **rebuildati da `main`** → ora a **`b1abe71`** (Onda 3 completa); health `ok`/`db:connected`. Le migration Onda 3 e **`add_tariffe_orarie`** sono **applicate al DB condiviso**. ⚠️ Il container è **1 PR indietro** dal codice tariffario (#127): serve un nuovo `up -d --build accountant-api accountant-web` per servirlo (la migration è già a posto → `migrate:deploy` no-op).
+- **Working tree PULITO**, nessun branch pendente (branch `feature/i18n-operatore-pages-catalogo-mandati-report` mergiato + eliminato).
+- ADR in repo fino a **0055** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · **0055 tariffario orario**). L'i18n #129 è una chiusura TD, senza ADR.
+- ⚠️ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono a **`b1abe71`** (Onda 3 completa); health `ok`/`db:connected`. Le migration Onda 3 e **`add_tariffe_orarie`** sono **applicate al DB condiviso**. ⚠️ Il container è **2 PR indietro** dal `main` (tariffario #127 + i18n #129): serve un nuovo `up -d --build accountant-api accountant-web` per servirli (la migration tariffario è già a posto → `migrate:deploy` no-op; l'i18n è solo FE).
 
 ### Schema dominio accountant — aggiornato
 
@@ -230,10 +241,10 @@ Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `
 - Server Hetzner `gestionale-test`. Docker Compose (`dev.yml` + `prod.yml`). Caddy custom (wildcard cert `*.studiodesk.cloud`, DNS-01 Cloudflare).
 - **App containerizzate e live**: `gestionale-accountant-api-1` + `gestionale-accountant-web-1`.
 - Tenant demo: `studio-demo` (= Studio Ferretti & Lombardi, dati identità popolati) + `studio-acme` + **`oneplatform`** (superadmin piattaforma).
-- Utenti demo: `admin@studio.local / Admin123!` · `collaboratore@studio.local / Collaboratore123!` · `cliente@studio-demo.local / Cliente123!` · `superadmin@oneplatform.local / Superadmin123!`.
+- Utenti demo: `admin@studio.local / Studio123!` · `collaboratore@studio.local / Collaboratore123!` · `cliente@studio-demo.local / Cliente123!` · `superadmin@oneplatform.local / Superadmin123!`.
 - Landing pubblica: `https://studiodesk.cloud/t/studio-demo` (no login richiesto).
 - Betadesk: `/home/deploy/projects/betadesk` — READ-ONLY, riferimento legacy.
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `01aaea8` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-29] (Onda 4 Task 3b — tariffario, #127).
+Working tree pulito, main @ `4be2a3a` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-29] (i18n superfici operatore, #129).
