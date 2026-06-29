@@ -98,6 +98,15 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_PRICE_LIST_PRIORITY_INVALID: 'Priorità listino non valida.',
   E_PRICE_LIST_IS_ACTIVE_INVALID: 'Stato attivazione listino non valido.',
 
+  // F2 Tavoli / Mappa sala (ADR-0058)
+  E_TABLE_NOT_FOUND: 'Tavolo non trovato.',
+  E_TABLE_NUMERO_INVALID: 'Numero tavolo non valido.',
+  E_TABLE_NUMERO_REQUIRED: 'Il numero del tavolo è obbligatorio.',
+  E_TABLE_NUMERO_TOO_LONG: 'Il numero del tavolo non può superare 50 caratteri.',
+  E_TABLE_NUMERO_EXISTS: 'Esiste già un tavolo con questo numero.',
+  E_TABLE_CAPIENZA_INVALID: 'La capienza deve essere un numero intero maggiore o uguale a 1.',
+  E_TABLE_POS_INVALID: 'Posizione del tavolo non valida.',
+
   // Fallback difensivo: `parseError` srotola `E_VALIDATION` → codice specifico
   // quando `message[0]` è un taxonomy code; se non lo è, resta questo messaggio.
   [CommonErrorCode.VALIDATION]: 'I dati inseriti non sono validi. Controlla i campi e riprova.',
