@@ -1,8 +1,8 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `b18cfae` (+1 commit docs(handoff) in arrivo via PR).
-> **Data:** 2026-06-29.
+> **Snapshot:** Main @ `8a57b2b` (+1 commit docs(handoff) in arrivo via PR).
+> **Data:** 2026-06-30.
 
 ---
 
@@ -16,8 +16,10 @@ Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente
 
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
-- **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **picker voce timesheet (#132)** + **i18n messaggi validazione zod (#134)** + **bozza AI risposta comunicazioni (#136, ADR-0056)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
+- **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): **RIATTIVATO** (ADR-0058, #138). Non più "scaffold congelato": **F1 Menu** (S20/S21) + **F2 Tavoli / Mappa sala** (#138) sono su `main`. La prossima sessione restaurant **riparte da questo stato, non da zero**. +2 permessi `tavoli.*` propri del verticale.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **picker voce timesheet (#132)** + **i18n messaggi validazione zod (#134)** + **bozza AI risposta comunicazioni (#136, ADR-0056)** + **insight AI margine (#139, ADR-0057)** + **Task 9 (landing, anticipato)**. Catalogo permessi accountant: **58**.
+
+> **Catalogo permessi su `main` = 60** (58 accountant + **2 `tavoli.*`** del verticale restaurant, #138). I permessi tavoli/sala appartengono al verticale ristorazione: non si sommano al perimetro funzionale accountant, che resta 58.
 
 **Onda 3 — pipeline cliente: COMPLETA** (preventivo → mandato → timesheet → margine):
 
@@ -161,6 +163,29 @@ Nessun TD residuo da questa slice.
 
 Nessun TD residuo da questa slice (backlog ADR-0056: audit origine AI, contesto azienda/mandati nel prompt, astrazione provider).
 
+### NOVITÀ sessione 2026-06-29 — Insight AI margine via Groq (PR #139, `1e8c12f`, ADR-0057)
+
+**Secondo use case AI** dopo la bozza risposta (#136) — **entrambi sul `GroqService` ora generalizzato**. Sblocca l'insight differito in ADR-0054 §7 (precondizione: tariffario #127 che deriva `importoPrestazioni`). Read-only puro: nessuno schema/migration/seed/permesso.
+
+- **`complete()` generico in `GroqService`**: core estratto in `complete(systemPrompt, userPrompt, { temperature?, maxTokens? })` (client lazy + chiamata + mappatura errori → 503 `E_AI_DISABLED`/`E_AI_EMPTY`/`E_AI_UPSTREAM`). `suggerisciRisposta()` (#136) delega ora a `complete()` — comportamento invariato, coperto dai test di regressione. Template riusabile per future feature AI.
+- **`analizzaMargine(rows)`** sopra `complete()` (`temp 0.3`, `max_tokens 400`): **una sintesi globale** sull'intero set di mandati (non per-riga), ≤200 parole, italiano, analizza solo i mandati presenti (righe scoperte marcate `MANCANTE/PARZIALE`, senza caveat fantasma — corretto in runtime). Tipo `MargineRigaInsight` locale → niente dipendenza inversa `ai → report`.
+- **Guard deterministico `< 2 mandati`**: `ReportService.margineInsight` short-circuita **prima** di Groq → `insight: null` + **`aiGenerated: false`** + `copertura` corretta (un'analisi comparativa su <2 mandati è rumore; su 1 mandato il modello divagava). Guard in `ReportService`, non in `GroqService` (resta wrapper AI puro). Risparmia la chiamata LLM.
+- **`aiGenerated` flag → i18n FE**: le stringhe del path deterministico sono testo di prodotto IT/EN renderizzato dal FE, **non** hardcoded in italiano dal BE; solo la prosa AI (`aiGenerated:true`) resta italiano LLM-generato (effimero).
+- **BE**: `POST /report/margine/insight` (azione → provider esterno) gated **`report.operativo.visualizza`** — **nessun permesso nuovo** (aggrega dati già accessibili via `GET /report/margine`). Ritorna `{ insight, aiGenerated, copertura: { totali, conPrestazioni } }`; copertura indipendente dal testo AI (disclaimer = fatto sui dati).
+- **FE**: bottone "Analizza con AI" su `/report/margine` (gated `aiEnabled` via `GET /ai/status`, best-effort parallelo → fail-soft), box insight + **disclaimer copertura**, errore inline. Namespace `report` esteso IT↔EN in parità. **CI #139 verde**.
+
+### NOVITÀ sessione 2026-06-30 — F2 Tavoli / Mappa sala — RESTAURANT RIATTIVATO (PR #138, `8a57b2b`, ADR-0058)
+
+**Il verticale ristorazione è riattivato.** Primo dominio nuovo costruito sul core estratto (ADR-0027) dopo F1 Menu — valida la riusabilità di `packages/*` (api-client, auth, db/RLS, ui, i18n) su un secondo dominio-feature restaurant. La voce shell `mappa` era un `<PlaceholderPage>`. **Restaurant non è più scaffold congelato: è verticale attivo**, la prossima sessione restaurant riparte da qui.
+
+- **Schema**: modello `Tavolo` (`numero`, `capienza`, `posX`/`posY` Float `@default(0)`, soft-delete) sotto confine DOMINIO + `Tenant.tavoli` back-relation. Migration `20260630120000_add_tavoli_models_f2_schema`: CREATE TABLE + index `tenant_id` + partial-unique soft-delete-aware `(tenant_id, numero) WHERE deleted_at IS NULL` + FK `ON DELETE CASCADE` + RLS `ENABLE`/`FORCE` + policy `tavoli_tenant_isolation` (pattern menu 1:1).
+- **BE**: modulo `tables/` (controller + service + DTO + spec), REST `/tables` CRUD gated: GET → `tavoli.visualizza`, POST/PATCH/DELETE → `tavoli.gestisci`. Drag-drop persiste `posX`/`posY` via lo **stesso** `PATCH` (no endpoint posizione dedicato — YAGNI).
+- **Permessi**: +2 `tavoli.{visualizza,gestisci}` → baseline array `PERMISSIONS` **58 → 60**. Assegnazione description-driven: `gestisci` → Direzione; `visualizza` → Direzione/Cassiere/Cameriere; Cucina/Bar esclusa; Super Admin + Admin sede via `ALL_PERMISSION_CODES`. **Questi permessi sono del verticale restaurant, non accountant.**
+- **FE**: `mappa/page.tsx` — mappa sala drag-drop (token assoluti `posX`/`posY`, pointer events, persistenza on-drop ottimistica + rollback) + elenco accessibile (CRUD da tastiera/AT). Form `TableForm` (RHF + zod i18n). Namespace `tavoli` it↔en in parità (153/153).
+- **E2E**: 3 spec Testcontainers (`tables-crud`, `tables-rbac`, `tables-tenant-isolation`) → **13 file e2e / 70 pass** (4 skip pre-esistenti TD-BS menu).
+- **Tech debt (ADR-0058)**: 🆕 **TD-sala-forward** (`Sala`/`Zona` raggruppamento multi-piano, deferred — unico piano finché non implementato) · 🆕 **TD-tavolo-stato-forward** (stato libero/occupato/riservato, dipende da Comande S23+; `deletedAt` copre già "fuori servizio"). Entrambi BASSA severità, additivi.
+- ⚠️ **Verifica runtime manuale FE non eseguita** (la PR #138 è verde su GATE statico + e2e, ma il giro manuale come non-superuser sulla mappa drag-drop resta da fare alla ripresa del verticale restaurant).
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
@@ -169,7 +194,7 @@ Nessun TD residuo da questa slice (backlog ADR-0056: audit origine AI, contesto 
 
 ### Prossimo — Onda 4 (in corso)
 
-**Onda 3 COMPLETA. Onda 4 avviata: Task 3b tariffario ✅ (#127).** All'avvio sessione i container prod sono stati **rebuildati da `main`** (a `b1abe71` = Onda 3) — vedi nota deploy. Candidati Onda 4 restanti: superadmin monitoring (stato container/disk/memory), impersonation studio con banner, invito operatore via email. Sbloccati ora dal tariffario: **insight AI margine** (Groq, ADR-0054 §7). Residui Onda 3 non implementati (email notifiche, alert scadenze cron) da riallocare/confermare.
+**Onda 3 COMPLETA. Onda 4 avviata: Task 3b tariffario ✅ (#127).** All'avvio sessione i container prod sono stati **rebuildati da `main`** (a `b1abe71` = Onda 3) — vedi nota deploy. Candidati Onda 4 restanti: superadmin monitoring (stato container/disk/memory), impersonation studio con banner, invito operatore via email. ✅ **Insight AI margine landed** (#139, ADR-0057 — era sbloccato dal tariffario, ADR-0054 §7). Residui Onda 3 non implementati (email notifiche, alert scadenze cron) da riallocare/confermare. **Parallelamente: verticale restaurant riattivato** (F1 Menu + F2 Tavoli #138) — arco separato dall'Onda 4 accountant.
 
 ### Fili aperti
 
@@ -188,7 +213,7 @@ Nuovi Onda 3:
 - ~~**TD-i18n-zod**~~ ✅ **RISOLTO** (#134): messaggi di validazione zod ora i18n it/en su 6 superfici (schema in `useMemo`+`t()`, namespace `validation` per area, 605 chiavi in parità). Vedi NOVITÀ #134.
 - ~~**TD-i18n-cumulativo**~~ ✅ **RISOLTO** (#129): pagine `/catalogo`, `/mandati`, `/report/margine` + timesheet `PrestazioniSection` ora i18n it/en (namespace `catalogo`/`mandati`/`report`/`prestazioni`, 577 chiavi in parità).
 - ~~**TD-voceId-FE**~~ ✅ **RISOLTO** (#132): select "Voce di preventivo" nel form prestazioni + colonna "Voce" in tabella (ADR-0053 sub-DP). Riusa `getPreventivo` per le opzioni, nessun endpoint nuovo.
-- ~~**TD-tariffario**~~ ✅ **RISOLTO** (#127, ADR-0055): tariffario per ruolo/utente → `Prestazione.importo` derivato (`ore × tariffa`). Restano sbloccati gli **insight AI margine** (Groq, deferiti ADR-0054 §7).
+- ~~**TD-tariffario**~~ ✅ **RISOLTO** (#127, ADR-0055): tariffario per ruolo/utente → `Prestazione.importo` derivato (`ore × tariffa`). Ha sbloccato gli **insight AI margine** ✅ landed (#139, ADR-0057).
 
 ### Roadmap onde (aggiornata)
 
@@ -239,16 +264,16 @@ Nuovi Onda 3:
 
 ### Git
 
-- **Main @ `b18cfae`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+- **Main @ `8a57b2b`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `8a57b2b` feat(tavoli): F2 Tavoli / Mappa sala drag-drop (ADR-0058) (#138)
+  - `1e8c12f` feat(report): insight AI margine via Groq (ADR-0057) (#139)
+  - `1c0280d` docs: aggiorna HANDOFF + PROGRESS — bozza AI risposta operatore (#136) (#137)
   - `b18cfae` feat(comunicazioni): bozza AI risposta operatore via Groq (ADR-0056) (#136)
   - `735743f` feat(i18n): traduzione IT/EN messaggi validazione zod form operatore + login (#134)
   - `75476fc` feat(prestazioni): picker voce di preventivo nel timesheet + colonna Voce (#132)
-  - `89c9f5c` docs(readme): refresh framing — StudioDesk verticale attivo (#131)
-  - `42f1b13` docs: aggiorna HANDOFF + PROGRESS — i18n superfici operatore (#129) (#130)
-  - `4be2a3a` feat(i18n): traduzione IT/EN pagine operatore catalogo/mandati/report + timesheet (#129)
-- **Working tree PULITO**, nessun branch pendente (branch `feature/ai-draft-risposta` mergiato + eliminato).
-- ADR in repo fino a **0056** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · 0055 tariffario orario · **0056 AI draft risposta**). i18n #129, voce-picker #132 e i18n-zod #134 sono chiusure TD, senza ADR.
-- ✅ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono stati **rebuildati da `main` in chiusura sessione** → allineati a **`b18cfae`** (tariffario #127 + i18n #129 + voce-picker #132 + i18n-zod #134 + **AI draft #136**); health `ok`/`db:connected`. **`GROQ_API_KEY` aggiunta a `.env`** (feature AI attiva in prod). Nessuna nuova migration da #136 (feature-flag runtime, nessuno schema-change).
+- **Working tree PULITO**, nessun branch pendente. Lavoro sequenziale (no worktree): disciplina = working tree pulito a fine sessione.
+- ADR in repo fino a **0058** (0054 report margine · 0055 tariffario orario · 0056 AI draft risposta · **0057 insight AI margine** · **0058 tavoli/mappa sala F2**). i18n #129, voce-picker #132 e i18n-zod #134 sono chiusure TD, senza ADR.
+- ⚠️ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono allineati a **`b18cfae`** (ultimo rebuild a fine sessione #136: tariffario #127 + i18n #129/#132/#134 + **AI draft #136**); health `ok`/`db:connected`, `GROQ_API_KEY` in `.env` (feature AI attiva). **`main` è avanzato a `8a57b2b`**: l'**insight AI margine (#139)** NON è ancora in prod (richiede un rebuild accountant-api/-web; read-only, nessuna nuova migration → solo redeploy codice). Il **verticale restaurant (#138)** non è deployato (solo lo stack accountant è dietro Caddy); la migration tavoli `20260630120000` riguarda il DB restaurant, non quello accountant prod.
 
 ### Schema dominio accountant — aggiornato
 
@@ -262,13 +287,14 @@ Nuovi Onda 3:
 
 **Tariffario (ADR-0055)**: `TariffaOraria` (`tariffe_orarie`, RLS FORCE) — `roleId?`/`userId?` (scope XOR via CHECK `tariffe_orarie_scope_xor`), `tariffaOraria Decimal(10,2)`, `attivo`, soft-delete; **2 partial-unique** `(tenant_id, role_id|user_id) WHERE ... IS NOT NULL AND deleted_at IS NULL`; FK tenant/role/user CASCADE. Migration `20260629090933_add_tariffe_orarie`. Deriva `Prestazione.importo` (nessuna colonna nuova su `Prestazione`).
 
-### Permessi (58 totali)
+### Permessi (60 su `main` = 58 accountant + 2 tavoli restaurant)
 
-> Baseline = **58** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). **NON usare `grep -c "code:"`** (sovrastima — conta match non-array). Regola anti-miscount in ADR-0052 / memoria `reference_permission_count_baseline`. Progressione: 50 → 52 (`servizi.*`, #120) → 54 (`mandati.*`, #122) → 56 (`prestazioni.*`, #124) → **58 (`tariffario.*`, #127)**.
+> Baseline su `main` = **60** (lunghezza array `PERMISSIONS` / log seed `Permissions: N attese` / count DB). **NON usare `grep -c "code:"`** (sovrastima — conta match non-array). Regola anti-miscount in ADR-0052 / memoria `reference_permission_count_baseline`. Progressione: 50 → 52 (`servizi.*`, #120) → 54 (`mandati.*`, #122) → 56 (`prestazioni.*`, #124) → 58 (`tariffario.*`, #127) → **60 (`tavoli.*`, #138)**. I 2 `tavoli.{visualizza,gestisci}` appartengono al **verticale restaurant** (non accountant); il perimetro funzionale accountant resta **58** (insight AI margine #139 riusa `report.operativo.visualizza`, nessun permesso nuovo).
 
 Namespace studio: `aziende.*` · `referenti.*` · `preventivi.*` · `scadenze.*` · **`servizi.{visualizza,gestisci}`** · **`mandati.{visualizza,gestisci}`** · **`prestazioni.{visualizza,gestisci}`** · **`tariffario.{visualizza,gestisci}`** · `report.*` · `comunicazioni.*` · `documenti.*` · `circolari.*` · `sistema.*` · **`clienti.invitare`**.
 Namespace portale: `portale.documenti.visualizza` · `portale.comunicazioni.{visualizza,rispondi}` · `portale.circolari.visualizza`.
-Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `prestazioni.*` anche al Collaboratore; `prestazioni.*` anche al Praticante. `tariffario.*` **solo** ai ruoli con `ALL_PERMISSION_CODES` (Super Admin/Admin sede/Socio — dati di costo sensibili). Report margine riusa `report.operativo.visualizza` (nessun permesso nuovo).
+Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `prestazioni.*` anche al Collaboratore; `prestazioni.*` anche al Praticante. `tariffario.*` **solo** ai ruoli con `ALL_PERMISSION_CODES` (Super Admin/Admin sede/Socio — dati di costo sensibili). Report margine **e insight AI margine (#139)** riusano `report.operativo.visualizza` (nessun permesso nuovo).
+Namespace **restaurant** (verticale ristorazione): **`tavoli.{visualizza,gestisci}`** (#138, ADR-0058) — `gestisci` → Direzione; `visualizza` → Direzione/Cassiere/Cameriere (Cucina/Bar esclusa).
 
 ### Stack & ambiente
 
@@ -282,4 +308,4 @@ Template "Cliente" → 4 permessi portale. `servizi.visualizza`, `mandati.*` e `
 
 ### Verifica finale richiesta a Code (chiusura sessione)
 
-Working tree pulito, main @ `735743f` allineato origin, nessun branch pendente, PROGRESS.md aggiornato con entry [2026-06-29] (i18n messaggi validazione zod, #134). Container prod rebuildati a `735743f`.
+Working tree pulito, main @ `8a57b2b` allineato origin, nessun branch pendente. PROGRESS.md aggiornato con entry [2026-06-29] **insight AI margine (#139, ADR-0057)** + [2026-06-30] **F2 Tavoli / Mappa sala (#138, ADR-0058)**. Baseline permessi su `main` = **60** (58 accountant + 2 `tavoli.*` restaurant). Container prod accountant fermi a `b18cfae` (insight #139 da rideployare con un rebuild; restaurant #138 non deployato). Verticale restaurant **riattivato**.
