@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 
 import { Alert, AlertDescription, Button, Input } from '@gestionale/ui';
@@ -29,14 +30,8 @@ import {
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-const STATO_LABEL: Record<StatoMandato, string> = {
-  in_corso: 'In corso',
-  sospeso: 'Sospeso',
-  concluso: 'Concluso',
-  annullato: 'Annullato',
-};
-
 export default function MandatoDetailPage(): JSX.Element {
+  const t = useTranslations('mandati');
   const { slug, id } = useParams<{ slug: string; id: string }>();
   const router = useRouter();
   const { permissions } = useAuth();
@@ -113,17 +108,17 @@ export default function MandatoDetailPage(): JSX.Element {
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
-        Torna ai mandati
+        {t('backToList')}
       </Link>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Caricamento…</p>
+        <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : loadError || !mandato ? (
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{loadError ?? 'Mandato non trovato.'}</span>
+            <span>{loadError ?? t('notFound')}</span>
             <Button variant="outline" size="sm" onClick={() => void load()}>
-              Riprova
+              {t('retry')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -132,11 +127,11 @@ export default function MandatoDetailPage(): JSX.Element {
           <header className="space-y-1">
             <h1 className="text-2xl font-semibold">{mandato.codice}</h1>
             <p className="text-sm text-muted-foreground">
-              Importo concordato:{' '}
+              {t('detail.importoConcordato')}{' '}
               <span className="font-medium text-foreground">
                 € {mandato.importoConcordato.toFixed(2)}
               </span>{' '}
-              · snapshot dal preventivo (non modificabile)
+              · {t('detail.snapshot')}
             </p>
           </header>
 
@@ -148,7 +143,7 @@ export default function MandatoDetailPage(): JSX.Element {
 
           <div className="space-y-4 rounded-md border p-4">
             <label className="space-y-1 text-xs text-muted-foreground">
-              <span>Stato</span>
+              <span>{t('fields.stato')}</span>
               <select
                 className={SELECT_CLASS}
                 value={stato}
@@ -157,7 +152,7 @@ export default function MandatoDetailPage(): JSX.Element {
               >
                 {STATI_MANDATO.map((s) => (
                   <option key={s} value={s}>
-                    {STATO_LABEL[s]}
+                    {t(`stato.${s}`)}
                   </option>
                 ))}
               </select>
@@ -165,7 +160,7 @@ export default function MandatoDetailPage(): JSX.Element {
 
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="space-y-1 text-xs text-muted-foreground">
-                <span>Inizio</span>
+                <span>{t('fields.inizio')}</span>
                 <Input
                   type="date"
                   value={inizio}
@@ -174,7 +169,7 @@ export default function MandatoDetailPage(): JSX.Element {
                 />
               </label>
               <label className="space-y-1 text-xs text-muted-foreground">
-                <span>Fine prevista</span>
+                <span>{t('fields.finePrevista')}</span>
                 <Input
                   type="date"
                   value={finePrevista}
@@ -183,7 +178,7 @@ export default function MandatoDetailPage(): JSX.Element {
                 />
               </label>
               <label className="space-y-1 text-xs text-muted-foreground">
-                <span>Fine effettiva</span>
+                <span>{t('fields.fineEffettiva')}</span>
                 <Input
                   type="date"
                   value={fineEffettiva}
@@ -194,7 +189,7 @@ export default function MandatoDetailPage(): JSX.Element {
             </div>
 
             <label className="space-y-1 text-xs text-muted-foreground">
-              <span>Note</span>
+              <span>{t('fields.note')}</span>
               <Input value={note} onChange={(e) => setNote(e.target.value)} disabled={!canManage} />
             </label>
 
@@ -207,10 +202,10 @@ export default function MandatoDetailPage(): JSX.Element {
                   className="text-destructive"
                   onClick={() => void handleDelete()}
                 >
-                  Elimina
+                  {t('delete')}
                 </Button>
                 <Button type="button" onClick={() => void handleSave()} disabled={saving}>
-                  {saving ? 'Salvataggio…' : 'Salva'}
+                  {saving ? t('saving') : t('save')}
                 </Button>
               </div>
             )}

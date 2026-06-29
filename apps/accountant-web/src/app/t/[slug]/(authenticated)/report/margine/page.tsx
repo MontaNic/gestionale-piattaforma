@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { TrendingUp } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@gestionale/ui';
@@ -16,15 +17,8 @@ import type { StatoMandato } from '@/lib/mandati-api';
 // Vista analitica read-only: ricavo concordato vs costo stimato (Σ importo
 // prestazioni). Lista flat ordinata per margine ASC (peggiori prima, null in
 // coda). Margine colorato: verde > 0, rosso < 0, grigio se null. Gating
-// report.operativo.visualizza. Dark-safe + stringhe IT (TD-i18n cumulativo).
+// report.operativo.visualizza. Dark-safe + stringhe i18n (namespace `report`).
 // =============================================================================
-
-const STATO_LABEL: Record<StatoMandato, string> = {
-  in_corso: 'In corso',
-  sospeso: 'Sospeso',
-  concluso: 'Concluso',
-  annullato: 'Annullato',
-};
 
 const STATO_BADGE: Record<StatoMandato, string> = {
   in_corso: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
@@ -45,6 +39,7 @@ function margineClass(m: number | null): string {
 }
 
 export default function ReportMarginePage(): JSX.Element {
+  const t = useTranslations('report');
   const { permissions } = useAuth();
   const canView = permissions.includes('report.operativo.visualizza');
 
@@ -73,7 +68,7 @@ export default function ReportMarginePage(): JSX.Element {
     return (
       <div className="mx-auto w-full max-w-5xl">
         <Alert>
-          <AlertDescription>Non hai i permessi per visualizzare i report.</AlertDescription>
+          <AlertDescription>{t('forbidden')}</AlertDescription>
         </Alert>
       </div>
     );
@@ -84,12 +79,9 @@ export default function ReportMarginePage(): JSX.Element {
       <header className="space-y-1">
         <h1 className="flex items-center gap-2 text-2xl font-semibold">
           <TrendingUp className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-          Report margine
+          {t('title')}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Ricavo concordato vs costo stimato (somma importi prestazioni). Il margine è disponibile
-          solo quando le prestazioni hanno un importo; senza, è mostrato come «—».
-        </p>
+        <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       {loadError && (
@@ -99,23 +91,23 @@ export default function ReportMarginePage(): JSX.Element {
       )}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Caricamento…</p>
+        <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : rows.length === 0 ? (
         <p className="rounded-md border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
-          Nessun mandato da analizzare.
+          {t('empty')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Azienda</th>
-                <th className="px-3 py-2">Mandato</th>
-                <th className="px-3 py-2">Stato</th>
-                <th className="px-3 py-2 text-right">Concordato</th>
-                <th className="px-3 py-2 text-right">Ore totali</th>
-                <th className="px-3 py-2 text-right">Importo prestazioni</th>
-                <th className="px-3 py-2 text-right">Margine</th>
+                <th className="px-3 py-2">{t('col.azienda')}</th>
+                <th className="px-3 py-2">{t('col.mandato')}</th>
+                <th className="px-3 py-2">{t('col.stato')}</th>
+                <th className="px-3 py-2 text-right">{t('col.concordato')}</th>
+                <th className="px-3 py-2 text-right">{t('col.oreTotali')}</th>
+                <th className="px-3 py-2 text-right">{t('col.importoPrestazioni')}</th>
+                <th className="px-3 py-2 text-right">{t('col.margine')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -127,7 +119,7 @@ export default function ReportMarginePage(): JSX.Element {
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATO_BADGE[r.stato]}`}
                     >
-                      {STATO_LABEL[r.stato]}
+                      {t(`stato.${r.stato}`)}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{eur(r.importoConcordato)}</td>
