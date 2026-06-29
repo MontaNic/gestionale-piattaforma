@@ -1,7 +1,7 @@
 # HANDOFF — Piattaforma Gestionale (multi-tenant SaaS)
 
 > Documento di passaggio sessione. Sostituisce integralmente il precedente.
-> **Snapshot:** Main @ `735743f` (+1 commit docs(handoff) in arrivo via PR).
+> **Snapshot:** Main @ `b18cfae` (+1 commit docs(handoff) in arrivo via PR).
 > **Data:** 2026-06-29.
 
 ---
@@ -17,7 +17,7 @@ Sessione densa: **Onda 2 completa** (identità visiva + homepage portale cliente
 Monorepo pnpm + Turbo, 2 verticali-core su base condivisa `packages/`:
 
 - **1° verticale — ristorazione** (`apps/restaurant-api` / `restaurant-web`): scaffold congelato. Invariato.
-- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **picker voce timesheet (#132)** + **i18n messaggi validazione zod (#134)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
+- **2° verticale — commercialisti / StudioDesk** (`apps/accountant-api` :3002 / `accountant-web` :3003): **livello 1 + livello 2 COMPLETI** + **Onda 1 COMPLETA** + **Onda 2 COMPLETA** + **Onda 3 COMPLETA** + **Onda 4 Task 3b — Tariffario (#127, ADR-0055)** + **i18n superfici operatore (#129)** + **picker voce timesheet (#132)** + **i18n messaggi validazione zod (#134)** + **bozza AI risposta comunicazioni (#136, ADR-0056)** + **Task 9 (landing, anticipato)**. Catalogo permessi: **58**.
 
 **Onda 3 — pipeline cliente: COMPLETA** (preventivo → mandato → timesheet → margine):
 
@@ -149,6 +149,18 @@ Chiude il **TD-i18n-zod**. I form FE con schema **zod a module-scope** avevano i
 
 Nessun TD residuo da questa slice.
 
+### NOVITÀ sessione 2026-06-29 — Bozza AI risposta operatore, Slice A (PR #136, `b18cfae`, ADR-0056)
+
+**Prima integrazione LLM del prodotto.** Nel composer di un thread comunicazioni l'operatore genera una **bozza di risposta** (provider **Groq**, `groq-sdk`); popola la textarea ed è editabile prima dell'invio. Nessuno schema/migration: feature-flag a runtime.
+
+- **Modulo `ai/` trasversale** (`apps/accountant-api/src/ai/`): `GroqService` (prompt sistema+utente, ultimi 5 messaggi `lato≠interno`, `temperature 0.4`, `max_tokens 400`) + `AiController` `GET /ai/status` pubblico → `{ aiEnabled }` (mai la key). Riusabile da future feature AI.
+- **Feature-flag su `GROQ_API_KEY`**: assente → `aiEnabled:false`, endpoint **503** (`E_AI_DISABLED`), bottone FE nascosto. Errori upstream/vuoti → 503 con `errorCode` stabile (`E_AI_UPSTREAM`/`E_AI_EMPTY`). Rollout/rollback = presenza della variabile, zero deploy.
+- **BE**: `POST /comunicazioni/:id/suggerisci` sotto `comunicazioni.gestisci` (**nessun permesso nuovo** → catalogo resta 58); riusa `getById`, esclude le note interne. Nessuna persistenza.
+- **FE**: bottone "Suggerisci risposta" nel `MessaggioComposer` (gated su `aiEnabled`), errore inline; `getAiStatus()` in parallelo al thread (fail-soft). i18n `comunicazioni.ai.*` it/en in parità.
+- **GATE**: 10 unit con `groq-sdk` mockato + typecheck/lint/build, **CI #136 verde** (Lint·Typecheck·Format·Test + E2E Playwright 14 passed). **Verifica runtime** con key reale, ruolo non-superuser `collaboratore`: `/ai/status` true, bozza Groq reale (~1.4s), click → textarea popolata, degradazione `aiEnabled:false` → niente bottone. Lasciata `COM-0002` (apertaDa=cliente) nel DB dev.
+
+Nessun TD residuo da questa slice (backlog ADR-0056: audit origine AI, contesto azienda/mandati nel prompt, astrazione provider).
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
@@ -162,7 +174,7 @@ Nessun TD residuo da questa slice.
 ### Fili aperti
 
 - **`STUDIO_DESK.md` extension**: aggiungere sezione AI, cron inventory, feature map per pannello (admin/superadmin/public → stato in gestionale). Da fare prima dell'Onda 3 completa.
-- **Nuova chiave Groq** da inserire in `.env` quando si implementano feature AI.
+- ~~**Nuova chiave Groq** da inserire in `.env`~~ ✅ inserita (Slice A AI draft #136); riusabile per future feature AI (insight margine, ecc.).
 - **Subdomain routing** (`[slug].studiodesk.cloud` per portale cliente): task infra futuro.
 - **UI configurazione identità tenant**: oggi solo seed/superadmin. Quando uno studio pilota chiede di cambiare logo/descrizione, serve form in `/platform/tenants/[id]`.
 - **Template landing**: betadesk aveva 6 template con stili diversi. Deferred — costruire quando lo studio pilota lo chiede.
@@ -227,15 +239,16 @@ Nuovi Onda 3:
 
 ### Git
 
-- **Main @ `735743f`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+- **Main @ `b18cfae`** (+1 commit `docs(handoff)` in arrivo via PR). Cronologia recente:
+  - `b18cfae` feat(comunicazioni): bozza AI risposta operatore via Groq (ADR-0056) (#136)
   - `735743f` feat(i18n): traduzione IT/EN messaggi validazione zod form operatore + login (#134)
   - `75476fc` feat(prestazioni): picker voce di preventivo nel timesheet + colonna Voce (#132)
   - `89c9f5c` docs(readme): refresh framing — StudioDesk verticale attivo (#131)
   - `42f1b13` docs: aggiorna HANDOFF + PROGRESS — i18n superfici operatore (#129) (#130)
   - `4be2a3a` feat(i18n): traduzione IT/EN pagine operatore catalogo/mandati/report + timesheet (#129)
-- **Working tree PULITO**, nessun branch pendente (branch `feature/i18n-zod-validation-messages` mergiato + eliminato).
-- ADR in repo fino a **0055** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · **0055 tariffario orario**). i18n #129, voce-picker #132 e i18n-zod #134 sono chiusure TD, senza ADR.
-- ✅ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono stati **rebuildati da `main` in chiusura sessione** → allineati a **`735743f`** (tariffario #127 + i18n #129 + voce-picker #132 + i18n-zod #134); health `ok`/`db:connected`. Le migration Onda 3 e **`add_tariffe_orarie`** sono **applicate al DB condiviso** (nessuna nuova migration da #129/#132/#134 — slice FE-only).
+- **Working tree PULITO**, nessun branch pendente (branch `feature/ai-draft-risposta` mergiato + eliminato).
+- ADR in repo fino a **0056** (0050 catalogo · 0051 mandati · 0052 GATE checklist · 0053 prestazioni · 0054 report margine · 0055 tariffario orario · **0056 AI draft risposta**). i18n #129, voce-picker #132 e i18n-zod #134 sono chiusure TD, senza ADR.
+- ✅ **Stato deploy**: i container prod (`accountant-api`/`-web`) sono stati **rebuildati da `main` in chiusura sessione** → allineati a **`b18cfae`** (tariffario #127 + i18n #129 + voce-picker #132 + i18n-zod #134 + **AI draft #136**); health `ok`/`db:connected`. **`GROQ_API_KEY` aggiunta a `.env`** (feature AI attiva in prod). Nessuna nuova migration da #136 (feature-flag runtime, nessuno schema-change).
 
 ### Schema dominio accountant — aggiornato
 

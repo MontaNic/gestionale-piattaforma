@@ -740,6 +740,20 @@ Chiude il **TD-i18n-zod**. I form FE con schema **zod a module-scope** avevano i
 
 Prossimo: Onda 4 (superadmin monitoring / impersonation / invito operatore via email).
 
+## [2026-06-29] Bozza AI risposta operatore — Slice A (#136, ADR-0056)
+
+Prima integrazione **LLM** del prodotto. Nel composer di un thread comunicazioni l'operatore genera una **bozza di risposta** (provider **Groq**, `groq-sdk`); la bozza popola la textarea ed è editabile prima dell'invio. Nessuno schema/migration: feature-flag a runtime.
+
+- **Modulo `ai/` trasversale** (`apps/accountant-api/src/ai/`): `GroqService` (prompt sistema+utente, ultimi 5 messaggi, `temperature 0.4`, `max_tokens 400`) + `AiController` `GET /ai/status` (pubblico → `{ aiEnabled }`, mai la key). Riusabile da future feature AI.
+- **Feature-flag su `GROQ_API_KEY`**: assente → `aiEnabled:false`, endpoint **503** (`E_AI_DISABLED`), bottone FE nascosto. Rollout/rollback = presenza della variabile, zero deploy di codice. Errori upstream/vuoti → 503 con `errorCode` stabile (`E_AI_UPSTREAM`/`E_AI_EMPTY`).
+- **BE**: `POST /comunicazioni/:id/suggerisci` sotto `comunicazioni.gestisci` (nessun permesso nuovo → catalogo resta **58**); riusa `getById`, **esclude le note interne** (`lato='interno'`). Nessuna persistenza.
+- **FE**: bottone "Suggerisci risposta" nel `MessaggioComposer` (gated su `aiEnabled`), errore inline; `getAiStatus()` in parallelo al thread (fail-soft). i18n `comunicazioni.ai.*` it/en in parità.
+- **Test**: 10 unit con `groq-sdk` mockato (nessuna chiamata reale in CI). **GATE** statico verde + **CI #136 verde** (Lint·Typecheck·Format·Test + E2E Playwright 14 passed).
+- **Verifica runtime** con `GROQ_API_KEY` reale, ruolo non-superuser `collaboratore`: `/ai/status` true, bozza Groq reale (~1.4s), bottone + click → textarea popolata, degradazione `aiEnabled:false` → niente bottone. Lasciata `COM-0002` (apertaDa=cliente) nel DB dev.
+- **Deploy**: container prod rebuildati da `main` → allineati a `b18cfae`.
+
+Prossimo: Onda 4 (superadmin monitoring / impersonation / invito operatore via email).
+
 ---
 
 ## 📌 Contesto rapido
