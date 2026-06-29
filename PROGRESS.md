@@ -703,6 +703,19 @@ Prossimo: Onda 4 — superadmin monitoring / impersonation / invito operatore vi
 
 ---
 
+## [2026-06-29] i18n superfici operatore — catalogo/mandati/report + timesheet (#129)
+
+Chiude il **TD-i18n-cumulativo**. Esternalizza in **next-intl** le ultime stringhe hardcoded IT delle superfici operatore-studio. **Solo FE**: nessuno schema/migration/permesso/endpoint.
+
+- **4 nuovi namespace** in parità IT↔EN — `catalogo` (riusa `preventivi.um`), `mandati` (lista+dettaglio), `report` (margine), `prestazioni` (timesheet) — **577 chiavi** bilanciate.
+- **5 superfici** cablate: `catalogo/page.tsx`, `mandati/page.tsx`, `mandati/[id]/page.tsx`, `report/margine/page.tsx`, `components/mandati/PrestazioniSection.tsx`. Enum (stato/ricorrenza/UM/Sì-No) via chiave dinamica; rimosse le `Record` di label hardcoded. Valori da DB restano in lingua d'origine.
+- **GATE**: CHECK-FE-2 parità bidirezionale (577), CHECK-FE-3 zero hardcoded, risoluzione di tutte le chiavi referenziate (incl. dinamiche), typecheck/eslint/prettier; CI #129 verde.
+- **Verifica runtime** su dev server come non-superuser (`admin@studio.local` full + `collaboratore@studio.local` ristretto) in IT ed EN, **0 errori console**: catalogo lista+form, mandati lista, dettaglio+timesheet, report table, stringa forbidden tradotta. Per la verifica creato mandato di test `RDL-2026-0002` + 2 prestazioni nel DB dev (lasciati).
+
+Resta aperto il **TD-i18n-zod** (messaggi validazione zod fuori dal contesto React). Prossimo invariato: Onda 4 (superadmin monitoring / impersonation / invito operatore).
+
+---
+
 ## 📌 Contesto rapido
 
 Progetto: piattaforma SaaS gestionale modulare per ristorazione. Vedi `PROJECT_BRIEF.md` per visione completa, architettura, stack, moduli, [BACKLOG].
