@@ -156,6 +156,17 @@ export class ComunicazioniController {
     return { data };
   }
 
+  // Bozza AI di risposta (ADR-0056). Non persiste nulla: ritorna { bozza }.
+  // 503 se la feature è disabilitata (no GROQ_API_KEY) o se il provider fallisce.
+  @Post(':id/suggerisci')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('comunicazioni.gestisci')
+  async suggerisci(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.comunicazioni.suggerisciRisposta(user.tenantId, id);
+    return { data };
+  }
+
   // ── Messaggio in un thread ────────────────────────────────────────────────────
   @Post(':id/messaggi')
   @HttpCode(HttpStatus.CREATED)

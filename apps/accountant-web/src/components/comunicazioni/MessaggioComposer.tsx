@@ -2,9 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Paperclip, Send } from 'lucide-react';
+import { Loader2, Paperclip, Send, Sparkles } from 'lucide-react';
 
 import { Button } from '@gestionale/ui';
+
+import { suggerisciRisposta } from '@/lib/comunicazioni-api';
 
 // =============================================================================
 // MessaggioComposer — invio messaggio in un thread.
@@ -12,23 +14,47 @@ import { Button } from '@gestionale/ui';
 // Toggle "nota interna" → lato='interno' (mai visibile in ottica cliente).
 // Allegato opzionale (≤ 20MB, validato anche dal backend): il file è passato al
 // parent che, dopo aver creato il messaggio, lo carica sul messaggio nuovo.
+// Bozza AI (ADR-0056): se `aiEnabled`, un bottone genera una bozza di risposta
+// e popola la textarea (editabile prima dell'invio). Errore → localError.
 // =============================================================================
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
 interface Props {
   disabled?: boolean;
+  aiEnabled?: boolean;
+  comunicazioneId: string;
   onSend: (input: { testo: string; lato: 'studio' | 'interno'; file?: File }) => Promise<void>;
 }
 
-export function MessaggioComposer({ disabled, onSend }: Props): JSX.Element {
+export function MessaggioComposer({
+  disabled,
+  aiEnabled,
+  comunicazioneId,
+  onSend,
+}: Props): JSX.Element {
   const t = useTranslations('comunicazioni');
   const [testo, setTesto] = useState('');
   const [interno, setInterno] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleSuggest(): Promise<void> {
+    if (suggesting || sending) return;
+    setSuggesting(true);
+    setLocalError(null);
+    try {
+      const { bozza } = await suggerisciRisposta(comunicazioneId);
+      setTesto(bozza);
+    } catch {
+      setLocalError(t('ai.errore'));
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   function pickFile(f: File | null): void {
     if (f && f.size > MAX_BYTES) {
@@ -67,7 +93,7 @@ export function MessaggioComposer({ disabled, onSend }: Props): JSX.Element {
         placeholder={interno ? t('composer.placeholderInterno') : t('composer.placeholder')}
         value={testo}
         onChange={(e) => setTesto(e.target.value)}
-        disabled={disabled || sending}
+        disabled={disabled || sending || suggesting}
       />
       {localError && <p className="text-xs text-destructive">{localError}</p>}
       <div className="flex flex-wrap items-center gap-3">
@@ -93,11 +119,28 @@ export function MessaggioComposer({ disabled, onSend }: Props): JSX.Element {
           />
         </label>
 
+        {aiEnabled && (
+          <Button
+            className="ml-auto"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleSuggest()}
+            disabled={disabled || sending || suggesting}
+          >
+            {suggesting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            {suggesting ? t('ai.caricamento') : t('ai.suggerisci')}
+          </Button>
+        )}
+
         <Button
-          className="ml-auto"
+          className={aiEnabled ? undefined : 'ml-auto'}
           size="sm"
           onClick={() => void handleSend()}
-          disabled={disabled || sending || testo.trim() === ''}
+          disabled={disabled || sending || suggesting || testo.trim() === ''}
         >
           <Send className="h-4 w-4" />
           {interno ? t('composer.inviaNota') : t('composer.invia')}

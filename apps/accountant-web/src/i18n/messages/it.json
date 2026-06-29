@@ -400,6 +400,11 @@
       "invia": "Invia",
       "inviaNota": "Aggiungi nota"
     },
+    "ai": {
+      "suggerisci": "Suggerisci risposta",
+      "caricamento": "Generazione in corso…",
+      "errore": "Errore nella generazione. Riprova."
+    },
     "lato": {
       "studio": "Studio",
       "cliente": "Cliente",
