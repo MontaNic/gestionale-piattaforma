@@ -3006,6 +3006,22 @@ NON proporre, NON includere senza esplicito sblocco:
 
 ---
 
+## [2026-06-29] Insight AI margine via Groq ([ADR-0057](docs/architecture/ADR-0057-ai-insight-margine.md), #139)
+
+**Seconda feature LLM del prodotto** e **primo riuso del modulo `ai/`** (ADR-0056) fuori dalle comunicazioni. Sblocca l'insight differito in ADR-0054 §7: ora che il tariffario (#127) deriva `importoPrestazioni`, un'analisi di redditività su dati significativi è legittima. Read-only puro: nessuno schema/migration/seed/permesso.
+
+- **`complete()` generico in `GroqService`**: il core (client lazy, chiamata, mappatura errori → 503 con `errorCode` stabile `E_AI_DISABLED`/`E_AI_EMPTY`/`E_AI_UPSTREAM`) è estratto in `complete(systemPrompt, userPrompt, { temperature?, maxTokens? })`. `suggerisciRisposta()` (#136) rifattorizzato per delegarvi — comportamento invariato, coperto dai test di regressione. Fondamento riusabile per le prossime feature AI.
+- **`analizzaMargine(rows)`** sopra `complete()` (`temperature 0.3`, `max_tokens 400`): una **sintesi globale** sull'intero set di mandati (pattern/criticità trasversali/suggerimenti), non un insight per riga — una chiamata LLM per richiesta. System prompt: ≤200 parole, italiano, analizza **solo i mandati presenti**, marca le righe scoperte `MANCANTE/PARZIALE` senza caveat fantasma su mandati inesistenti (riscontrato in runtime e corretto). Tipo d'ingresso `MargineRigaInsight` locale a `groq.service.ts` → evita la dipendenza inversa `ai → report`.
+- **Guard deterministico `< 2 mandati`**: `ReportService.margineInsight` short-circuita **prima** di chiamare Groq quando `rows.length < 2` (un'analisi comparativa non ha senso, e su input degenere il modello riempiva la risposta con commenti sull'assenza di altri mandati) → `insight: null` + **`aiGenerated: false`**, `copertura` comunque corretta. Risparmia la chiamata LLM e rimuove il rumore alla radice. Guard in `ReportService` (business-logic), non in `GroqService` (resta wrapper AI puro).
+- **`aiGenerated` flag → i18n FE**: le stringhe del path deterministico ("nessun mandato"/"un solo mandato") sono testo di prodotto e rispettano la parità IT/EN — il BE NON le hardcoda in italiano, ritorna `aiGenerated:false` e il FE rende la stringa localizzata interpolando dai dati già caricati. La prosa AI (`aiGenerated:true`) resta italiano generato dall'LLM (effimero, coerente con ADR-0056).
+- **`POST /report/margine/insight`** (azione che invoca un provider esterno, non lettura cacheabile) in `ReportController`, gated **`report.operativo.visualizza`** — **nessun permesso nuovo** (l'insight aggrega dati già accessibili via `GET /report/margine`; identica motivazione di ADR-0054). `margineInsight(tenantId)` riusa `margine()` per i dati, calcola la **copertura** (`{ totali, conPrestazioni }`) e la ritorna **insieme** all'insight, così il FE mostra un disclaimer indipendente dal testo AI (fatto sui dati, non inferenza del modello).
+- **FE**: bottone "Analizza con AI" su `/report/margine` (gated `aiEnabled` via `GET /ai/status`, caricato best-effort in parallelo ai dati → fail-soft), box insight + **disclaimer copertura** ("N di M mandati con importi"), errore inline (`localError`, no toast). i18n namespace `report` esteso IT↔EN in parità.
+- **Feature-flag** invariato (ADR-0056): key assente → bottone nascosto, 503 solo sul path AI (≥2 mandati); con <2 mandati la risposta è sempre 200.
+
+Riuso permesso `report.operativo.visualizza` (catalogo invariato **58**). CI #139 verde.
+
+---
+
 ## [2026-06-30] F2 Tavoli / Mappa sala — schema + backend + mappa drag-drop ([ADR-0058](docs/architecture/ADR-0058-tavoli-mappa-sala-f2.md))
 
 **Primo dominio nuovo costruito sul core estratto (ADR-0027) dopo F1 Menu** — valida la riusabilità di `packages/*` (api-client, auth, db/RLS, ui, i18n) su un secondo dominio-feature. La voce shell `mappa` era un `<PlaceholderPage>`.
