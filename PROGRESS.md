@@ -728,6 +728,18 @@ Chiude il **TD-voceId-FE** (ADR-0053 sub-DP). `voceId` era già supportato a BE 
 
 Prossimo: Onda 4 (superadmin monitoring / impersonation / invito operatore via email).
 
+## [2026-06-29] i18n messaggi di validazione zod — form operatore + login (#134)
+
+Chiude il **TD-i18n-zod**. I form FE con schema **zod a module-scope** avevano i messaggi di validazione hardcoded IT (fuori dal contesto React → non passavano per `t()`). **Solo FE**: nessuno schema/migration/permesso/endpoint (il BE emette già `errorCode E_*`).
+
+- **Pattern**: schema spostato dentro il componente in `useMemo(() => z.object({...}), [t])` → `t` in scope, messaggi via `t('validation.*')`, identità resolver stabile per locale, tipo da `z.infer<typeof schema>`.
+- **6 superfici**: `AziendaForm`, `ReferenteForm`, `ScadenzaForm` (con `superRefine`), `CategoriaForm`, `PreventivoForm` (testata), `login`. Le altre superfici zod (`InvitiSection`, `forgot/reset-password`, `accept-invite`, `platform/tenants`) usavano già `t()` → non toccate.
+- **i18n**: nuovi sotto-namespace `validation` per area con chiavi ICU `{max}` per le lunghezze → **605 chiavi** in parità it/en.
+- **GATE**: typecheck/eslint/prettier + parità chiavi, CI #134 verde (Lint·Typecheck·Format·Test + E2E Playwright). **Verifica runtime** con login `admin@studio.local`: messaggi tradotti IT (default+cookie) ed EN su login + form interni (Azienda incl. chiave parametrica `emailInvalid` con `{label}`, Scadenza), **0 errori**.
+- **Deploy**: container prod rebuildati da `main` → allineati a `735743f`.
+
+Prossimo: Onda 4 (superadmin monitoring / impersonation / invito operatore via email).
+
 ---
 
 ## 📌 Contesto rapido
