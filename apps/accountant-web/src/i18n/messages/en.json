@@ -622,5 +622,146 @@
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
     }
+  },
+  "catalogo": {
+    "title": "Service catalog",
+    "subtitle": "Your studio's service price list. Platform items are shared and read-only; you can add and manage your own custom items.",
+    "forbidden": "You don't have permission to view the catalog.",
+    "loading": "Loading…",
+    "platform": "Platform",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "servizi": {
+      "title": "Services",
+      "new": "New service",
+      "allCategories": "All categories",
+      "empty": "No services.",
+      "col": {
+        "codice": "Code",
+        "nome": "Name",
+        "categoria": "Category",
+        "um": "Unit",
+        "prezzo": "Price",
+        "ricorrenza": "Recurrence"
+      }
+    },
+    "categorie": {
+      "title": "Categories",
+      "new": "New category",
+      "nome": "Name",
+      "colore": "Color"
+    },
+    "fields": {
+      "codice": "Code",
+      "nome": "Name",
+      "categoria": "Category",
+      "categoriaNone": "None",
+      "unitaMisura": "Unit of measure",
+      "prezzoBase": "Base price",
+      "ivaAliquota": "VAT %",
+      "ricorrenza": "Recurrence",
+      "attivo": "Active"
+    },
+    "ricorrenza": {
+      "una_tantum": "One-off",
+      "mensile": "Monthly",
+      "annuale": "Annual"
+    }
+  },
+  "mandati": {
+    "title": "Engagements",
+    "subtitle": "Engagement letters generated from accepted quotes.",
+    "forbidden": "You don't have permission to view engagements.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "empty": "No engagements yet. Engagements are created from accepted quotes.",
+    "allStates": "All statuses",
+    "notFound": "Engagement not found.",
+    "backToList": "Back to engagements",
+    "save": "Save",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "col": {
+      "codice": "Code",
+      "azienda": "Client",
+      "stato": "Status",
+      "importo": "Amount",
+      "inizio": "Start"
+    },
+    "stato": {
+      "in_corso": "In progress",
+      "sospeso": "Suspended",
+      "concluso": "Completed",
+      "annullato": "Cancelled"
+    },
+    "detail": {
+      "importoConcordato": "Agreed amount:",
+      "snapshot": "snapshot from the quote (read-only)"
+    },
+    "fields": {
+      "stato": "Status",
+      "inizio": "Start",
+      "finePrevista": "Expected end",
+      "fineEffettiva": "Actual end",
+      "note": "Notes"
+    }
+  },
+  "report": {
+    "title": "Margin report",
+    "subtitle": "Agreed revenue vs estimated cost (sum of service amounts). The margin is available only when services have an amount; otherwise it is shown as «—».",
+    "forbidden": "You don't have permission to view reports.",
+    "loading": "Loading…",
+    "empty": "No engagements to analyze.",
+    "col": {
+      "azienda": "Client",
+      "mandato": "Engagement",
+      "stato": "Status",
+      "concordato": "Agreed",
+      "oreTotali": "Total hours",
+      "importoPrestazioni": "Services amount",
+      "margine": "Margin"
+    },
+    "stato": {
+      "in_corso": "In progress",
+      "sospeso": "Suspended",
+      "concluso": "Completed",
+      "annullato": "Cancelled"
+    }
+  },
+  "prestazioni": {
+    "title": "Timesheet",
+    "subtitle": "Hours logged on this engagement.",
+    "add": "Add",
+    "readOnlyHint": "Engagement not in progress: the timesheet is read-only.",
+    "loading": "Loading…",
+    "empty": "No entries logged.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "edit": "Edit",
+    "delete": "Delete",
+    "totals": "Totals",
+    "yes": "Yes",
+    "no": "No",
+    "fields": {
+      "data": "Date",
+      "ore": "Hours",
+      "descrizione": "Description",
+      "importo": "Amount (optional)",
+      "importoPlaceholder": "Calculated from the rate card if empty",
+      "importoHint": "Leave empty to derive it automatically (hours × hourly rate).",
+      "fatturabile": "Billable",
+      "note": "Notes"
+    },
+    "col": {
+      "data": "Date",
+      "descrizione": "Description",
+      "ore": "Hours",
+      "fatturabile": "Bill.",
+      "importo": "Amount"
+    }
   }
 }

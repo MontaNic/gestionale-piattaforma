@@ -622,5 +622,146 @@
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
     }
+  },
+  "catalogo": {
+    "title": "Catalogo servizi",
+    "subtitle": "Listino servizi dello studio. Le voci di piattaforma sono condivise e in sola lettura; puoi aggiungere e gestire le tue voci custom.",
+    "forbidden": "Non hai i permessi per visualizzare il catalogo.",
+    "loading": "Caricamento…",
+    "platform": "Piattaforma",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "create": "Crea",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "servizi": {
+      "title": "Servizi",
+      "new": "Nuovo servizio",
+      "allCategories": "Tutte le categorie",
+      "empty": "Nessun servizio.",
+      "col": {
+        "codice": "Codice",
+        "nome": "Nome",
+        "categoria": "Categoria",
+        "um": "UM",
+        "prezzo": "Prezzo",
+        "ricorrenza": "Ricorrenza"
+      }
+    },
+    "categorie": {
+      "title": "Categorie",
+      "new": "Nuova categoria",
+      "nome": "Nome",
+      "colore": "Colore"
+    },
+    "fields": {
+      "codice": "Codice",
+      "nome": "Nome",
+      "categoria": "Categoria",
+      "categoriaNone": "Nessuna",
+      "unitaMisura": "Unità di misura",
+      "prezzoBase": "Prezzo base",
+      "ivaAliquota": "IVA %",
+      "ricorrenza": "Ricorrenza",
+      "attivo": "Attivo"
+    },
+    "ricorrenza": {
+      "una_tantum": "Una tantum",
+      "mensile": "Mensile",
+      "annuale": "Annuale"
+    }
+  },
+  "mandati": {
+    "title": "Mandati / Incarichi",
+    "subtitle": "Lettere d'incarico generate dai preventivi accettati.",
+    "forbidden": "Non hai i permessi per visualizzare i mandati.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "empty": "Nessun mandato. I mandati nascono dai preventivi accettati.",
+    "allStates": "Tutti gli stati",
+    "notFound": "Mandato non trovato.",
+    "backToList": "Torna ai mandati",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "delete": "Elimina",
+    "col": {
+      "codice": "Codice",
+      "azienda": "Azienda",
+      "stato": "Stato",
+      "importo": "Importo",
+      "inizio": "Inizio"
+    },
+    "stato": {
+      "in_corso": "In corso",
+      "sospeso": "Sospeso",
+      "concluso": "Concluso",
+      "annullato": "Annullato"
+    },
+    "detail": {
+      "importoConcordato": "Importo concordato:",
+      "snapshot": "snapshot dal preventivo (non modificabile)"
+    },
+    "fields": {
+      "stato": "Stato",
+      "inizio": "Inizio",
+      "finePrevista": "Fine prevista",
+      "fineEffettiva": "Fine effettiva",
+      "note": "Note"
+    }
+  },
+  "report": {
+    "title": "Report margine",
+    "subtitle": "Ricavo concordato vs costo stimato (somma importi prestazioni). Il margine è disponibile solo quando le prestazioni hanno un importo; senza, è mostrato come «—».",
+    "forbidden": "Non hai i permessi per visualizzare i report.",
+    "loading": "Caricamento…",
+    "empty": "Nessun mandato da analizzare.",
+    "col": {
+      "azienda": "Azienda",
+      "mandato": "Mandato",
+      "stato": "Stato",
+      "concordato": "Concordato",
+      "oreTotali": "Ore totali",
+      "importoPrestazioni": "Importo prestazioni",
+      "margine": "Margine"
+    },
+    "stato": {
+      "in_corso": "In corso",
+      "sospeso": "Sospeso",
+      "concluso": "Concluso",
+      "annullato": "Annullato"
+    }
+  },
+  "prestazioni": {
+    "title": "Timesheet",
+    "subtitle": "Ore registrate su questo mandato.",
+    "add": "Aggiungi",
+    "readOnlyHint": "Mandato non in corso: il timesheet è in sola lettura.",
+    "loading": "Caricamento…",
+    "empty": "Nessuna prestazione registrata.",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "totals": "Totali",
+    "yes": "Sì",
+    "no": "No",
+    "fields": {
+      "data": "Data",
+      "ore": "Ore",
+      "descrizione": "Descrizione",
+      "importo": "Importo (opzionale)",
+      "importoPlaceholder": "Calcolato dal tariffario se vuoto",
+      "importoHint": "Lascia vuoto per derivarlo automaticamente (ore × tariffa oraria).",
+      "fatturabile": "Fatturabile",
+      "note": "Note"
+    },
+    "col": {
+      "data": "Data",
+      "descrizione": "Descrizione",
+      "ore": "Ore",
+      "fatturabile": "Fatt.",
+      "importo": "Importo"
+    }
   }
 }

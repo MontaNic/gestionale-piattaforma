@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { Alert, AlertDescription, Button, Input } from '@gestionale/ui';
@@ -22,7 +23,7 @@ import type { StatoMandato } from '@/lib/mandati-api';
 // Lista ore registrate + form aggiungi/modifica + totali (ore, importo). Il
 // pulsante "Aggiungi" compare solo se `prestazioni.gestisci` E mandato in_corso
 // (mirror del guard BE). Gating sezione: `prestazioni.visualizza`. Classi
-// dark-mode-safe (design tokens, ADR-0052). Stringhe IT hardcoded (TD-i18n).
+// dark-mode-safe (design tokens, ADR-0052). Stringhe i18n (namespace `prestazioni`).
 // =============================================================================
 
 interface PrestazioneForm {
@@ -47,6 +48,7 @@ export function PrestazioniSection({
   mandatoId,
   mandatoStato,
 }: PrestazioniSectionProps): JSX.Element | null {
+  const t = useTranslations('prestazioni');
   const { permissions } = useAuth();
   const canView = permissions.includes('prestazioni.visualizza');
   const canManage = permissions.includes('prestazioni.gestisci');
@@ -148,22 +150,18 @@ export function PrestazioniSection({
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <h2 className="text-base font-semibold">Timesheet</h2>
-          <p className="text-sm text-muted-foreground">Ore registrate su questo mandato.</p>
+          <h2 className="text-base font-semibold">{t('title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         {canManage && isInCorso && (
           <Button type="button" size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" />
-            Aggiungi
+            {t('add')}
           </Button>
         )}
       </div>
 
-      {!isInCorso && (
-        <p className="text-xs text-muted-foreground">
-          Mandato non in corso: il timesheet è in sola lettura.
-        </p>
-      )}
+      {!isInCorso && <p className="text-xs text-muted-foreground">{t('readOnlyHint')}</p>}
 
       {loadError && (
         <Alert variant="destructive">
@@ -180,7 +178,7 @@ export function PrestazioniSection({
         <div className="space-y-3 rounded-md border bg-muted/30 p-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-xs text-muted-foreground">
-              <span>Data</span>
+              <span>{t('fields.data')}</span>
               <Input
                 type="date"
                 value={form.data}
@@ -188,7 +186,7 @@ export function PrestazioniSection({
               />
             </label>
             <label className="space-y-1 text-xs text-muted-foreground">
-              <span>Ore</span>
+              <span>{t('fields.ore')}</span>
               <Input
                 inputMode="decimal"
                 value={form.ore}
@@ -196,22 +194,22 @@ export function PrestazioniSection({
               />
             </label>
             <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">
-              <span>Descrizione</span>
+              <span>{t('fields.descrizione')}</span>
               <Input
                 value={form.descrizione}
                 onChange={(e) => setForm((f) => ({ ...f, descrizione: e.target.value }))}
               />
             </label>
             <label className="space-y-1 text-xs text-muted-foreground">
-              <span>Importo (opzionale)</span>
+              <span>{t('fields.importo')}</span>
               <Input
                 inputMode="decimal"
-                placeholder="Calcolato dal tariffario se vuoto"
+                placeholder={t('fields.importoPlaceholder')}
                 value={form.importo}
                 onChange={(e) => setForm((f) => ({ ...f, importo: e.target.value }))}
               />
               <span className="text-[11px] text-muted-foreground/80">
-                Lascia vuoto per derivarlo automaticamente (ore × tariffa oraria).
+                {t('fields.importoHint')}
               </span>
             </label>
             <label className="flex items-center gap-2 self-end text-sm">
@@ -220,10 +218,10 @@ export function PrestazioniSection({
                 checked={form.fatturabile}
                 onChange={(e) => setForm((f) => ({ ...f, fatturabile: e.target.checked }))}
               />
-              <span>Fatturabile</span>
+              <span>{t('fields.fatturabile')}</span>
             </label>
             <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">
-              <span>Note</span>
+              <span>{t('fields.note')}</span>
               <Input
                 value={form.note}
                 onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
@@ -232,31 +230,31 @@ export function PrestazioniSection({
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-              Annulla
+              {t('cancel')}
             </Button>
             <Button type="button" size="sm" onClick={() => void submit()} disabled={saving}>
-              {saving ? 'Salvataggio…' : editingId ? 'Salva' : 'Aggiungi'}
+              {saving ? t('saving') : editingId ? t('save') : t('add')}
             </Button>
           </div>
         </div>
       )}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Caricamento…</p>
+        <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : prestazioni.length === 0 ? (
         <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-          Nessuna prestazione registrata.
+          {t('empty')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Data</th>
-                <th className="px-3 py-2">Descrizione</th>
-                <th className="px-3 py-2 text-right">Ore</th>
-                <th className="px-3 py-2">Fatt.</th>
-                <th className="px-3 py-2 text-right">Importo</th>
+                <th className="px-3 py-2">{t('col.data')}</th>
+                <th className="px-3 py-2">{t('col.descrizione')}</th>
+                <th className="px-3 py-2 text-right">{t('col.ore')}</th>
+                <th className="px-3 py-2">{t('col.fatturabile')}</th>
+                <th className="px-3 py-2 text-right">{t('col.importo')}</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -266,7 +264,9 @@ export function PrestazioniSection({
                   <td className="px-3 py-2 text-muted-foreground">{p.data}</td>
                   <td className="px-3 py-2 font-medium">{p.descrizione}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{p.ore.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{p.fatturabile ? 'Sì' : 'No'}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {p.fatturabile ? t('yes') : t('no')}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {p.importo === null ? '—' : `€ ${p.importo.toFixed(2)}`}
                   </td>
@@ -277,7 +277,7 @@ export function PrestazioniSection({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          aria-label="Modifica"
+                          aria-label={t('edit')}
                           onClick={() => openEdit(p)}
                         >
                           <Pencil className="h-4 w-4" />
@@ -286,7 +286,7 @@ export function PrestazioniSection({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          aria-label="Elimina"
+                          aria-label={t('delete')}
                           onClick={() => void remove(p)}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -300,7 +300,7 @@ export function PrestazioniSection({
             <tfoot className="border-t bg-muted/30 font-medium">
               <tr>
                 <td className="px-3 py-2" colSpan={2}>
-                  Totali
+                  {t('totals')}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{totali.ore.toFixed(2)}</td>
                 <td className="px-3 py-2" />

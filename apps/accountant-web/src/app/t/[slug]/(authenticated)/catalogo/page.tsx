@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { BookOpen, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { Alert, AlertDescription, Button, Input } from '@gestionale/ui';
@@ -28,15 +29,11 @@ import {
 // Due sezioni: Servizi (primaria) + Categorie. Righe piattaforma (tenantId null)
 // sono read-only (badge "Piattaforma", nessuna azione); le custom hanno CRUD
 // completo. Gating: servizi.visualizza per vedere, servizi.gestisci per gestire.
-// Stringhe IT hardcoded (superficie operatore, scope ADR-0050). Decimali già
-// normalizzati a number dall'api-client.
+// Stringhe i18n via next-intl (namespace `catalogo`; unità di misura riusano
+// `preventivi.um`). Decimali già normalizzati a number dall'api-client.
 // =============================================================================
 
-const RICORRENZA_OPTS: ReadonlyArray<{ value: TipoRicorrenza; label: string }> = [
-  { value: 'una_tantum', label: 'Una tantum' },
-  { value: 'mensile', label: 'Mensile' },
-  { value: 'annuale', label: 'Annuale' },
-];
+const RICORRENZA_VALUES: ReadonlyArray<TipoRicorrenza> = ['una_tantum', 'mensile', 'annuale'];
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -70,6 +67,8 @@ function emptyServizioForm(): ServizioForm {
 }
 
 export default function CatalogoPage(): JSX.Element {
+  const t = useTranslations('catalogo');
+  const tum = useTranslations('preventivi');
   const { permissions } = useAuth();
   const canView = permissions.includes('servizi.visualizza');
   const canManage = permissions.includes('servizi.gestisci');
@@ -227,7 +226,7 @@ export default function CatalogoPage(): JSX.Element {
     return (
       <div className="mx-auto w-full max-w-5xl">
         <Alert>
-          <AlertDescription>Non hai i permessi per visualizzare il catalogo.</AlertDescription>
+          <AlertDescription>{t('forbidden')}</AlertDescription>
         </Alert>
       </div>
     );
@@ -238,12 +237,9 @@ export default function CatalogoPage(): JSX.Element {
       <header className="space-y-1">
         <h1 className="flex items-center gap-2 text-2xl font-semibold">
           <BookOpen className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-          Catalogo servizi
+          {t('title')}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Listino servizi dello studio. Le voci di piattaforma sono condivise e in sola lettura;
-          puoi aggiungere e gestire le tue voci custom.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       {loadError && (
@@ -258,20 +254,20 @@ export default function CatalogoPage(): JSX.Element {
       )}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Caricamento…</p>
+        <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : (
         <>
           {/* ── Servizi ───────────────────────────────────────────────────── */}
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">Servizi</h2>
+              <h2 className="text-base font-semibold">{t('servizi.title')}</h2>
               <div className="flex items-center gap-2">
                 <select
                   className={SELECT_CLASS + ' max-w-[14rem]'}
                   value={catFilter}
                   onChange={(e) => setCatFilter(e.target.value)}
                 >
-                  <option value="">Tutte le categorie</option>
+                  <option value="">{t('servizi.allCategories')}</option>
                   {categorie.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nome}
@@ -281,7 +277,7 @@ export default function CatalogoPage(): JSX.Element {
                 {canManage && (
                   <Button type="button" size="sm" onClick={openCreateServizio}>
                     <Plus className="h-4 w-4" />
-                    Nuovo servizio
+                    {t('servizi.new')}
                   </Button>
                 )}
               </div>
@@ -291,21 +287,21 @@ export default function CatalogoPage(): JSX.Element {
               <div className="space-y-3 rounded-md border bg-muted/30 p-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>Codice</span>
+                    <span>{t('fields.codice')}</span>
                     <Input
                       value={servizioForm.codice}
                       onChange={(e) => setServizioForm((f) => ({ ...f, codice: e.target.value }))}
                     />
                   </label>
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>Nome</span>
+                    <span>{t('fields.nome')}</span>
                     <Input
                       value={servizioForm.nome}
                       onChange={(e) => setServizioForm((f) => ({ ...f, nome: e.target.value }))}
                     />
                   </label>
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>Categoria</span>
+                    <span>{t('fields.categoria')}</span>
                     <select
                       className={SELECT_CLASS}
                       value={servizioForm.categoriaId}
@@ -313,7 +309,7 @@ export default function CatalogoPage(): JSX.Element {
                         setServizioForm((f) => ({ ...f, categoriaId: e.target.value }))
                       }
                     >
-                      <option value="">Nessuna</option>
+                      <option value="">{t('fields.categoriaNone')}</option>
                       {categorie.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.nome}
@@ -322,7 +318,7 @@ export default function CatalogoPage(): JSX.Element {
                     </select>
                   </label>
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>Unità di misura</span>
+                    <span>{t('fields.unitaMisura')}</span>
                     <select
                       className={SELECT_CLASS}
                       value={servizioForm.unitaMisura}
@@ -335,13 +331,13 @@ export default function CatalogoPage(): JSX.Element {
                     >
                       {UNITA_MISURA.map((u) => (
                         <option key={u} value={u}>
-                          {u}
+                          {tum(`um.${u}`)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>Prezzo base</span>
+                    <span>{t('fields.prezzoBase')}</span>
                     <Input
                       inputMode="decimal"
                       value={servizioForm.prezzoBase}
@@ -351,7 +347,7 @@ export default function CatalogoPage(): JSX.Element {
                     />
                   </label>
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>IVA %</span>
+                    <span>{t('fields.ivaAliquota')}</span>
                     <Input
                       inputMode="decimal"
                       value={servizioForm.ivaAliquota}
@@ -361,7 +357,7 @@ export default function CatalogoPage(): JSX.Element {
                     />
                   </label>
                   <label className="space-y-1 text-xs text-muted-foreground">
-                    <span>Ricorrenza</span>
+                    <span>{t('fields.ricorrenza')}</span>
                     <select
                       className={SELECT_CLASS}
                       value={servizioForm.tipoRicorrenza}
@@ -372,9 +368,9 @@ export default function CatalogoPage(): JSX.Element {
                         }))
                       }
                     >
-                      {RICORRENZA_OPTS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
+                      {RICORRENZA_VALUES.map((v) => (
+                        <option key={v} value={v}>
+                          {t(`ricorrenza.${v}`)}
                         </option>
                       ))}
                     </select>
@@ -385,7 +381,7 @@ export default function CatalogoPage(): JSX.Element {
                       checked={servizioForm.attivo}
                       onChange={(e) => setServizioForm((f) => ({ ...f, attivo: e.target.checked }))}
                     />
-                    <span>Attivo</span>
+                    <span>{t('fields.attivo')}</span>
                   </label>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -395,10 +391,10 @@ export default function CatalogoPage(): JSX.Element {
                     size="sm"
                     onClick={() => setServizioOpen(false)}
                   >
-                    Annulla
+                    {t('cancel')}
                   </Button>
                   <Button type="button" size="sm" onClick={() => void submitServizio()}>
-                    {editingServizioId ? 'Salva' : 'Crea'}
+                    {editingServizioId ? t('save') : t('create')}
                   </Button>
                 </div>
               </div>
@@ -406,19 +402,19 @@ export default function CatalogoPage(): JSX.Element {
 
             {serviziFiltrati.length === 0 ? (
               <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-                Nessun servizio.
+                {t('servizi.empty')}
               </p>
             ) : (
               <div className="overflow-x-auto rounded-md border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-2">Codice</th>
-                      <th className="px-3 py-2">Nome</th>
-                      <th className="px-3 py-2">Categoria</th>
-                      <th className="px-3 py-2">UM</th>
-                      <th className="px-3 py-2 text-right">Prezzo</th>
-                      <th className="px-3 py-2">Ricorrenza</th>
+                      <th className="px-3 py-2">{t('servizi.col.codice')}</th>
+                      <th className="px-3 py-2">{t('servizi.col.nome')}</th>
+                      <th className="px-3 py-2">{t('servizi.col.categoria')}</th>
+                      <th className="px-3 py-2">{t('servizi.col.um')}</th>
+                      <th className="px-3 py-2 text-right">{t('servizi.col.prezzo')}</th>
+                      <th className="px-3 py-2">{t('servizi.col.ricorrenza')}</th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>
@@ -432,17 +428,19 @@ export default function CatalogoPage(): JSX.Element {
                             {s.nome}
                             {isPlatform && (
                               <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                                Piattaforma
+                                {t('platform')}
                               </span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
                             {categoriaNome(s.categoriaId)}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{s.unitaMisura}</td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {tum(`um.${s.unitaMisura}`)}
+                          </td>
                           <td className="px-3 py-2 text-right">{eur(s.prezzoBase)}</td>
                           <td className="px-3 py-2 text-muted-foreground">
-                            {RICORRENZA_OPTS.find((o) => o.value === s.tipoRicorrenza)?.label}
+                            {t(`ricorrenza.${s.tipoRicorrenza}`)}
                           </td>
                           <td className="px-3 py-2 text-right">
                             {canManage && !isPlatform && (
@@ -451,7 +449,7 @@ export default function CatalogoPage(): JSX.Element {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  aria-label="Modifica"
+                                  aria-label={t('edit')}
                                   onClick={() => openEditServizio(s)}
                                 >
                                   <Pencil className="h-4 w-4" />
@@ -460,7 +458,7 @@ export default function CatalogoPage(): JSX.Element {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  aria-label="Elimina"
+                                  aria-label={t('delete')}
                                   onClick={() => void removeServizio(s)}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
@@ -480,11 +478,11 @@ export default function CatalogoPage(): JSX.Element {
           {/* ── Categorie ─────────────────────────────────────────────────── */}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Categorie</h2>
+              <h2 className="text-base font-semibold">{t('categorie.title')}</h2>
               {canManage && (
                 <Button type="button" variant="outline" size="sm" onClick={openCreateCat}>
                   <Plus className="h-4 w-4" />
-                  Nuova categoria
+                  {t('categorie.new')}
                 </Button>
               )}
             </div>
@@ -492,11 +490,11 @@ export default function CatalogoPage(): JSX.Element {
             {catOpen && canManage && (
               <div className="flex flex-wrap items-end gap-3 rounded-md border bg-muted/30 p-4">
                 <label className="space-y-1 text-xs text-muted-foreground">
-                  <span>Nome</span>
+                  <span>{t('categorie.nome')}</span>
                   <Input value={catNome} onChange={(e) => setCatNome(e.target.value)} />
                 </label>
                 <label className="space-y-1 text-xs text-muted-foreground">
-                  <span>Colore</span>
+                  <span>{t('categorie.colore')}</span>
                   <input
                     type="color"
                     value={catColore}
@@ -506,10 +504,10 @@ export default function CatalogoPage(): JSX.Element {
                 </label>
                 <div className="ml-auto flex gap-2">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setCatOpen(false)}>
-                    Annulla
+                    {t('cancel')}
                   </Button>
                   <Button type="button" size="sm" onClick={() => void submitCat()}>
-                    {editingCatId ? 'Salva' : 'Crea'}
+                    {editingCatId ? t('save') : t('create')}
                   </Button>
                 </div>
               </div>
@@ -530,7 +528,7 @@ export default function CatalogoPage(): JSX.Element {
                         {c.nome}
                         {isPlatform && (
                           <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                            Piattaforma
+                            {t('platform')}
                           </span>
                         )}
                       </span>
@@ -540,7 +538,7 @@ export default function CatalogoPage(): JSX.Element {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            aria-label="Modifica"
+                            aria-label={t('edit')}
                             onClick={() => openEditCat(c)}
                           >
                             <Pencil className="h-4 w-4" />
@@ -549,7 +547,7 @@ export default function CatalogoPage(): JSX.Element {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            aria-label="Elimina"
+                            aria-label={t('delete')}
                             onClick={() => void removeCat(c)}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
