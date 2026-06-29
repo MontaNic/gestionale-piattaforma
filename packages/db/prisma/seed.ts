@@ -264,6 +264,10 @@ const PERMISSIONS: PermissionSeed[] = [
   },
   { code: 'cassa.visualizza', description: 'Visualizzazione movimenti cassa', category: 'cassa' },
 
+  // tavoli.* (2) — F2 Mappa sala (ADR-0058)
+  { code: 'tavoli.visualizza', description: 'Visualizzazione mappa tavoli', category: 'tavoli' },
+  { code: 'tavoli.gestisci', description: 'Gestione tavoli e mappa sala', category: 'tavoli' },
+
   // magazzino.* (2) — [PRE F2]
   {
     code: 'magazzino.articolo.gestisci',
@@ -375,6 +379,8 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'menu.piatto.modifica',
       'menu.prezzo.modifica',
       'menu.visualizza',
+      'tavoli.visualizza',
+      'tavoli.gestisci',
       'preventivi.visualizza',
       'preventivi.gestisci',
       'comande.crea',
@@ -406,13 +412,20 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'cassa.storno.esegui',
       'cassa.chiusura.giornaliera',
       'cassa.visualizza',
+      'tavoli.visualizza',
       'report.operativo.visualizza',
     ],
   },
   {
     name: 'Cameriere',
     description: 'Cameriere smartphone: comande proprie + mappa tavoli. No cassa, no report.',
-    permissionCodes: ['menu.visualizza', 'comande.crea', 'comande.modifica', 'comande.visualizza'],
+    permissionCodes: [
+      'menu.visualizza',
+      'tavoli.visualizza',
+      'comande.crea',
+      'comande.modifica',
+      'comande.visualizza',
+    ],
   },
   {
     name: 'Cucina/Bar',
