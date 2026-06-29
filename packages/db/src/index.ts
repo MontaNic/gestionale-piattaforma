@@ -143,6 +143,7 @@ export type {
   ArticlePrice,
   Recipe,
   PricingRule,
+  Tavolo,
   Azienda,
   Referente,
   Preventivo,

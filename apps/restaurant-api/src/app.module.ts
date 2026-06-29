@@ -28,6 +28,7 @@ import { MeModule } from './me/me.module';
 import { MenuCategoriesModule } from './menu-categories/menu-categories.module';
 import { MenusModule } from './menus/menus.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
+import { TablesModule } from './tables/tables.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { PriceListsModule } from './price-lists/price-lists.module';
     MenuCategoriesModule,
     ArticlesModule,
     PriceListsModule,
+    TablesModule,
   ],
   controllers: [AppController],
   providers: [

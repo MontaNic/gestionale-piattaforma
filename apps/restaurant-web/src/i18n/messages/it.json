@@ -171,5 +171,39 @@
       "asporto": "Asporto",
       "delivery": "Delivery"
     }
+  },
+  "tavoli": {
+    "title": "Mappa tavoli",
+    "subtitle": "Disponi i tavoli della sala trascinandoli sulla mappa.",
+    "newTable": "Nuovo tavolo",
+    "editTable": "Modifica tavolo",
+    "empty": "Nessun tavolo presente. Creane uno per iniziare.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "seats": "{count, plural, one {# coperto} other {# coperti}}",
+    "listTitle": "Elenco tavoli",
+    "listAriaLabel": "Elenco tavoli con azioni di modifica ed eliminazione",
+    "editAria": "Modifica tavolo {numero}",
+    "deleteAria": "Elimina tavolo {numero}",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "create": "Crea",
+    "creating": "Creazione…",
+    "cancel": "Annulla",
+    "fields": {
+      "numero": "Numero / etichetta",
+      "capienza": "Coperti"
+    },
+    "validation": {
+      "numeroRequired": "Il numero del tavolo è obbligatorio.",
+      "numeroMaxLength": "Il numero non può superare {max} caratteri.",
+      "capienzaInvalid": "I coperti devono essere un numero intero maggiore o uguale a 1."
+    },
+    "confirm": {
+      "title": "Eliminare il tavolo?",
+      "body": "Il tavolo «{numero}» sarà rimosso dalla mappa.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
+    }
   }
 }

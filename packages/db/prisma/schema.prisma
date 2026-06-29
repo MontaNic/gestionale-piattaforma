@@ -67,6 +67,7 @@ model Tenant {
   articlePrices        ArticlePrice[]
   recipes              Recipe[]
   pricingRules         PricingRule[]
+  tavoli               Tavolo[]
   aziende              Azienda[]
   referenti            Referente[]
   preventivi           Preventivo[]
@@ -692,6 +693,36 @@ model PricingRule {
 
   @@index([tenantId])
   @@map("pricing_rules")
+}
+
+// =============================================================================
+// F2 Tavoli / Mappa sala (ADR-0058)
+// =============================================================================
+// Primo dominio nuovo costruito sul core post-estrazione (valida il core su un
+// secondo verticale). Solo `Tavolo` + coordinate posX/posY per la mappa sala
+// drag-drop (unico pattern FE nuovo: persistenza coordinate). `Sala`/`Zona` e lo
+// stato tavolo (libero/occupato/riservato) deferiti — TD-sala-forward /
+// TD-tavolo-stato-forward: nessun consumer reale ora, lo stato ha senso solo con
+// un ordine attivo (comande non esistono ancora). `deletedAt` copre "fuori
+// servizio". Unicità `numero` per-tenant soft-delete-aware `(tenant_id, numero)
+// WHERE deleted_at IS NULL` via partial unique index raw (Prisma 6 non lo esprime
+// nel DSL → no @@unique). RLS FORCE + policy `tavoli_tenant_isolation` nella migration.
+model Tavolo {
+  id        String    @id
+  tenantId  String    @map("tenant_id")
+  numero    String // etichetta/numero tavolo (es. "12", "Terrazza 3")
+  capienza  Int // coperti
+  posX      Float     @default(0) @map("pos_x") // nuovo tavolo nasce all'origine, poi trascinabile
+  posY      Float     @default(0) @map("pos_y")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tavoli")
 }
 
 // =============================================================================

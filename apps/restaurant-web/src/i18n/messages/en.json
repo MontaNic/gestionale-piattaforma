@@ -171,5 +171,39 @@
       "asporto": "Takeaway",
       "delivery": "Delivery"
     }
+  },
+  "tavoli": {
+    "title": "Table map",
+    "subtitle": "Arrange your dining room tables by dragging them on the map.",
+    "newTable": "New table",
+    "editTable": "Edit table",
+    "empty": "No tables yet. Create one to get started.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "seats": "{count, plural, one {# seat} other {# seats}}",
+    "listTitle": "Table list",
+    "listAriaLabel": "Table list with edit and delete actions",
+    "editAria": "Edit table {numero}",
+    "deleteAria": "Delete table {numero}",
+    "save": "Save",
+    "saving": "Saving…",
+    "create": "Create",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "fields": {
+      "numero": "Number / label",
+      "capienza": "Seats"
+    },
+    "validation": {
+      "numeroRequired": "The table number is required.",
+      "numeroMaxLength": "The number cannot exceed {max} characters.",
+      "capienzaInvalid": "Seats must be a whole number greater than or equal to 1."
+    },
+    "confirm": {
+      "title": "Delete this table?",
+      "body": "Table “{numero}” will be removed from the map.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
+    }
   }
 }

@@ -3006,6 +3006,26 @@ NON proporre, NON includere senza esplicito sblocco:
 
 ---
 
+## [2026-06-30] F2 Tavoli / Mappa sala — schema + backend + mappa drag-drop ([ADR-0058](docs/architecture/ADR-0058-tavoli-mappa-sala-f2.md))
+
+**Primo dominio nuovo costruito sul core estratto (ADR-0027) dopo F1 Menu** — valida la riusabilità di `packages/*` (api-client, auth, db/RLS, ui, i18n) su un secondo dominio-feature. La voce shell `mappa` era un `<PlaceholderPage>`.
+
+**Consegnato:**
+
+- **Schema** — modello `Tavolo` (`numero`, `capienza`, `posX`/`posY` Float `@default(0)`, soft-delete) sotto il confine DOMINIO. `Tenant.tavoli` back-relation. Re-export tipo `Tavolo` in `packages/db`.
+- **Migration** `20260630120000_add_tavoli_models_f2_schema` — CREATE TABLE + index `tenant_id` + partial-unique soft-delete-aware `(tenant_id, numero) WHERE deleted_at IS NULL` (fuso in creazione, greenfield) + FK `ON DELETE CASCADE` + RLS `ENABLE`/`FORCE` + policy `tavoli_tenant_isolation` (USING-only, branch super-admin, pattern menu 1:1). Applicata su DB pulito via Testcontainers (CHECK-DB-1 ✅).
+- **Backend** — modulo `tables/` (controller + service + DTO + unit spec), REST `/tables` CRUD gated: GET → `tavoli.visualizza`, POST/PATCH/DELETE → `tavoli.gestisci`. Soft-delete via `update deletedAt` sul tx. `PATCH` include `posX`/`posY` (drag-drop persiste via stesso endpoint, no position dedicato — YAGNI).
+- **Seed** — +2 permessi `tavoli.visualizza` / `tavoli.gestisci`. Baseline array `PERMISSIONS` **58 → 60**. Assegnazione **description-driven**: `gestisci` → Direzione; `visualizza` → Direzione, Cassiere, Cameriere (description citano i tavoli); **Cucina/Bar esclusa** («Nessuna altra azione»); Super Admin + Admin sede automatici via `ALL_PERMISSION_CODES`.
+- **FE** — `mappa/page.tsx`: mappa sala drag-drop (token assoluti a `posX`/`posY`, pointer events, persistenza on-drop ottimistica + rollback) + elenco accessibile (CRUD da tastiera/AT, fallback mobile). Form `TableForm` (RHF + zod i18n via `useMemo([t])`). Namespace i18n `tavoli` it↔en in parità (153/153 chiavi).
+- **E2E** — 3 spec Testcontainers: `tables-crud` (CRUD + patch posizione + soft-delete invisibility + GET 404), `tables-rbac` (viewer→GET 200 / POST·PATCH·DELETE 403; manager→201), `tables-tenant-isolation` (cross-tenant GET/PATCH/DELETE → 404, no leak). **13 file e2e / 70 pass** (4 skip pre-esistenti TD-BS menu).
+
+**Tech debt registrati (ADR-0058):**
+
+- 🆕 **TD-sala-forward** — `Sala`/`Zona` (raggruppamento tavoli, multi-piano) deferred. **Confine:** unico piano sala finché non implementato. Relazione 1:N già provata da Menu→Category → zero validazione nuova. Severità BASSA, additivo. Si attiva col primo consumer multi-sala.
+- 🆕 **TD-tavolo-stato-forward** — stato tavolo (libero/occupato/riservato) deferred. **Confine:** mappa senza colore-stato. Dipende da Comande (S23+): lo stato deriva da un ordine attivo, gated `comande.*`. `deletedAt` copre già "fuori servizio". Severità BASSA, additivo.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
