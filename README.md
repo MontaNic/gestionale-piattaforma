@@ -1,8 +1,8 @@
-# 🎯 Gestionale
+# StudioDesk — Gestionale per commercialisti
 
 [![CI](https://github.com/MontaNic/gestionale-piattaforma/actions/workflows/ci.yml/badge.svg)](https://github.com/MontaNic/gestionale-piattaforma/actions/workflows/ci.yml)
 
-Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile, organizzata in verticali su un core tecnico condiviso (vedi ADR-0025). La ristorazione è lo starter/boilerplate; primo verticale reale: studi commercialisti / consulenti del lavoro.
+Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile, organizzata in verticali su un core tecnico condiviso (vedi ADR-0025). **Verticale attivo: StudioDesk** — gestionale per studi commercialisti / consulenti del lavoro italiani (`apps/accountant-*`, in sviluppo avanzato). La ristorazione (`apps/restaurant-*`) è lo starter/boilerplate, ora congelato a scaffold.
 
 > 📖 La fonte di verità del progetto è [PROJECT_BRIEF.md](./PROJECT_BRIEF.md).
 > Lo stato corrente e la roadmap operativa sono in [PROGRESS.md](./PROGRESS.md).
@@ -10,7 +10,7 @@ Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile, organizzata in
 > ⚠️ Scope ridefinito da [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md): da gestionale ristorazione a piattaforma a verticali con core condiviso.
 
 > ✅ **Estrazione del core tecnico condiviso completa** (ADR-0027 §D5, passo 9 — 5 giugno 2026).
-> La foundation costruita nelle sessioni 1-21 (auth multi-tenant + RLS, RBAC cross-tenant defense-in-depth, audit, rate-limit/lockout, email, i18n, shell UI) è estratta in **9 `packages/` condivisi**; `apps/*` ospita il verticale **ristorazione**, ora **congelato come scaffold/boilerplate** (vedi [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md)). Prossimo scope: avvio del primo verticale reale (studi commercialisti). Stato dettagliato, roadmap e storico macro-task in [PROGRESS.md](./PROGRESS.md).
+> La foundation costruita nelle sessioni 1-21 (auth multi-tenant + RLS, RBAC cross-tenant defense-in-depth, audit, rate-limit/lockout, email, i18n, shell UI) è estratta in **9 `packages/` condivisi**. Su questa base è stato avviato e portato avanti il verticale reale **StudioDesk** (`apps/accountant-*`): livelli operatore-studio + portale cliente + superadmin minimale, Onde 1-4 (catalogo, mandati, timesheet, report margine, tariffario, i18n IT/EN). La ristorazione (`apps/restaurant-*`) resta **congelata come scaffold/boilerplate** (vedi [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md)). Stato dettagliato, roadmap e storico macro-task in [PROGRESS.md](./PROGRESS.md); snapshot di sessione in [docs/handoff/HANDOFF.md](./docs/handoff/HANDOFF.md).
 
 ## Stack
 
@@ -35,11 +35,13 @@ Vincolato dalla sezione A3 del brief.
 ## Struttura monorepo
 
 ```
-apps/         Verticali che consumano il core — oggi solo ristorazione (api NestJS + web Next.js), congelata a scaffold (ADR-0025)
+apps/         Verticali che consumano il core:
+                accountant-api (NestJS, :3002) + accountant-web (Next.js, :3003) — verticale StudioDesk ATTIVO
+                restaurant-api + restaurant-web — scaffold/boilerplate congelato (ADR-0025)
 packages/     Core tecnico condiviso (9): api-client · auth · auth-web · db · eslint-config · i18n · platform · shared · ui
 plugins/      Plugin ufficiali interni (placeholder, sviluppo futuro)
 infra/        Dockerfile, compose, configurazioni Caddy
-docs/         ADR (docs/architecture), decisioni di prodotto (docs/decisions), API, ai-prompts
+docs/         ADR (docs/architecture), decisioni di prodotto (docs/decisions), handoff (docs/handoff), API, ai-prompts
 scripts/      Script operativi (backup, migrazioni custom, ecc.)
 ```
 
@@ -567,4 +569,4 @@ pnpm build         # turbo run build (per produzione futura)
 
 ## Stato del progetto
 
-Vedi [PROGRESS.md](./PROGRESS.md). Roadmap di alto livello in [PROJECT_BRIEF.md](./PROJECT_BRIEF.md) sezione A5. Lo scope corrente (estrazione core tecnico condiviso + avvio verticale commercialisti) è definito in [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md).
+Vedi [PROGRESS.md](./PROGRESS.md) e lo snapshot di sessione in [docs/handoff/HANDOFF.md](./docs/handoff/HANDOFF.md). Roadmap di alto livello in [PROJECT_BRIEF.md](./PROJECT_BRIEF.md) sezione A5. L'impostazione a piattaforma-con-verticali su core condiviso è definita in [ADR-0025](./docs/architecture/ADR-0025-piattaforma-core-condiviso-verticali.md); il verticale StudioDesk (`accountant-*`) è in sviluppo avanzato (Onde 1-4).
