@@ -19,6 +19,8 @@ import {
   type Mandato,
   type StatoMandato,
 } from '@/lib/mandati-api';
+import { getPreventivo } from '@/lib/preventivi-api';
+import type { PreventivoVoce } from '@/lib/preventivi-types';
 
 // =============================================================================
 // mandati/[id]/page.tsx — Dettaglio + edit mandato (ADR-0051)
@@ -38,6 +40,7 @@ export default function MandatoDetailPage(): JSX.Element {
   const canManage = permissions.includes('mandati.gestisci');
 
   const [mandato, setMandato] = useState<Mandato | null>(null);
+  const [voci, setVoci] = useState<PreventivoVoce[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -61,6 +64,15 @@ export default function MandatoDetailPage(): JSX.Element {
       setFinePrevista(m.finePrevista ?? '');
       setFineEffettiva(m.fineEffettiva ?? '');
       setNote(m.note ?? '');
+      // Voci del preventivo d'origine → opzioni del picker "Voce" nel timesheet.
+      // Best-effort: un ruolo senza preventivi.visualizza non blocca la pagina
+      // (voceId resta opzionale, picker vuoto).
+      try {
+        const prev = await getPreventivo(m.aziendaId, m.preventivoId);
+        setVoci(prev.voci);
+      } catch {
+        setVoci([]);
+      }
     } catch (err) {
       setLoadError(messageForError(err));
     } finally {
@@ -212,7 +224,7 @@ export default function MandatoDetailPage(): JSX.Element {
           </div>
 
           {/* Timesheet (ADR-0053) — prestazioni sul mandato */}
-          <PrestazioniSection mandatoId={mandato.id} mandatoStato={mandato.stato} />
+          <PrestazioniSection mandatoId={mandato.id} mandatoStato={mandato.stato} voci={voci} />
         </>
       )}
     </div>

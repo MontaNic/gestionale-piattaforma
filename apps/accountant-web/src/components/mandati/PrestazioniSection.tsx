@@ -16,6 +16,10 @@ import {
   type Prestazione,
 } from '@/lib/prestazioni-api';
 import type { StatoMandato } from '@/lib/mandati-api';
+import type { PreventivoVoce } from '@/lib/preventivi-types';
+
+const SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 // =============================================================================
 // PrestazioniSection.tsx — Timesheet embedded nella pagina mandato (ADR-0053)
@@ -33,26 +37,44 @@ interface PrestazioneForm {
   fatturabile: boolean;
   importo: string;
   note: string;
+  voceId: string;
 }
 
 function emptyForm(): PrestazioneForm {
-  return { data: '', ore: '', descrizione: '', fatturabile: true, importo: '', note: '' };
+  return {
+    data: '',
+    ore: '',
+    descrizione: '',
+    fatturabile: true,
+    importo: '',
+    note: '',
+    voceId: '',
+  };
 }
 
 interface PrestazioniSectionProps {
   mandatoId: string;
   mandatoStato: StatoMandato;
+  /** Voci del preventivo d'origine — opzioni del picker "Voce" (ADR-0053 sub-DP). */
+  voci: PreventivoVoce[];
 }
 
 export function PrestazioniSection({
   mandatoId,
   mandatoStato,
+  voci,
 }: PrestazioniSectionProps): JSX.Element | null {
   const t = useTranslations('prestazioni');
   const { permissions } = useAuth();
   const canView = permissions.includes('prestazioni.visualizza');
   const canManage = permissions.includes('prestazioni.gestisci');
   const isInCorso = mandatoStato === 'in_corso';
+
+  // Lookup voceId → nome per la colonna "Voce" della tabella.
+  const voceNome = useMemo(() => {
+    const m = new Map(voci.map((v) => [v.id, v.nome]));
+    return (voceId: string | null): string => (voceId ? (m.get(voceId) ?? '—') : '—');
+  }, [voci]);
 
   const [prestazioni, setPrestazioni] = useState<Prestazione[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,6 +127,7 @@ export function PrestazioniSection({
       fatturabile: p.fatturabile,
       importo: p.importo === null ? '' : String(p.importo),
       note: p.note ?? '',
+      voceId: p.voceId ?? '',
     });
     setOpen(true);
     setActionError(null);
@@ -120,6 +143,7 @@ export function PrestazioniSection({
       fatturabile: form.fatturabile,
       importo: form.importo.trim() === '' ? undefined : Number(form.importo),
       note: form.note.trim() || undefined,
+      voceId: form.voceId || undefined,
     };
     try {
       if (editingId) {
@@ -200,6 +224,21 @@ export function PrestazioniSection({
                 onChange={(e) => setForm((f) => ({ ...f, descrizione: e.target.value }))}
               />
             </label>
+            <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">
+              <span>{t('fields.voce')}</span>
+              <select
+                className={SELECT_CLASS}
+                value={form.voceId}
+                onChange={(e) => setForm((f) => ({ ...f, voceId: e.target.value }))}
+              >
+                <option value="">{t('fields.voceNone')}</option>
+                {voci.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="space-y-1 text-xs text-muted-foreground">
               <span>{t('fields.importo')}</span>
               <Input
@@ -252,6 +291,7 @@ export function PrestazioniSection({
               <tr>
                 <th className="px-3 py-2">{t('col.data')}</th>
                 <th className="px-3 py-2">{t('col.descrizione')}</th>
+                <th className="px-3 py-2">{t('col.voce')}</th>
                 <th className="px-3 py-2 text-right">{t('col.ore')}</th>
                 <th className="px-3 py-2">{t('col.fatturabile')}</th>
                 <th className="px-3 py-2 text-right">{t('col.importo')}</th>
@@ -263,6 +303,7 @@ export function PrestazioniSection({
                 <tr key={p.id}>
                   <td className="px-3 py-2 text-muted-foreground">{p.data}</td>
                   <td className="px-3 py-2 font-medium">{p.descrizione}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{voceNome(p.voceId)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{p.ore.toFixed(2)}</td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {p.fatturabile ? t('yes') : t('no')}
@@ -299,7 +340,7 @@ export function PrestazioniSection({
             </tbody>
             <tfoot className="border-t bg-muted/30 font-medium">
               <tr>
-                <td className="px-3 py-2" colSpan={2}>
+                <td className="px-3 py-2" colSpan={3}>
                   {t('totals')}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{totali.ore.toFixed(2)}</td>

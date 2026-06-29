@@ -754,11 +754,14 @@
       "importoPlaceholder": "Calcolato dal tariffario se vuoto",
       "importoHint": "Lascia vuoto per derivarlo automaticamente (ore × tariffa oraria).",
       "fatturabile": "Fatturabile",
-      "note": "Note"
+      "note": "Note",
+      "voce": "Voce di preventivo (opzionale)",
+      "voceNone": "— Nessuna voce —"
     },
     "col": {
       "data": "Data",
       "descrizione": "Descrizione",
+      "voce": "Voce",
       "ore": "Ore",
       "fatturabile": "Fatt.",
       "importo": "Importo"
