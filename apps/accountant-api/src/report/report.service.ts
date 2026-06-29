@@ -15,6 +15,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type StatoMandato } from '@gestionale/db';
 import { DbService } from '@gestionale/db/nest';
 
+import { GroqService } from '../ai/groq.service';
 import { round2 } from '../common/money.util';
 
 export interface MargineRow {
@@ -29,9 +30,28 @@ export interface MargineRow {
   margine: number | null;
 }
 
+// Copertura dati: quanti mandati hanno importoPrestazioni valorizzato sul totale.
+// Il FE mostra il disclaimer da qui, indipendentemente dall'AI (ADR-0057).
+export interface MargineCopertura {
+  totali: number;
+  conPrestazioni: number;
+}
+
+export interface MargineInsight {
+  // Testo AI (italiano, effimero) quando aiGenerated; null nel path deterministico
+  // (< 2 mandati): in quel caso il FE rende una stringa localizzata da copertura
+  // e dai dati già caricati, evitando italiano hardcoded dal BE (ADR-0057).
+  insight: string | null;
+  aiGenerated: boolean;
+  copertura: MargineCopertura;
+}
+
 @Injectable()
 export class ReportService {
-  constructor(@Inject(DbService) private readonly db: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly db: DbService,
+    @Inject(GroqService) private readonly groq: GroqService,
+  ) {}
 
   async margine(tenantId: string): Promise<MargineRow[]> {
     const mandati = await this.db.prisma.mandato.findMany({
@@ -84,5 +104,26 @@ export class ReportService {
     });
 
     return rows;
+  }
+
+  // Sintesi AI globale dei margini (ADR-0057). Riusa margine() per i dati, calcola
+  // la copertura (mandati con importoPrestazioni valorizzato vs totali) e delega
+  // la sintesi a GroqService. 503 se la feature AI è disabilitata (no key).
+  async margineInsight(tenantId: string): Promise<MargineInsight> {
+    const rows = await this.margine(tenantId);
+    const copertura: MargineCopertura = {
+      totali: rows.length,
+      conPrestazioni: rows.filter((r) => r.importoPrestazioni !== null).length,
+    };
+
+    // Guard: con < 2 mandati un'analisi comparativa AI non ha senso (e il modello
+    // tende a riempire con commenti sull'assenza di dati). Path deterministico:
+    // nessuna chiamata Groq, il FE localizza il messaggio da copertura + righe.
+    if (rows.length < 2) {
+      return { insight: null, aiGenerated: false, copertura };
+    }
+
+    const insight = await this.groq.analizzaMargine(rows);
+    return { insight, aiGenerated: true, copertura };
   }
 }

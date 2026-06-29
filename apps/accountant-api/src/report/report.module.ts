@@ -7,10 +7,12 @@
 
 import { Module } from '@nestjs/common';
 
+import { AiModule } from '../ai/ai.module';
 import { ReportController } from './report.controller';
 import { ReportService } from './report.service';
 
 @Module({
+  imports: [AiModule],
   providers: [ReportService],
   controllers: [ReportController],
   exports: [ReportService],

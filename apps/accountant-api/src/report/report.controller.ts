@@ -6,7 +6,7 @@
 // accessibili). Pattern dashboard.controller. Prefisso /api/v1 da main.ts.
 // =============================================================================
 
-import { Controller, Get, Inject, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Inject, Post, UnauthorizedException } from '@nestjs/common';
 
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@gestionale/auth';
 import { AuthErrorCode } from '@gestionale/shared';
@@ -22,6 +22,16 @@ export class ReportController {
   async margine(@CurrentUser() user: AuthenticatedUser | undefined) {
     if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.report.margine(user.tenantId);
+    return { data };
+  }
+
+  // Sintesi AI dei margini (ADR-0057). POST (azione, non lettura idempotente);
+  // stesso permesso di margine (aggrega dati già accessibili). 503 se AI disabilitata.
+  @Post('margine/insight')
+  @RequirePermissions('report.operativo.visualizza')
+  async margineInsight(@CurrentUser() user: AuthenticatedUser | undefined) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.report.margineInsight(user.tenantId);
     return { data };
   }
 }

@@ -769,6 +769,15 @@
       "sospeso": "Suspended",
       "concluso": "Completed",
       "annullato": "Cancelled"
+    },
+    "ai": {
+      "titolo": "Margin analysis",
+      "analizza": "Analyze with AI",
+      "caricamento": "Analyzing…",
+      "errore": "Analysis failed. Please try again.",
+      "copertura": "{conPrestazioni} of {totali} mandates with recorded work",
+      "nessunMandato": "No mandates with margin data available.",
+      "singoloMandato": "Only one mandate available: {nome} — margin {margine}. More mandates are needed for a comparative analysis."
     }
   },
   "prestazioni": {
