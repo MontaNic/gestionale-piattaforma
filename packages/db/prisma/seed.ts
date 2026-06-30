@@ -3,8 +3,8 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (41 permessi atomici namespaced)
-//   2. system_role_templates (10 template predefiniti, isDefault: true)
+//   1. permissions          (60 permessi atomici namespaced)
+//   2. system_role_templates (11 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //   3. scadenze_categorie    (7 categorie piattaforma, tenant_id NULL)
 //
@@ -338,7 +338,10 @@ const PERMISSIONS: PermissionSeed[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. System role templates (10 ruoli: 6 ristorazione F1 + 4 commercialisti)
+// 2. System role templates (11 ruoli: mix ristorazione + commercialisti + condivisi).
+//    NB: isDefault=true su TUTTI → il bootstrap API li clona tutti, cross-verticale
+//    (un tenant restaurant riceve anche i ruoli studio e viceversa). Oggi la curatela
+//    per-verticale vive solo qui nel seed imperativo. Vedi TD-bootstrap-verticale (ADR-0060).
 // ─────────────────────────────────────────────────────────────────────────────
 interface RoleTemplateSeed {
   name: string;

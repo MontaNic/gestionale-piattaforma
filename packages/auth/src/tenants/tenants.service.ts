@@ -1,9 +1,9 @@
 // =============================================================================
 // tenants.service.ts — Bootstrap di un nuovo tenant (D4)
 // =============================================================================
-// Operazione single-shot che crea tenant + sede + admin user + clone dei 6
-// system_role_templates → roles tenant-scoped (+ role_permissions) + admin
-// assignment Super Admin tenant-wide + audit log.
+// Operazione single-shot che crea tenant + sede + admin user + clone di TUTTI
+// i system_role_templates con isDefault=true → roles tenant-scoped
+// (+ role_permissions) + admin assignment Super Admin tenant-wide + audit log.
 //
 // Pattern: tutto dentro `withSystemContextAtomicTx` (D4 + atomicity fix
 // emerso dal STEP 2a-bis). 8 operazioni in un singolo $transaction Prisma →
@@ -114,9 +114,13 @@ export class TenantsService {
         },
       });
 
-      // 2.6 Clone 6 system_role_templates (isDefault=true) → roles tenant-scoped
-      // + copia mapping system_role_template_permissions → role_permissions.
-      // Letti dinamicamente: se in futuro aggiungiamo template, scale-up free.
+      // 2.6 Clone di TUTTI i system_role_templates con isDefault=true (oggi 11)
+      // → roles tenant-scoped + copia mapping system_role_template_permissions
+      // → role_permissions. Letti dinamicamente.
+      // ⚠️ TD-bootstrap-verticale (ADR-0060): isDefault è globale, non per-verticale →
+      // un tenant creato qui riceve anche i ruoli del verticale sbagliato (es. un
+      // tenant restaurant ottiene Socio/Praticante/Segreteria). Latente finché nessun
+      // tenant nasce via API; matura con la nozione di verticale first-class (#4).
       const templates = await tx.systemRoleTemplate.findMany({
         where: { isDefault: true },
         include: { permissions: true },

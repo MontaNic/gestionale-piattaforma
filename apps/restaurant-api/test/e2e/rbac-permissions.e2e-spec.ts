@@ -22,7 +22,7 @@ import {
 // seedMinimal (admin demo) + seedRbacFixtures (permission + role + grant +
 // limited user). Login UI POST /auth/login per JWT.
 //
-// NB: seedMinimal NON copre RBAC schema (32 permessi + 6 templates + 104
+// NB: seedMinimal NON copre RBAC schema (60 permessi + 11 templates + 249
 // mappings). seedRbacFixtures aggiunge il minimo necessario inline via raw SQL.
 // =============================================================================
 

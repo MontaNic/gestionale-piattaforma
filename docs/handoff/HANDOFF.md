@@ -221,6 +221,12 @@ Nuovi (Smoke funzionale per-ruolo, ADR-0059):
 - 🆕 **TD-sidebar-permission-filter** — la sidebar accountant filtra per permesso **solo `tariffario`**; le altre voci gated (es. `report/margine` → `report.operativo.visualizza`) restano esposte a ruoli senza il view → alert "permesso mancante" (corretto ma incoerente). BASSA severità.
 - 🆕 **TD-comunicazioni-mutate-on-view** — il dettaglio comunicazione muta al mount (operatore: `POST /api/v1/comunicazioni/<id>/letto`; portale: `PATCH /api/v1/portale/comunicazioni/<id>/letto-cliente`). Non idempotente su refresh, side-effect su apertura, problematico per prefetch/link-preview. Le 2 detail sono escluse dal tour smoke (read-only). TD di **design**, non un blocker.
 
+Nuovi (Sync permessi template→tenant — no-op verificato, [ADR-0060](../architecture/ADR-0060-sync-permessi-template-tenant-noop.md)). I tre maturano **insieme**, trigger comune = nascita del primo tenant via API bootstrap e/o nozione di **verticale first-class** (task #4). Delta dati oggi = 0 → nessuno urgente:
+
+- 🆕 **TD-perm-propagation** — nessun meccanismo auto/idempotente di propagazione template→ruoli materializzati: oggi ci si affida al re-seed manuale, che copre **solo** i tenant well-known gestiti dal seed. Diventa azionabile col primo tenant API o un cambio di template post-bootstrap. Meccanismo già accertato (per quando servirà): upsert additivo su `role_permissions` PK `(role_id, permission_id)`, scrittura via `DIRECT_URL`/postgres (`roles` è RLS FORCE), Super Admin enumerato esplicito da includere. BASSA severità (delta 0). Cross-ref TD-bootstrap-verticale, TD-role-template-key.
+- 🆕 **TD-bootstrap-verticale** — `tenants.service.ts` clona **tutti** gli 11 template `isDefault=true` → un tenant creato via API riceverebbe i ruoli del verticale sbagliato (es. tenant restaurant ottiene Socio/Praticante/Segreteria). Latente: nessun tenant via API esiste. Causa-radice: assenza di una dimensione `verticale` nei dati (la curatela vive solo nel seed imperativo). BASSA severità (latente). Cross-ref TD-perm-propagation, TD-role-template-key.
+- 🆕 **TD-role-template-key** — i ruoli materializzati non portano `templateId`/`code`: l'unico match template↔ruolo è `name` (stringa libera, rinominabile). Rende fragile sia il sync sia il fix del bootstrap. Prerequisito tecnico dei due TD sopra: un riferimento stabile (`templateId`/`code`) sui ruoli system. BASSA severità. Cross-ref TD-perm-propagation, TD-bootstrap-verticale.
+
 ### Roadmap onde (aggiornata)
 
 **Onda 1 — Sblocca l'uso reale** ✅ COMPLETA
