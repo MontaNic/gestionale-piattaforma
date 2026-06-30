@@ -3055,6 +3055,18 @@ Gate **post-deploy** che colma il gap di processo emerso dal bug "tavoli 403" (S
 
 ---
 
+## [2026-06-30] Cleanup tenant di test + comando ops `purge-tenant`
+
+Pulizia del DB prod condiviso da tenant di test/verifica residui, e versionamento del tool che l'ha eseguita (i tenant di test ricorrono → consumer reale e dimostrato).
+
+- **Rimossi 3 tenant** (hard-delete, ruolo `postgres` superuser via `DIRECT_URL`/`docker exec`, bypassa RLS FORCE): `verifica-41554` (Studio Verifica, residuo soft-deleted di una verifica deploy del 24/06), `rls-a-…`/`rls-b-…` (fixture del test RLS finite su prod il 19/06). **22 righe** totali via singolo `DELETE` + `ON DELETE CASCADE` (3 tenants, 11 roles, 1 user, 1 user_roles, 1 sede, 1 audit_log, 1 azienda, 1 comunicazione, 1 com_messaggi, 1 com_allegati). Well-known (`demo`/`acme`/`studio-demo`/`oneplatform`) intoccati.
+- **Gate anti-rigenerazione chiuso con evidenza** (nessun TD aperto): `git log -S"rls-a-"` → 0 commit ⇒ slug mai versionati = artefatti runtime one-shot; i test RLS usano solo Testcontainers ephemeral; lo smoke #142 è read-only su tenant esistenti (nessun `tenant.create`). Nessun path test→prod che li ricrei.
+- **Esecuzione transazionale con verifica pre-commit**: `BEGIN` → guard well-known riasserito nel set → `DELETE` → `COMMIT` solo se `ROW_COUNT = 3` E figli azzerati, `ROLLBACK` altrimenti. Post: `tenants = 4` (solo well-known).
+- **Non-regressione**: `pnpm smoke` verde post-cleanup — **accountant 32/32 + restaurant 10/10** contro prod → l'operativo non è stato sfiorato.
+- **Tool ops versionato** `pnpm --filter @gestionale/db purge-tenant` (⭐ YAGNI non si applica: consumer ricorrente e appena usato). Guard-rail: blocklist well-known categorica, **match esatto per `--slug`/`--id`** (mai pattern `LIKE`), **dry-run di default** (`--execute` per cancellare davvero), transazione con verifica pre-commit. Connessione `DIRECT_URL` (superuser, no estensione RLS). Doc nel [README del package db](packages/db/README.md#ops-purge-tenant). Scelto **niente ADR**: è tooling ops, non una decisione architetturale strutturale.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
