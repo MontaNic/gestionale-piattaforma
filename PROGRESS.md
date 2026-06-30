@@ -3079,6 +3079,19 @@ Task #1 (causa-radice del 403 tavoli) chiuso come **no-op verificato**, non cost
 
 ---
 
+## [2026-07-01] Branding per-verticale build-time — pattern riusabile ([ADR-0061](docs/architecture/ADR-0061-branding-per-verticale-build-time.md))
+
+Task #4 (ultimo dei 4 aperti il 2026-06-30): i due verticali dicevano entrambi "Gestionale", zero logo. Ora hanno brand distinti, con un pattern che paga il prossimo verticale.
+
+- **Pattern:** tipo `BrandConfig` in `packages/ui` (type-only, runtime-zero) + **istanza per-app disaccoppiata** (`apps/*/src/lib/brand.tsx`): `StudioDesk` (accountant), `FoodDesk` (restaurant, segnaposto). Nessuna app importa il brand di un'altra → aggiungere un verticale = una sola istanza brand, non clonare login/shell.
+- **Asset placeholder via codice:** wordmark SVG in `currentColor` (light+dark) + favicon-tile a colore fisso. Sostituibili nello stesso path senza altri cambi.
+- **Cablaggio simmetrico (8 punti UI):** `metadata.title`/`applicationName`/`icons` + login `CardTitle` (→ `brand.Logo`, titolo **i18n** `auth.login.title` "Accedi a {brand}", brand come param fuori dal catalogo) + Sidebar header + Topbar mobile. Effetto collaterale corretto: **login restaurant portato a next-intl** (prima hardcoded, namespace `auth` assente) → parità i18n con accountant.
+- **Dimensioni tenute separate:** V (brand verticale, build-time) ≠ T (logo del singolo studio, ADR-0049, NON cablato sul login) ≠ Θ (dark, invariato). Palette `globals.css` non toccata.
+- **Verticale strutturale per scelta:** nessun dato `vertical`, nessuna migration. Il verticale-dato nascerà col trigger dei 3 TD di ADR-0060 (primo tenant via API).
+- **GATE ADR-0052 completo (FE live):** CHECK-FE 1–6 tutti ✅ con evidenza reale (render Playwright login light/dark/mobile, `next build` entrambe, parità i18n, a11y `role="img"`+accessible name). 3 asserzioni e2e aggiornate nello stesso commit.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

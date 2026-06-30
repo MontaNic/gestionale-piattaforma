@@ -16,6 +16,7 @@ import { Input } from '@gestionale/ui';
 import { apiGet, apiPost, ApiError } from '@gestionale/api-client';
 import { setTokens, type LoginResponse, type MeResponse } from '@gestionale/auth-web';
 import { messageForErrorCode } from '@/lib/error-codes';
+import { brand } from '@/lib/brand';
 
 // TD-2 ADR-0012 resolution: slug runtime da URL (`/t/<slug>/login`) via
 // useParams(). Middleware (src/middleware.ts) ha gia' validato il formato
@@ -71,7 +72,12 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Accedi a Gestionale</CardTitle>
+          <CardTitle>
+            <brand.Logo
+              className="h-7 w-auto"
+              aria-label={tAuth('title', { brand: brand.productName })}
+            />
+          </CardTitle>
           <CardDescription>Inserisci le tue credenziali per continuare</CardDescription>
         </CardHeader>
         <CardContent>

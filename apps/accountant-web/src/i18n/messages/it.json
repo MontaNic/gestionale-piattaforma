@@ -527,6 +527,7 @@
   },
   "auth": {
     "login": {
+      "title": "Accedi a {brand}",
       "forgotPasswordLink": "Password dimenticata?",
       "validationEmail": "Email non valida",
       "validationPassword": "Password troppo corta (min 8 caratteri)"

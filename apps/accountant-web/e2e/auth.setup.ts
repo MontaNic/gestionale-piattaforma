@@ -65,9 +65,9 @@ async function loginAndPersistStorage(page: Page, p: RoleProfile): Promise<void>
 
   await page.goto(`/t/${p.slug}/login`);
 
-  // Form login presente. shadcn/ui CardTitle renderizza come <div> (no heading
-  // role) → match via testo. Stessa accortezza di restaurant auth.setup.
-  await expect(page.getByText(/accedi a gestionale/i)).toBeVisible();
+  // Form login presente. Il titolo è ora il wordmark brand (ADR-0061): SVG
+  // role="img" con accessible name = titolo i18n "Accedi a {brand}".
+  await expect(page.getByRole('img', { name: /accedi a studiodesk/i })).toBeVisible();
   await expect(page.locator('input[type="email"]')).toBeVisible();
 
   // pressSequentially su email per robustezza cross-browser (WebKit + RHF):

@@ -186,6 +186,15 @@ Nessun TD residuo da questa slice (backlog ADR-0056: audit origine AI, contesto 
 - **Tech debt (ADR-0058)**: 🆕 **TD-sala-forward** (`Sala`/`Zona` raggruppamento multi-piano, deferred — unico piano finché non implementato) · 🆕 **TD-tavolo-stato-forward** (stato libero/occupato/riservato, dipende da Comande S23+; `deletedAt` copre già "fuori servizio"). Entrambi BASSA severità, additivi.
 - ⚠️ **Verifica runtime manuale FE non eseguita** (la PR #138 è verde su GATE statico + e2e, ma il giro manuale come non-superuser sulla mappa drag-drop resta da fare alla ripresa del verticale restaurant).
 
+### NOVITÀ sessione 2026-07-01 — Branding per-verticale build-time (ADR-0061)
+
+Ultimo dei 4 task aperti 2026-06-30. I due verticali dicevano entrambi "Gestionale" (zero logo): ora hanno brand distinti (**StudioDesk** / **FoodDesk** segnaposto), con un pattern riusabile.
+
+- **Pattern**: tipo `BrandConfig` in `packages/ui` (type-only) + istanza per-app disaccoppiata (`apps/*/src/lib/brand.tsx`). Aggiungere un verticale = una sola istanza brand; login/metadata/shell/asset-slot ereditati. Asset placeholder (wordmark `currentColor` light+dark, favicon-tile) sostituibili nello stesso path.
+- **Cablato (8 punti, simmetrico)**: `metadata.title`/`applicationName`/`icons`, login `CardTitle`→`brand.Logo` (titolo i18n `auth.login.title` "Accedi a {brand}", brand come param), Sidebar header, Topbar mobile. **Login restaurant portato a next-intl** (parità i18n con accountant, era hardcoded).
+- **Dimensioni separate**: V (brand verticale, build-time) ≠ T (logo studio ADR-0049, non cablato sul login) ≠ Θ (dark, invariato). Palette intatta. **Verticale strutturale per scelta** (no dato `vertical`, no migration) → il verticale-dato è il trigger dei 3 TD di ADR-0060.
+- **GATE**: CHECK-FE 1–6 ✅ (render reale login light/dark/mobile, `next build` entrambe, i18n IT↔EN, a11y). **Nessun nuovo TD.** La `CardDescription` login resta hardcoded IT = famiglia TD-i18n preesistente (non allargato lo scope).
+
 ### Visione del verticale — tre livelli StudioDesk
 
 1. **Operatore-studio** ✅ COMPLETO
