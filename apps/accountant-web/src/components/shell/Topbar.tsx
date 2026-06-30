@@ -20,6 +20,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@gestionale/ui';
 import { locales, type Locale } from '@gestionale/i18n/config';
 import { setLocale } from '@gestionale/i18n/client';
 import { useAuth } from '@gestionale/auth-web';
+import { brand } from '@/lib/brand';
 
 import { Sidebar } from './Sidebar';
 
@@ -28,7 +29,7 @@ import { Sidebar } from './Sidebar';
 // =============================================================================
 // Layout:
 // - Sx mobile: hamburger Sheet trigger → drawer Sidebar
-// - Sx desktop: logo "Gestionale" (sidebar gia' visibile a sx)
+// - Sx desktop: wordmark del brand verticale (sidebar gia' visibile a sx)
 // - Dx: user dropdown (Avatar trigger) con profilo + theme + locale + logout
 //
 // Theme toggle: next-themes useTheme(), 3 opzioni (light/dark/system).
@@ -91,7 +92,7 @@ export function Topbar(): JSX.Element {
             <Sidebar onNavigate={() => setMobileNavOpen(false)} />
           </SheetContent>
         </Sheet>
-        <span className="text-base font-semibold md:hidden">Gestionale</span>
+        <brand.Logo className="h-5 w-auto md:hidden" aria-label={brand.productName} />
       </div>
 
       <DropdownMenu>

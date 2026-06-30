@@ -24,7 +24,8 @@ test.describe('Auth redirect anonymous user', () => {
     await page.waitForURL(/\/t\/demo\/login$/, { timeout: 5_000 });
     await expect(page).toHaveURL(/\/t\/demo\/login$/);
 
-    // Verifica form login presente (no UI leak dashboard a non-auth)
-    await expect(page.getByText(/accedi a gestionale/i)).toBeVisible();
+    // Verifica form login presente (no UI leak dashboard a non-auth).
+    // Titolo = wordmark brand (ADR-0061): role="img", name = titolo i18n.
+    await expect(page.getByRole('img', { name: /accedi a fooddesk/i })).toBeVisible();
   });
 });

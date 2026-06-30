@@ -1,4 +1,9 @@
 {
+  "auth": {
+    "login": {
+      "title": "Sign in to {brand}"
+    }
+  },
   "shell": {
     "nav": {
       "dashboard": "Dashboard",

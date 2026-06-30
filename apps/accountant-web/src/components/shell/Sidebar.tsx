@@ -22,6 +22,7 @@ import {
 import { cn } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 import { PLATFORM_SLUG } from '@/lib/platform-types';
+import { brand } from '@/lib/brand';
 
 // =============================================================================
 // Sidebar.tsx — Primary nav shell (ADR-0018 DP-2)
@@ -136,7 +137,7 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
       aria-label="Primary navigation"
     >
       <div className="px-6 py-5 border-b">
-        <span className="text-lg font-semibold">Gestionale</span>
+        <brand.Logo className="h-6 w-auto" aria-label={brand.productName} />
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">{items.map(renderItem)}</ul>

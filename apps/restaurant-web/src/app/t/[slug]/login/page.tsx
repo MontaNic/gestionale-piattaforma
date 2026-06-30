@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
 import { Alert, AlertDescription } from '@gestionale/ui';
@@ -14,6 +15,7 @@ import { Input } from '@gestionale/ui';
 import { apiPost, ApiError } from '@gestionale/api-client';
 import { setTokens, type LoginResponse } from '@gestionale/auth-web';
 import { messageForErrorCode } from '@/lib/error-codes';
+import { brand } from '@/lib/brand';
 
 // TD-2 ADR-0012 resolution: slug runtime da URL (`/t/<slug>/login`) via
 // useParams(). Middleware (src/middleware.ts) ha gia' validato il formato
@@ -30,6 +32,7 @@ export default function LoginPage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const tenantSlug = params.slug;
+  const tAuth = useTranslations('auth.login');
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<LoginFormValues>({
@@ -58,7 +61,12 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Accedi a Gestionale</CardTitle>
+          <CardTitle>
+            <brand.Logo
+              className="h-7 w-auto"
+              aria-label={tAuth('title', { brand: brand.productName })}
+            />
+          </CardTitle>
           <CardDescription>Inserisci le tue credenziali per continuare</CardDescription>
         </CardHeader>
         <CardContent>

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@gestionale/ui';
+import { brand } from '@/lib/brand';
 
 // =============================================================================
 // Sidebar.tsx — Primary nav shell (ADR-0018 DP-2)
@@ -64,7 +65,7 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
       aria-label="Primary navigation"
     >
       <div className="px-6 py-5 border-b">
-        <span className="text-lg font-semibold">Gestionale</span>
+        <brand.Logo className="h-6 w-auto" aria-label={brand.productName} />
       </div>
       <ul className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {NAV_ITEMS.map((item) => {

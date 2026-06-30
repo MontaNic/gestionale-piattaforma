@@ -527,6 +527,7 @@
   },
   "auth": {
     "login": {
+      "title": "Sign in to {brand}",
       "forgotPasswordLink": "Forgot password?",
       "validationEmail": "Invalid email",
       "validationPassword": "Password too short (min 8 characters)"

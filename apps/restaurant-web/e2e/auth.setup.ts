@@ -49,9 +49,9 @@ async function loginAndPersistStorage(page: Page, creds: TenantCreds): Promise<v
   // Naviga a login page (middleware TD-2 valida slug)
   await page.goto(`/t/${creds.slug}/login`);
 
-  // Verifica form login presente. NB: shadcn/ui CardTitle renderizza come <div>,
-  // NON heading — getByRole('heading') non matcha. Usiamo getByText + textbox.
-  await expect(page.getByText(/accedi a gestionale/i)).toBeVisible();
+  // Verifica form login presente. Il titolo è ora il wordmark brand (ADR-0061):
+  // SVG role="img" con accessible name = titolo i18n "Accedi a {brand}".
+  await expect(page.getByRole('img', { name: /accedi a fooddesk/i })).toBeVisible();
   await expect(page.locator('input[type="email"]')).toBeVisible();
 
   // Empirical Fase 3.9 STOP 3 (WebKit-specific):

@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from 'next-themes';
 
 import './globals.css';
+import { brand } from '@/lib/brand';
 
 export const metadata: Metadata = {
-  title: 'Gestionale',
+  title: brand.productName,
   description: 'Piattaforma SaaS gestionale per ristorazione',
+  applicationName: brand.productName,
+  icons: { icon: brand.favicon },
 };
 
 // ADR-0018 Sub-DP-C: ThemeProvider a root (cross-tenant scope, user preference

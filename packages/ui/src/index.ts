@@ -3,6 +3,7 @@
 // `transpilePackages` (i sorgenti .tsx mantengono le direttive "use client").
 export * from './alert';
 export * from './avatar';
+export type { BrandConfig } from './brand';
 export * from './button';
 export * from './card';
 export * from './dialog';

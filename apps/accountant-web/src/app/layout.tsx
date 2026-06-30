@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 
 import './globals.css';
+import { brand } from '@/lib/brand';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -11,8 +12,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Gestionale',
+  title: brand.productName,
   description: 'Piattaforma SaaS gestionale per studi commercialisti',
+  applicationName: brand.productName,
+  icons: { icon: brand.favicon },
 };
 
 // ADR-0018 Sub-DP-C: ThemeProvider a root (cross-tenant scope, user preference
