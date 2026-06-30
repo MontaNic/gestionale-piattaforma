@@ -30,7 +30,9 @@ COPY packages/shared    ./packages/shared
 
 # Genera il client Prisma (engine musl per alpine; non serve DB attivo) poi
 # builda in ordine topologico (turbo risolve db/shared -> platform -> auth -> api).
-# NB: restaurant-api usa `nest build` (tsc, NON swc come accountant) -> output dist/main.js.
+# NB: restaurant-api builda con `nest build --builder swc` (come accountant): swc
+# transpila senza type-check (gate separato `pnpm typecheck`), evitando gli errori
+# di risoluzione tipi tsc-in-emit su path-to-source. Output swc -> dist/src/main.js.
 RUN pnpm --filter @gestionale/db exec prisma generate && \
     pnpm turbo run build --filter=@gestionale/restaurant-api...
 
@@ -56,4 +58,6 @@ COPY --from=builder /app/apps/restaurant-api/package.json ./apps/restaurant-api/
 
 WORKDIR /app/apps/restaurant-api
 EXPOSE 3004
-CMD ["node", "dist/main.js"]
+# swc emette preservando sourceRoot (src/) -> dist/src/main.js. Coerente con
+# `start:prod` del package.json (entrambi node dist/src/main.js).
+CMD ["node", "dist/src/main.js"]
