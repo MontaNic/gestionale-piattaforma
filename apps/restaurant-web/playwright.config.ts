@@ -24,6 +24,10 @@ dotenv.config({ path: path.join(import.meta.dirname, '.env.e2e') });
  */
 export default defineConfig({
   testDir: './e2e',
+  // Lo smoke funzionale (page-tour.spec.ts) gira contro prod live ON-DEMAND via
+  // playwright.smoke.config.ts → va ESCLUSO dalla config CI (invariante 2: non
+  // CI-bloccante). Qui restano solo gli e2e funzionali locali.
+  testIgnore: ['**/page-tour.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
