@@ -52,6 +52,7 @@
     "smoke:soft-delete": "dotenv -e ../../.env -- tsx scripts/smoke-soft-delete.ts",
     "smoke:rls-e2e": "dotenv -e ../../.env -- tsx scripts/smoke-rls-e2e.ts",
     "smoke:rls-core": "dotenv -e ../../.env -- tsx scripts/smoke-rls-core.ts",
+    "purge-tenant": "dotenv -e ../../.env -- tsx scripts/purge-tenant.ts",
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
