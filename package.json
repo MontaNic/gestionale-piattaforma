@@ -16,6 +16,9 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
+    "smoke:accountant": "pnpm --filter @gestionale/accountant-web test:e2e:smoke",
+    "smoke:restaurant": "pnpm --filter @gestionale/restaurant-web test:e2e:smoke",
+    "smoke": "pnpm smoke:accountant && pnpm smoke:restaurant",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "prepare": "husky"

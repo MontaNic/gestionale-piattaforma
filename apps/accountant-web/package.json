@@ -11,7 +11,10 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e:smoke": "playwright test --config playwright.smoke.config.ts",
+    "test:e2e:smoke:ui": "playwright test --config playwright.smoke.config.ts --ui",
+    "test:e2e:smoke:report": "playwright show-report"
   },
   "dependencies": {
     "@gestionale/api-client": "workspace:*",
@@ -32,10 +35,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22",
     "@types/react": "^18.3",
     "@types/react-dom": "^18.3",
     "autoprefixer": "^10.5.0",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^15",
     "postcss": "^8.5.14",
