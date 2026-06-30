@@ -3067,6 +3067,18 @@ Pulizia del DB prod condiviso da tenant di test/verifica residui, e versionament
 
 ---
 
+## [2026-07-01] Sync permessi template→tenant — no-op verificato, debito deferito ([ADR-0060](docs/architecture/ADR-0060-sync-permessi-template-tenant-noop.md))
+
+Task #1 (causa-radice del 403 tavoli) chiuso come **no-op verificato**, non costruito.
+
+- **STOP 0 ricognitivo (read-only su prod):** delta dati = **0** — 0 permessi mancanti, 0 eccessi, 0 ruoli custom, 0 orfani su tutti i 6 ruoli materializzati × 4 tenant. `tavoli.*` già presente su ogni Super Admin → il 403 è chiuso a livello dati dal re-seed additivo. Ancore: 60 permessi, 11 template (tutti `isDefault`), 245 role_permissions.
+- **Decisione (Pattern 43):** nessun sync correttivo senza consumer reale. Il valore del sync è preventivo/forward, non correttivo: nessun tenant via API esiste → nessun drift attivo.
+- **Meccanismo idempotenza accertato** (per quando servirà): upsert additivo su `role_permissions` PK `(role_id, permission_id)`; scrittura via `DIRECT_URL`/postgres (`roles` è RLS FORCE, app role non vede cross-tenant); Super Admin enumerato esplicito da includere.
+- **Debito reale registrato** (3 TD coesi, trigger comune = verticale first-class #4 / primo tenant API): **TD-perm-propagation**, **TD-bootstrap-verticale**, **TD-role-template-key** (vedi HANDOFF + ADR-0060).
+- **Chore:** allineati i commenti stale sui conteggi template/permessi (`tenants.service.ts`, `seed.ts`, e2e `rbac-permissions`) — solo commenti, nessun cambio logica. **GATE ADR-0052: N/A** (nessun FE/BE/DB/migration).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
