@@ -65,3 +65,37 @@ studiodesk.cloud, *.studiodesk.cloud {
 		format console
 	}
 }
+
+# food.studiodesk.cloud — verticale ristorazione (restaurant-*). Blocco a sé:
+# host ESATTO, ha precedenza sul wildcard *.studiodesk.cloud (Caddy ordina per
+# specificità — verificato via `caddy adapt`: il route food. precede il wildcard,
+# quindi food NON ricade sugli upstream accountant). Stesso split path-based
+# same-origin del blocco sopra, ma verso gli upstream restaurant.
+food.studiodesk.cloud {
+	# Cert dedicato per l'host esatto via DNS-01 (come il blocco wildcard). Il
+	# wildcard copre food crittograficamente, ma un site block esatto fa partire
+	# la gestione cert per quel nome: il blocco tls esplicito forza DNS-01 (dietro
+	# Cloudflare più affidabile di HTTP-01/TLS-ALPN). Stesso token zona studiodesk.cloud.
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1 8.8.8.8
+	}
+
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# /api/* -> restaurant-api:3004. `handle` (NON handle_path) NON strippa il
+	# prefisso: l'API conserva il suo global prefix /api/v1.
+	handle /api/* {
+		reverse_proxy restaurant-api:3004
+	}
+	# Tutto il resto -> restaurant-web:3005 (Next standalone, browser only).
+	handle {
+		reverse_proxy restaurant-web:3005
+	}
+
+	encode gzip zstd
+	log {
+		output stdout
+		format console
+	}
+}
