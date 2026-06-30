@@ -102,6 +102,55 @@ services:
     networks:
       - gestionale_network
 
+  # ── Verticale ristorazione (food.studiodesk.cloud) ──────────────────────────
+  # Stesso pattern dei servizi accountant: porte interne 3004/3005 NON pubblicate
+  # sull'host (solo Caddy le raggiunge per service name sulla gestionale_network).
+  restaurant-api:
+    build:
+      context: .
+      dockerfile: apps/restaurant-api/Dockerfile
+    image: gestionale/restaurant-api
+    restart: unless-stopped
+    # JWT/Throttle/Lockout/SMTP + GROQ_API_KEY dal .env (AI futura eredita da qui);
+    # override sotto per le var host-specific (service name dentro la rete).
+    env_file:
+      - .env
+    environment:
+      PORT: '3004'
+      REDIS_HOST: redis
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      # DATABASE_URL/DIRECT_URL del .env puntano a 127.0.0.1 (host); nel container
+      # servono le varianti host=postgres (stesse credenziali+encoding).
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?DATABASE_URL_DOCKER mancante in .env (variante host=postgres)}
+      DIRECT_URL: ${DIRECT_URL_DOCKER:?DIRECT_URL_DOCKER mancante in .env (variante host=postgres)}
+      # Same-origin (routing path-based /api/* su food.studiodesk.cloud) -> CORS di
+      # fatto non scatta; valore di sicurezza per eventuali richieste cross-origin.
+      CORS_ORIGIN: https://food.studiodesk.cloud
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gestionale_network
+
+  restaurant-web:
+    build:
+      context: .
+      dockerfile: apps/restaurant-web/Dockerfile
+    image: gestionale/restaurant-web
+    restart: unless-stopped
+    # Next standalone (server.js) legge PORT/HOSTNAME a runtime. HOSTNAME 0.0.0.0
+    # obbligatorio in container. NEXT_PUBLIC_API_URL=/api/v1 è inlined a build-time.
+    environment:
+      PORT: '3005'
+      HOSTNAME: '0.0.0.0'
+    depends_on:
+      - restaurant-api
+    networks:
+      - gestionale_network
+
 # `web` è external: la sua vita non è legata a questo compose (la crea/possiede
 # l'operatore una tantum: `docker network create web`). Vedi ADR-0042.
 networks:

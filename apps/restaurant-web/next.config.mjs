@@ -3,6 +3,10 @@ import createNextIntlPlugin from 'next-intl/plugin';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Build standalone (server.js + deps tracciate) per l'immagine Docker prod:
+  // il runner copia .next/standalone ed esegue `node server.js`. Allineato ad
+  // accountant-web. La porta a runtime arriva da PORT (compose), HOSTNAME 0.0.0.0.
+  output: 'standalone',
   // @gestionale/ui (design system, passo 2), @gestionale/i18n (meccanismo i18n,
   // passo 4), @gestionale/api-client (client HTTP FE, passo 5a) e
   // @gestionale/auth-web (auth FE, passo 5b) esportano i sorgenti .ts/.tsx: Next
