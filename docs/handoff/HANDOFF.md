@@ -215,6 +215,12 @@ Nuovi Onda 3:
 - ~~**TD-voceId-FE**~~ ✅ **RISOLTO** (#132): select "Voce di preventivo" nel form prestazioni + colonna "Voce" in tabella (ADR-0053 sub-DP). Riusa `getPreventivo` per le opzioni, nessun endpoint nuovo.
 - ~~**TD-tariffario**~~ ✅ **RISOLTO** (#127, ADR-0055): tariffario per ruolo/utente → `Prestazione.importo` derivato (`ore × tariffa`). Ha sbloccato gli **insight AI margine** ✅ landed (#139, ADR-0057).
 
+Nuovi (Smoke funzionale per-ruolo, ADR-0059):
+
+- 🆕 **TD-no-error-boundary** — nessun `error.tsx`/`global-error.tsx` in accountant-web né restaurant-web: un client component che lancia mostra il fallback grezzo di Next ("client-side exception has occurred"), non una UI di errore controllata. Lo smoke usa quel fallback come marker di crash. BASSA severità, additivo.
+- 🆕 **TD-sidebar-permission-filter** — la sidebar accountant filtra per permesso **solo `tariffario`**; le altre voci gated (es. `report/margine` → `report.operativo.visualizza`) restano esposte a ruoli senza il view → alert "permesso mancante" (corretto ma incoerente). BASSA severità.
+- 🆕 **TD-comunicazioni-mutate-on-view** — il dettaglio comunicazione muta al mount (operatore: `POST /api/v1/comunicazioni/<id>/letto`; portale: `PATCH /api/v1/portale/comunicazioni/<id>/letto-cliente`). Non idempotente su refresh, side-effect su apertura, problematico per prefetch/link-preview. Le 2 detail sono escluse dal tour smoke (read-only). TD di **design**, non un blocker.
+
 ### Roadmap onde (aggiornata)
 
 **Onda 1 — Sblocca l'uso reale** ✅ COMPLETA

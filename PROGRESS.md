@@ -3042,6 +3042,19 @@ Riuso permesso `report.operativo.visualizza` (catalogo invariato **58**). CI #13
 
 ---
 
+## [2026-06-30] Smoke funzionale per-verticale per-ruolo ([ADR-0059](docs/architecture/ADR-0059-smoke-funzionale-per-verticale-per-ruolo.md))
+
+Gate **post-deploy** che colma il gap di processo emerso dal bug "tavoli 403" (Super Admin senza permesso nel DB prod → 403 sfuggito a GATE statico + e2e effimeri). Smoke Playwright che logga come ogni ruolo seedato e **visita ogni pagina accessibile al ruolo** contro gli **URL pubblici** → DB prod condiviso, fallendo su 403/≥500/`pageerror`/crash.
+
+- **Read-only ASSOLUTO** con guard attivo (`page.route` → `route.abort()` su POST≠login/PUT/PATCH/DELETE): nessuna mutazione lascia il browser. Verificato (POST/PATCH/DELETE bloccati, GET passa; zero scritture su prod).
+- **On-demand, non CI-bloccante**: config dedicate `playwright.smoke.config.ts` (entrambe le app) fuori da turbo; la config CI funzionale fa `testIgnore` di `page-tour.spec.ts`. Script: `pnpm smoke` / `smoke:accountant` / `smoke:restaurant`.
+- **Tour = pagine accessibili per-ruolo** (single source of truth: `e2e/page-manifest.ts` per verticale, derivato da `NAV_ITEMS` + `page.tsx` + permessi seed). Dinamiche `[id]` risolte navigando l'index → primo link; lista vuota → skip.
+- **Scaffold accountant** (prima senza e2e): `playwright.smoke.config.ts` + `e2e/auth.setup.ts` (storageState per profilo-ruolo, localStorage) + `.env.e2e.example`, replicando il pattern restaurant (ADR-0016).
+- **Run reale post-deploy**: **restaurant 10/10 PASS** (incl. `mappa`/tavoli → 403 originale risolto), **accountant 32/32 PASS**. Bonus: il tour ha pescato un finding architetturale (mutate-on-view comunicazioni).
+- **Copertura Fase 1**: 3/11 ruoli (Super Admin/Collaboratore/Cliente — gli unici seedati). Limiti noti + 3 TD (`TD-no-error-boundary`, `TD-sidebar-permission-filter`, `TD-comunicazioni-mutate-on-view`) in ADR-0059 + HANDOFF.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
