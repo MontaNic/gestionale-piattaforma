@@ -48,7 +48,13 @@ Bug segnalato: da collaboratore su StudioDesk il cambio lingua IT→EN non facev
 
 ### Tech debt aperti
 
-**Invariati (pre-sessione, riconciliati col registry live):** TD-BV · TD-CB · TD-PATCH-null-FK · TD-blocklist-drift · `web` external one-time · TD-documenti-tipo-codice · TD-utente-enum-forward · TD-storage-gc · TD-moduleResolution-node10 · TD-circolari-utente-forward · TD-portale-com-allegati · TD-portale-com-apertura · TD-portale-circolari-html · TD-immagine-api · TD-sala-forward · TD-tavolo-stato-forward (restaurant, ADR-0058) · TD-no-error-boundary · TD-sidebar-permission-filter · TD-comunicazioni-mutate-on-view
+**Invariati (pre-sessione, riconciliati col registry live):** TD-BV · TD-CB · TD-PATCH-null-FK · TD-blocklist-drift · `web` external one-time · TD-moduleResolution-node10 · TD-circolari-utente-forward · TD-portale-com-allegati · TD-portale-com-apertura · TD-portale-circolari-html · TD-immagine-api · TD-sala-forward · TD-tavolo-stato-forward (restaurant, ADR-0058) · TD-no-error-boundary · TD-sidebar-permission-filter · TD-comunicazioni-mutate-on-view
+
+**TD residui accountant (ex-ADR-0044) — triati 2026-07-01 ([ADR-0065](../architecture/ADR-0065-triage-td-residui.md)):** la voce generica "TD residui accountant" si chiude → 2 deferred-con-trigger + 1 backlog ops. Verifica empirica read-only: tutti e tre sono tier alto, nessuno è fix meccanico.
+
+- **TD-documenti-tipo-codice → DEFERRED (trigger-gated):** `DocumentoTipo` funziona a `nome`, 0 consumer di un codice macchina. Trigger = fase 6C (questionari / `documenti_tipi_campi`), **assente in codice** (unico match = un commento). Non si aggiunge finché 6C non porta un consumer reale.
+- **TD-utente-enum-forward → DEFERRED (trigger-gated, security-sensitive):** portale cliente (ADR-0046) live con ACL **per-ruolo** (`VisibilitaDocumento {tutti, azienda}`), non per-utente; il targeting per singolo utente-cliente non è mai stato richiesto. Non si tocca l'enum condiviso né l'ACL live `clienteWhere` senza un consumer reale.
+- **TD-storage-gc → BACKLOG OPS ATTIVO:** soft-delete-keeps-file è intenzionale, ma gli orfani si accumulano davvero → item ops reale. GC = sottosistema cron da costruire (`@nestjs/schedule` assente), cancellazione file irreversibile, tier alto. Nessuna urgenza dimostrata al momento.
 
 **Nuovi (2026-07-01, ADR-0060 — maturano insieme alla nozione di verticale first-class):**
 
