@@ -3125,6 +3125,19 @@ Micro-PR **solo-docs** (tier BASSO, ADR-0063): nessun codice/schema/seed/permess
 - **TD-storage-gc → BACKLOG OPS ATTIVO:** soft-delete-keeps-file intenzionale, ma orfani reali; GC = sottosistema cron da costruire, cancellazione irreversibile, tier alto. Nessuna urgenza dimostrata.
 - Esito: 2 deferred-con-trigger (riattivazione automatica quando il consumer comparirà in codice) + 1 backlog ops esplicito. Tutti e tre tier alto: nessun fix meccanico. HANDOFF `Tech debt aperti` aggiornato.
 
+## [2026-07-01] Blocco COMANDE PR-1 — fondamenta dati aggregato Conto ([ADR-0067](docs/architecture/ADR-0067-modello-aggregato-conto.md))
+
+Primo sotto-blocco della sequenza food **Comande → KDS → Cassa pre-fiscale → RT differito**. Tier **ALTO** (nuovo aggregato + migration su `schema.prisma` condiviso + RLS tenant), STOP-gate pieno. PR-1 = **solo fondamenta dati** (no endpoint, no permessi): endpoint + enforcement `comande.*` → PR-2, FE pagina comande → PR-3.
+
+- **Aggregato 2 livelli `Conto` (testata) → `ContoRiga` (riga)**, `contoId` non-null. La **Comanda (KDS) è differita**: aggancio additivo futuro `comandaId` nullable — PR-1 non predispone.
+- **`Conto`** tenant-scoped come `Tavolo` (no FK Tavolo→Sede; `sedeId` futuro additivo nullable con trigger): `tavoloId` nullable (asporto/delivery), `channel` (riusa enum food), `coperti` nullable, `stato StatoConto{aperto,chiuso,annullato}`, `apertoIl`/`chiusoIl`, soft-delete.
+- **`ContoRiga` snapshot pricing (DP-C):** `nomeArticolo`/`prezzoUnitario`/`reparto` congelati dall'`Article` all'ordine, colonne indipendenti (verificato: modifica dell'Article sorgente non muove la riga).
+- **`createdBy` ASSENTE** — coerenza col pattern food (Menu/Article/Tavolo non lo hanno; unico è Documento accountant). Deviazione consapevole dal prompt (citava createdBy a memoria); "verifica il pattern, non inventare". Additivo nullable se servirà.
+- **RLS FORCE su entrambi i model** + soft-delete. Isolamento **esercitato** (non solo scritto): spec `conti-rls-isolation.e2e-spec.ts` come ruolo `gestionale_app` non-superuser, 8 casi che tentano la violazione cross-tenant e falliscono chiuso (read vuoto, update→P2025 con vittima intatta, insert `tenantId` altrui bloccato da WITH CHECK) + soft-delete invisibility (CHECK-BE-2) + snapshot independence.
+- **Forward dichiarato (rimando [ADR-0021](docs/architecture/ADR-0021-soft-delete-rls-tx-escape-fix.md), non TD nuovo):** `.delete()` su plain client sotto RLS → P2025 (rewrite delete→update fuori dalla tx RLS); il path service `withTenantContextAtomicTx`+`tx.update({deletedAt})` arriva in PR-2. Test PR-1 valorizza `deletedAt` via `update()` e verifica l'invisibilità.
+- **Migration solo su DB throwaway** (Postgres 16, porta 55432, volume effimero, `DATABASE_URL` inline): `.env` prod intoccato, container prod invariati pre/post. Catalogo permessi resta **60**.
+- Commit split: `feat(db)` aggregato+migration+RLS / `test(db)` isolamento+soft-delete / `docs(adr)` ADR-0067 + PROGRESS.
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
