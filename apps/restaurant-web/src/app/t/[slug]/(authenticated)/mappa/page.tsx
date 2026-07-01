@@ -206,6 +206,7 @@ export default function MappaPage(): JSX.Element {
           <div className="overflow-x-auto rounded-lg border bg-muted/30">
             <div
               ref={canvasRef}
+              data-testid="mappa-canvas"
               className="relative"
               style={{ height: CANVAS_H, minWidth: CANVAS_MIN_W }}
               aria-hidden="true"
@@ -213,6 +214,7 @@ export default function MappaPage(): JSX.Element {
               {tables.map((tavolo) => (
                 <div
                   key={tavolo.id}
+                  data-testid={`tavolo-${tavolo.id}`}
                   onPointerDown={(e) => handlePointerDown(e, tavolo)}
                   onPointerMove={handlePointerMove}
                   onPointerUp={() => void handlePointerUp()}
