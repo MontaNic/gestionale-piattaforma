@@ -1,96 +1,80 @@
-# HANDOFF — gestionale-piattaforma
+# HANDOFF — Gestionale Piattaforma
 
-**Snapshot:** Main @ `a69fb09` (+1 commit `docs(handoff)` in arrivo via PR).
-**Aggiornato:** 2026-07-01.
-**Verticali:** entrambi deployati e pubblici — `studiodesk.cloud` (accountant), `food.studiodesk.cloud` (restaurant, demo temporaneo).
-
----
-
-## PARTE A — STATO CORRENTE
-
-### Sessione 2026-07-01 — catena dei 4 task del 2026-06-30 (tutti su main)
-
-| #   | Task                                     | Esito                                                        | PR · ADR        |
-| --- | ---------------------------------------- | ------------------------------------------------------------ | --------------- |
-| #2  | Smoke funzionale per-verticale per-ruolo | **costruito**                                                | #142 · ADR-0059 |
-| #3  | Cleanup tenant test + `purge-tenant` ops | **costruito**                                                | #143            |
-| #1  | Sync permessi template→tenant            | **non costruito** — no-op misurato (delta=0) + 3 TD deferiti | #144 · ADR-0060 |
-| #4  | Branding per-verticale build-time        | **costruito**                                                | #145 · ADR-0061 |
-
-Filo metodologico: _verified, not promised_ applicato in positivo e in negativo. Due fix costruiti perché la misura diceva che servivano; due non costruiti perché misurati come non necessari, con il debito reale isolato e datato al suo trigger anziché tappato a intuito.
-
-### Smoke funzionale (ADR-0059, #142)
-
-Gate post-deploy read-only on-demand: `pnpm smoke` (`smoke:accountant` / `smoke:restaurant`). Login reale per-ruolo → tour di ogni pagina shell accessibile al ruolo → assert no 403/≥500/pageerror/crash, con guard read-only attivo (qualsiasi metodo mutante durante il tour = fail). Copertura Fase 1: restaurant 10/10 (Super Admin), accountant 32/32 (Super Admin + Collaboratore + Cliente). Fuori da CI (`testIgnore` + config `.smoke` dedicate). Principio: tour di un ruolo = pagine a cui ha legittimo accesso → ogni 403 nel tour è un bug per definizione. Limiti noti: 3/11 ruoli coperti (solo quelli con utenti seedati); `platform/tenants` non coperta (Fase 2 oneplatform); 2 detail comunicazioni escluse (mutate-on-view → TD).
-
-### Cleanup + tooling ops (#143)
-
-DB prod ripulito: **4 tenant well-known** (`demo`/`acme`/`studio-demo`/`oneplatform`), zero residui di test (rimossi `verifica-41554`, `rls-a`, `rls-b` via hard-delete transazionale CASCADE, 22 righe). `purge-tenant` versionato in `packages/db` (`pnpm --filter @gestionale/db purge-tenant --slug <x>`, dry-run default, `--execute`): guard-rail blocklist well-known categorica, match esatto slug/id, transazione con verifica pre-commit, connessione `DIRECT_URL` (superuser, bypassa RLS FORCE). Prima pietra del tooling ops in `packages/db`.
-
-### Sync permessi — no-op verificato (ADR-0060, #144)
-
-STOP 0 ha **misurato** delta = 0 su tutti i 6 ruoli materializzati × 4 tenant (0 mancanti, 0 eccessi, 0 ruoli custom, 0 orfani): il 403 tavoli era già chiuso dal re-seed. Nessun meccanismo costruito (nessun consumer reale). Allineati i conteggi stale nei commenti (`tenants.service.ts`, `seed.ts`, e2e rbac → 11 template / 60 permessi / 249 mapping). Meccanismo di idempotenza accertato per quando servirà: `role_permissions` PK `(role_id, permission_id)` → upsert additivo; scrittura via `DIRECT_URL`; Super Admin enumerato esplicito (va incluso in un sync futuro). Trigger di rivisitazione: primo tenant via API / nozione di verticale first-class.
-
-### Branding per-verticale (ADR-0061, #145)
-
-Build-time, pattern riusabile. Tipo `BrandConfig` (type-only) in `packages/ui` + istanza per-app disaccoppiata (`StudioDesk` / `FoodDesk`). Aggiungere un verticale = un solo brand object (login/metadata/shell/asset-slot ereditati). Asset placeholder (wordmark `currentColor` light+dark, favicon-tile) sostituibili nello stesso path. 8 punti cablati simmetrici (metadata, login→`brand.Logo`+title i18n, Sidebar, Topbar). Login restaurant portato a next-intl (parità i18n con accountant). Verticale **strutturale per scelta** — il verticale-dato (`tenants.vertical`) è deferito al trigger dei 3 TD di ADR-0060, non aggiunto "già che ci siamo". GATE 6/6. **`FoodDesk` è segnaposto consapevole** — sostituibile col suo giro PR quando il nome food sarà deciso.
-
-### Hotfix cambio lingua prod (ADR-0062, #146)
-
-Bug segnalato: da collaboratore su StudioDesk il cambio lingua IT→EN non faceva nulla. Diagnosi empirica: sintomo fuorviante → **bug generale prod-only, entrambi i verticali**, non ruolo-specifico. Causa: la route Next `POST /api/set-locale` era ingoiata da Caddy `handle /api/*` → inoltrata al backend NestJS (`/api/v1`) → 404 → cookie `NEXT_LOCALE` mai scritto. Fix (asse B): route spostata fuori dal namespace backend (`/api/set-locale` → `/set-locale`) in entrambe le app, client `fetch` aggiornato, `set-locale$` escluso dal matcher middleware. Contratto reso **eseguibile** (ADR-0062): guard CI `scripts/check-no-api-next-routes.sh` fallisce su qualsiasi `apps/*/src/app/api/**/route.ts`, con messaggio che spiega il perché — auto-enforce del same-origin di ADR-0042. Regression guard e2e `locale-switcher.spec.ts` (restaurant). Deployato (rebuild web ×2, `a69fb09`) e verificato in prod su entrambi i domini: nuovo path 200+cookie, vecchio path 404, UI IT→EN persistente al refresh. **Risolto end-to-end.**
-
-### Contesto stabile (invariato)
-
-- **StudioDesk (accountant):** Onda 3+4 complete (TD-tariffario #127/ADR-0055, i18n-cumulativo #129, voceId-FE #132, i18n-zod #134; AI draft comunicazioni #136/ADR-0056 + insight margine #139/ADR-0057). Live su `studiodesk.cloud`.
-- **Restaurant:** riattivato (ADR-0058). F1 Menu completo, F2 Tavoli/Mappa (#138). Deployato (#141) su `food.studiodesk.cloud` (demo temporaneo). Prossimi blocchi: comande/cassa/KDS.
-- **Permessi:** 60 nel catalogo su main. Parità ruoli↔template (delta 0).
-- **Deploy/Caddy:** config reale in `/home/deploy/projects/gestionale/infra/caddy/conf` (bind ro), NON il Caddyfile placeholder in root. Verifica sempre dalla config montata nel container. Schema Prisma unico condiviso tra verticali, un solo DB.
-
-### Tech debt aperti
-
-**Invariati (pre-sessione, riconciliati col registry live):** TD-BV · TD-CB · TD-PATCH-null-FK · TD-blocklist-drift · `web` external one-time · TD-moduleResolution-node10 · TD-circolari-utente-forward · TD-portale-com-allegati · TD-portale-com-apertura · TD-portale-circolari-html · TD-immagine-api · TD-sala-forward · TD-tavolo-stato-forward (restaurant, ADR-0058) · TD-no-error-boundary · TD-sidebar-permission-filter · TD-comunicazioni-mutate-on-view
-
-**TD residui accountant (ex-ADR-0044) — triati 2026-07-01 ([ADR-0065](../architecture/ADR-0065-triage-td-residui.md)):** la voce generica "TD residui accountant" si chiude → 2 deferred-con-trigger + 1 backlog ops. Verifica empirica read-only: tutti e tre sono tier alto, nessuno è fix meccanico.
-
-- **TD-documenti-tipo-codice → DEFERRED (trigger-gated):** `DocumentoTipo` funziona a `nome`, 0 consumer di un codice macchina. Trigger = fase 6C (questionari / `documenti_tipi_campi`), **assente in codice** (unico match = un commento). Non si aggiunge finché 6C non porta un consumer reale.
-- **TD-utente-enum-forward → DEFERRED (trigger-gated, security-sensitive):** portale cliente (ADR-0046) live con ACL **per-ruolo** (`VisibilitaDocumento {tutti, azienda}`), non per-utente; il targeting per singolo utente-cliente non è mai stato richiesto. Non si tocca l'enum condiviso né l'ACL live `clienteWhere` senza un consumer reale.
-- **TD-storage-gc → BACKLOG OPS ATTIVO:** soft-delete-keeps-file è intenzionale, ma gli orfani si accumulano davvero → item ops reale. GC = sottosistema cron da costruire (`@nestjs/schedule` assente), cancellazione file irreversibile, tier alto. Nessuna urgenza dimostrata al momento.
-
-**Nuovi (2026-07-01, ADR-0060 — maturano insieme alla nozione di verticale first-class):**
-
-- **TD-perm-propagation** — nessuna propagazione idempotente template→ruoli materializzati; oggi solo re-seed manuale, copre solo i tenant well-known. Delta attuale 0 → non urgente.
-- **TD-bootstrap-verticale** — `tenants.service.ts` clona tutti gli 11 template `isDefault` → un tenant creato via API riceverebbe ruoli del verticale sbagliato. Latente: nessun tenant via API esiste. Causa-radice: assenza di dimensione `verticale` nei dati.
-- **TD-role-template-key** — i ruoli materializzati non portano `templateId`/`code`; match solo per `name` (stringa libera). Prerequisito tecnico di entrambi i sopra.
-
-### Residui aperti
-
-- Verifica runtime manuale FE mappa drag-drop #138 come non-superuser (drag-persist su Testcontainers ephemeral, FE-5): lo smoke #142 copre ora il _caricamento_ della pagina mappa come Super Admin, non la persistenza del drag — quella resta da verificare formalmente.
-
-_(Il bug cambio lingua prod, inizialmente sospetto residuo, è stato trovato e risolto in questa sessione — vedi Hotfix ADR-0062/#146. Non è un residuo aperto.)_
+**Ultimo aggiornamento:** 2026-07-01 · fine sessione
+**Snapshot:** Main @ `39632ae` (PR #152 merged; +1 commit `docs(handoff)` in arrivo via PR)
 
 ---
 
-## PARTE B — SULL'ORIZZONTE
+## PARTE A — Stato
 
-### Prossimi fronti (datati al loro trigger)
+### Deploy (invariato dalla sessione precedente)
 
-- **Verticale-dato (`tenants.vertical`)** — quando nasce il primo tenant via API. Paga TD-bootstrap-verticale + TD-perm-propagation; richiede anche TD-role-template-key (chiave stabile sui ruoli). È il momento in cui la curatela verticale passa dal seed imperativo ai dati.
-- **Nome food reale** — `FoodDesk` → brand definitivo (1 riga `productName`); + eventuale migrazione a dominio-brand proprio (`foodesk.cloud` o simile) quando il food avrà adesione. `food.studiodesk.cloud` è demo sotto il brand commercialisti, non l'indirizzo finale.
+- **Accountant** live su `studiodesk.cloud` + `*.studiodesk.cloud` a `0093b79`.
+- **Restaurant** live su `food.studiodesk.cloud` (demo/temporaneo; brand finale sarà dominio dedicato).
+- Caddy reale bind-mounted da `infra/caddy/conf/Caddyfile`; reload zero-downtime (`caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`), mai restart.
+- Schema Prisma **unico** condiviso tra verticali, un solo DB `gestionale`. Il modulo comande esiste **solo a livello codice/DB-schema**: **non ancora deployato** in prod (la migration `add_conto_aggregate` sarà applicata a prod al prossimo deploy restaurant, non è ancora girata su prod).
 
-### Blocco restaurant: comande / cassa / KDS
+### PR mergiate in questa sessione (main @ 39632ae)
 
-Discovery da Cassa in Cloud (TeamSystem) — decisioni di modellazione **a monte**, costose da retrofittare:
+- **#148** (ADR-0063/0064) — FE-5 drag-persist mappa tavoli coperto da e2e browser-level + utente `direzione@demo.local` (ruolo Direzione) nel seed + tiering STOP-gate formalizzato.
+- **#149** (ADR-0065) — triage 3 TD residui accountant → 2 deferred-con-trigger + 1 backlog ops.
+- **#150** (ADR-0066) — sync permessi template→tenant differito con trigger esplicito.
+- **#151** (ADR-0067) — PR-1 blocco COMANDE: fondamenta dati aggregato `Conto`/`ContoRiga` (migration, RLS FORCE, soft-delete, snapshot pricing).
+- **#152** (ADR-0068) — PR-2 blocco COMANDE: operatività BE end-to-end.
 
-- **Coperti sul conto/tavolo** — unità di tutti i KPI sala; se non tracciati dal giorno 1, lo storico è irrecuperabile.
-- **Ciclo di vita del Conto con timestamp** (apertura→comande→chiusura) — abilita turnover tavolo, durata servizio, incasso/tavolo. F2 ha il `Tavolo`; manca l'entità `Conto`.
-- **Modalità di vendita come dimensione di prezzo** (sala/asporto/…) — tocca il modello prezzo del Menu F1 (oggi prezzo scalare).
-- **Reparto ≠ Categoria** — categoria merceologica (menu/UX) vs reparto fiscale (IVA, routing KDS).
-- ⚠️ **Nodo fiscale**: cassa gestionale-pre-fiscale (documento via RT esterno) **vs** cassa fiscale (integrazione RT/corrispettivi telematici). Decisione di scope da verbalizzare prima della prima riga. Raccomandazione: gestionale-pre-fiscale per i primi blocchi, fiscalità come blocco separato.
+### Blocco COMANDE — stato
 
-### Roadmap più lontana
+Backend **completo end-to-end** (PR-1 dati + PR-2 operatività). Su main:
 
-Portal accountant Onda 5+ (upload, email notifications, accettazione preventivi online); Public API versionata (per-tenant keys, OpenAPI); theme switching per-tenant (deferito a richiesta reale); subdomain routing `[slug].studiodesk.cloud`; layer `sa.<verticale>` superadmin (tenant mgmt, billing).
+- Aggregato `Conto` → `ContoRiga` (2 livelli; Comanda-KDS differita, sarà additiva via `comandaId` nullable). Conto tenant-scoped (no FK Sede; `sedeId` futuro additivo). RLS FORCE esercitata.
+- Modulo `restaurant-api/conti`: endpoint apri/righe(add/patch)/storno/chiudi/annulla. RBAC su 4 `comande.*` (crea=apri, modifica=righe+chiusura/annullo, elimina=storno, visualizza=GET). Audit-in-tx. Soft-delete via service (path ADR-0021). State machine `aperto→{chiuso,annullato}` con blocco mutazioni su stati terminali. Coerenza tavolo↔canale (`cassa⇒tavolo`, `E_CONTO_CHANNEL_TAVOLO_MISMATCH`, 400).
+- Modulo `restaurant-api/pricing`: resolver prezzo-per-canale banale (`channel→listino attivo→ArticlePrice ∨ basePrice`) + **fail-fast** `E_PRICE_AMBIGUOUS` (409) su overlap multi-listino. Snapshot congelato (prezzo+nome+reparto) verificato via mutazione SQL raw.
+- Manca solo il **FE** (pagina `comande` oggi placeholder) → PR-3.
+
+### Permessi
+
+Catalogo = **60** (invariato in tutta la sessione; PR-1/PR-2 non aggiungono permessi). `comande.stato.cambia` = **orfano intenzionale**, trigger = blocco KDS (documentato ADR-0068, non è dimenticanza).
+
+### Governance/processo
+
+- **ADR-0063 tiering STOP-gate per rischio** in vigore: tier BASSO = un round-trip a `gh pr create`; tier ALTO = STOP-gate pieno. GATE obbligatori in entrambi. In dubbio → alto. Lezione confermata: **modifica al seed condiviso è potenzialmente tier-alto** (coupling smoke/security invisibile allo scope-lock) — emendamento ad ADR-0063 ancora DA FARE (PR docs, non urgente).
+- Pattern DB throwaway isolato (porta 55432, volume effimero, `.env` intoccato) per operazioni mutanti quando serve, dato che `.env` dev punta al DB prod (`TD-dev-env-punta-prod`).
+
+### TD / forward tracciati
+
+- `TD-pricing-multilistino` (ADR-0068) — `priority`/finestre validità dormienti; trigger = dati con ≥2 listini attivi per canale.
+- `TD-dev-env-punta-prod` — `.env` dev → DB prod, rischio sistemico, fix fuori scope.
+- Pattern `TenantTx` (`common/tenant-tx.type.ts`) documentato in ADR-0068 §Nota tecnica — riusabile dai moduli food futuri (extended tx non assegnabile a `Prisma.TransactionClient`).
+- TD accountant: `TD-documenti-tipo-codice` + `TD-utente-enum-forward` = **deferred-con-trigger** (ADR-0065); `TD-storage-gc` = backlog ops attivo.
+- Problema sistemico permessi = **differito, monitorato** (ADR-0066), trigger = primo tenant via API.
+
+### Nota operativa
+
+Branch locale residuo `docs/adr-0066-sync-permessi-differito` (PR #150 già mergiata, contenuto su main) — cleanup facoltativo: `git branch -D docs/adr-0066-sync-permessi-differito`.
 
 ---
 
-_HANDOFF completo. Nessun lavoro in sospeso da questa sessione oltre ai residui sopra elencati._
+## PARTE B — Ripartenza prossima sessione
+
+### Base
+
+Main @ `39632ae`, working tree pulito, nessuna PR aperta, nessun branch feat/pr\* residuo. Verificato empiricamente a fine sessione.
+
+### Entry-point: PR-3 — FE comande
+
+Primo passo = **STOP 0 read-only** della pagina `comande` (oggi `PlaceholderPage`). Poi scope-lock + STOP 1. Tier ALTO ma più contenuto (consuma endpoint BE già esistenti e provati).
+
+- **I CHECK-FE tornano DOVUTI** (erano N/A in PR-1/PR-2): CHECK-FE-1 dark mode, CHECK-FE-2 i18n parity IT↔EN, CHECK-FE-3 no hardcoded IT, CHECK-FE-4 `next build`, CHECK-FE-5 responsive, CHECK-FE-6 a11y.
+- Consuma: `POST /conti`, `GET /conti[/:id]`, `POST /conti/:id/righe`, `PATCH .../righe/:id`, `DELETE .../righe/:id`, `POST /conti/:id/chiudi|annulla`.
+
+### Rotta blocco restaurant (fissata 2026-07-01)
+
+**Comande ✅(BE) → PR-3 FE → KDS → Cassa pre-fiscale → RT differito.**
+
+- **KDS**: `comande.stato.cambia` trova qui il consumer; la Comanda diventa aggregato inviabile (additiva su `ContoRiga.comandaId` nullable).
+- **Cassa pre-fiscale**: conto/totali/pagamento/chiusura/audit, documento interno, zero omologazione. **RT (Registratore Telematico) = blocco separato e DIFFERITO** — solo con cliente reale che emette scontrini fiscali.
+- **AI-pilota food** = blocco dedicato, decision point da sciogliere guardando l'aggregato comande reale (candidati: upselling/note-cucina-NL nelle comande, insight venduto). **Prerequisito:** estrazione `GroqService` da `accountant-api` a `@gestionale/platform` (tier alto), giustificata dal caso scelto, non speculativa.
+
+### Backlog docs (non urgente)
+
+- Emendamento ADR-0063: criterio "seed condiviso → potenzialmente tier-alto".
