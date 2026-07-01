@@ -3116,6 +3116,15 @@ Chiuso il buco storico **FE-5**: il drag-drop della mappa sala (F2, ADR-0058) no
 - **Tier BASSO — GATE self-check:** baseline BE e2e verde (70 pass/4 skip); permessi = **60** (array/DB count); `db:seed` ×2 idempotente; `migrate deploy` verde (CHECK-DB-1); spec FE-5 verde in isolamento + suite; PATCH 200 + persistenza; `next build` verde (CHECK-FE-4); FE-1/2/3 N/A (solo `data-testid`); CHECK-BE-1 non regredito.
 - Commit split: `docs(adr)` ADR-0063 / `feat(seed)` / `test(restaurant-web)` / `docs(adr)` ADR-0064 + PROGRESS.
 
+## [2026-07-01] Triage TD residui accountant (ex-ADR-0044) → [ADR-0065](docs/architecture/ADR-0065-triage-td-residui.md)
+
+Micro-PR **solo-docs** (tier BASSO, ADR-0063): nessun codice/schema/seed/permesso toccato. Una verifica empirica read-only (STOP 0 cross-codebase) ha riclassificato i tre TD residui nati da ADR-0044, chiudendo la voce generica "TD residui accountant".
+
+- **TD-documenti-tipo-codice → DEFERRED (trigger-gated):** `DocumentoTipo` funziona a `nome`, 0 consumer di un codice macchina; trigger = fase 6C (questionari), **assente in codice**.
+- **TD-utente-enum-forward → DEFERRED (trigger-gated, security-sensitive):** portale cliente (ADR-0046) live con ACL per-ruolo (`VisibilitaDocumento {tutti, azienda}`); targeting per-utente mai richiesto → non si tocca enum condiviso né ACL live `clienteWhere`.
+- **TD-storage-gc → BACKLOG OPS ATTIVO:** soft-delete-keeps-file intenzionale, ma orfani reali; GC = sottosistema cron da costruire, cancellazione irreversibile, tier alto. Nessuna urgenza dimostrata.
+- Esito: 2 deferred-con-trigger (riattivazione automatica quando il consumer comparirà in codice) + 1 backlog ops esplicito. Tutti e tre tier alto: nessun fix meccanico. HANDOFF `Tech debt aperti` aggiornato.
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
