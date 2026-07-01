@@ -3055,7 +3055,7 @@ Gate **post-deploy** che colma il gap di processo emerso dal bug "tavoli 403" (S
 
 ---
 
-## [2026-06-30] Cleanup tenant di test + comando ops `purge-tenant`
+## [2026-06-30] Cleanup tenant di test + comando ops `purge-tenant` (#143)
 
 Pulizia del DB prod condiviso da tenant di test/verifica residui, e versionamento del tool che l'ha eseguita (i tenant di test ricorrono → consumer reale e dimostrato).
 
@@ -3067,7 +3067,7 @@ Pulizia del DB prod condiviso da tenant di test/verifica residui, e versionament
 
 ---
 
-## [2026-07-01] Sync permessi template→tenant — no-op verificato, debito deferito ([ADR-0060](docs/architecture/ADR-0060-sync-permessi-template-tenant-noop.md))
+## [2026-07-01] Sync permessi template→tenant — no-op verificato, debito deferito ([ADR-0060](docs/architecture/ADR-0060-sync-permessi-template-tenant-noop.md)) (#144)
 
 Task #1 (causa-radice del 403 tavoli) chiuso come **no-op verificato**, non costruito.
 
@@ -3079,7 +3079,7 @@ Task #1 (causa-radice del 403 tavoli) chiuso come **no-op verificato**, non cost
 
 ---
 
-## [2026-07-01] Branding per-verticale build-time — pattern riusabile ([ADR-0061](docs/architecture/ADR-0061-branding-per-verticale-build-time.md))
+## [2026-07-01] Branding per-verticale build-time — pattern riusabile ([ADR-0061](docs/architecture/ADR-0061-branding-per-verticale-build-time.md)) (#145)
 
 Task #4 (ultimo dei 4 aperti il 2026-06-30): i due verticali dicevano entrambi "Gestionale", zero logo. Ora hanno brand distinti, con un pattern che paga il prossimo verticale.
 
@@ -3092,7 +3092,7 @@ Task #4 (ultimo dei 4 aperti il 2026-06-30): i due verticali dicevano entrambi "
 
 ---
 
-## [2026-07-01] Hotfix cambio lingua — route Next fuori da `/api/*` ([ADR-0062](docs/architecture/ADR-0062-no-next-route-under-api.md))
+## [2026-07-01] Hotfix cambio lingua — route Next fuori da `/api/*` ([ADR-0062](docs/architecture/ADR-0062-no-next-route-under-api.md)) (#146)
 
 Bug: in prod, loggato come operatore, il cambio lingua IT→EN non faceva nulla. **Diagnosi (discriminante empirico):** NON ruolo-specifico (Super Admin e Collaboratore rotti identici; il cliente non ha lo switcher sul portale) — è **generale e prod-only**. La route Next `POST /api/set-locale` cadeva in `handle /api/*` di Caddy → backend NestJS (prefix `api/v1`) → **404** (`E_NOT_FOUND`) → `setLocale` `res.ok=false` → cookie `NEXT_LOCALE` mai scritto → UI resta IT. Invisibile in dev (no Caddy). Vale su **entrambi** i verticali.
 
