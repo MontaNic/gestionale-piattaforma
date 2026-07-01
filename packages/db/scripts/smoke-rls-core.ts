@@ -103,11 +103,20 @@ async function main(): Promise<void> {
     roles: await prisma.role.count(),
     userRoles: await prisma.userRole.count(),
   }));
+  // Conteggi attesi = righe possedute dal solo tenant demo. Il tenant demo seeda
+  // 1 sede + 2 utenti (admin@demo.local Super Admin + direzione@demo.local
+  // Direzione, ADR-0064) + 2 ruoli tenant-scoped + 2 user_roles. Un eventuale
+  // leak da acme spingerebbe i conteggi OLTRE questi valori → l'uguaglianza
+  // esatta resta un rilevatore di leak (non solo un check di seed).
   record(
     'S1',
-    'read isolation demo: tenants/sedi/users/roles == 1, nessun leak acme',
-    demo.tenants === 1 && demo.sedi === 1 && demo.users === 1 && demo.roles === 1,
-    `demo ctx counts = ${JSON.stringify(demo)} (atteso tenants/sedi/users/roles=1)`,
+    'read isolation demo: tenants=1/sedi=1/users=2/roles=2, nessun leak acme',
+    demo.tenants === 1 &&
+      demo.sedi === 1 &&
+      demo.users === 2 &&
+      demo.roles === 2 &&
+      demo.userRoles === 2,
+    `demo ctx counts = ${JSON.stringify(demo)} (atteso tenants=1/sedi=1/users=2/roles=2/userRoles=2)`,
   );
 
   // ---------------------------------------------------------------------------
