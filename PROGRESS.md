@@ -3138,6 +3138,19 @@ Primo sotto-blocco della sequenza food **Comande → KDS → Cassa pre-fiscale �
 - **Migration solo su DB throwaway** (Postgres 16, porta 55432, volume effimero, `DATABASE_URL` inline): `.env` prod intoccato, container prod invariati pre/post. Catalogo permessi resta **60**.
 - Commit split: `feat(db)` aggregato+migration+RLS / `test(db)` isolamento+soft-delete / `docs(adr)` ADR-0067 + PROGRESS.
 
+## [2026-07-01] Blocco COMANDE PR-2 — operatività (endpoint + RBAC + pricing) ([ADR-0068](docs/architecture/ADR-0068-operativita-comande.md))
+
+Modulo `conti` (restaurant-api) sopra l'aggregato di PR-1. Tier **ALTO** (mutazioni + RBAC + audit su schema/permessi condivisi), STOP-gate pieno. **Nessuno schema/migration**, **nessun permesso nuovo** (li *enforce* → catalogo resta **60**), no FE (→PR-3), no AI (blocco separato).
+
+- **Resolver prezzo-per-canale (D2):** `channel → PriceList attivo → ArticlePrice ∨ basePrice`. **Fail-fast `E_PRICE_AMBIGUOUS` (409)** se ≥2 listini attivi collidono sul canale (modello+service non lo impediscono). Core puro `resolveUnitPrice` (6 unit test) + `PricingService`. Snapshot congelato (prezzo/nome/reparto) provato a livello dati (muto `articles`+`article_prices` via SQL → riga invariata).
+- **`TD-pricing-multilistino`:** `priority`/finestre validità dormienti (non usate dal resolver), riattivazione trigger-gated su dati multi-listino reali.
+- **RBAC (D4):** `comande.crea`→apri; `comande.modifica`→aggiungi/modifica riga + chiudi/annulla; `comande.elimina`→storno; `comande.visualizza`→GET. **`comande.stato.cambia` = orfano intenzionale** (semantica KDS "cucina/bar", trigger = blocco KDS — in attesa, non dimenticanza).
+- **Coerenza canale↔tavolo (D3, nel service):** `cassa ⇒ tavolo obbligatorio`, altri ⇒ assente → `E_CONTO_CHANNEL_TAVOLO_MISMATCH` (400). **State machine (D5):** `aperto → {chiuso, annullato}` terminali; mutazioni su non-aperto → `E_CONTO_NOT_OPEN` (409). Distinzione 400 (input) / 409 (stato) applicata con criterio.
+- **Soft-delete storno** via service (`tx.update({deletedAt})`, path ADR-0021 — forward di PR-1 chiuso). Totale conto derivato in read (mai persistito, YAGNI).
+- **Nota tecnica `TenantTx`** (`common/tenant-tx.type.ts`): `Prisma.TransactionClient` base non è assignabile al tx del client esteso (soft-delete aggiunge `forceDelete`); `Omit<ExtendedPrismaClient, metodi-top-level>` condiviso tra service collaboratori dentro un tx. Pattern riusabile dai moduli food futuri.
+- **GATE-1 esercitato:** 6 unit + **16 e2e** (`comande.e2e-spec.ts`) con RBAC reale — ogni guardia *tentata* (pricing ambiguo, cassa senza tavolo→400, addRiga su conto chiuso→409, demo sui conti acme→404, storno invisibile+fisicamente presente, audit-in-tx).
+- Commit split: `feat(restaurant)` resolver / `feat(restaurant)` modulo conti / `test(restaurant)` e2e / `docs(adr)` ADR-0068 + PROGRESS.
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
