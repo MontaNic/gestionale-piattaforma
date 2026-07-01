@@ -33,7 +33,7 @@ import { Sidebar } from './Sidebar';
 // - Dx: user dropdown (Avatar trigger) con profilo + theme + locale + logout
 //
 // Theme toggle: next-themes useTheme(), 3 opzioni (light/dark/system).
-// Locale switcher: POST /api/set-locale + router.refresh() (re-render RSC
+// Locale switcher: POST /set-locale + router.refresh() (re-render RSC
 // con nuove messages, no full reload).
 // Logout: useAuth().logout() — pattern TD-6 preservato (NO reinvent).
 // =============================================================================

@@ -5,14 +5,15 @@ import { isValidLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from './config';
 // =============================================================================
 // set-locale.ts — handler POST per cookie NEXT_LOCALE (ADR-0018 Sub-DP-A)
 // =============================================================================
-// Meccanismo riusabile: l'app monta `handleSetLocale` su /api/set-locale.
+// Meccanismo riusabile: l'app monta `handleSetLocale` su /set-locale (fuori da
+// `/api/*`, riservato al backend NestJS same-origin dietro Caddy).
 // Body: { locale: 'it' | 'en' } — validation via whitelist `isValidLocale`.
 // Cookie: NEXT_LOCALE, path '/', maxAge 1 anno. Non httpOnly perche' UX
 // cross-tab visibility (future feature locale switcher puo' leggere
 // document.cookie).
 //
 // TD-BC: NO rate limit (low-risk F1 authenticated, re-evaluation F2 public).
-// Il matcher del middleware esclude `/api/` → path pass-through, NO slug
+// Il matcher del middleware esclude `/set-locale` → path pass-through, NO slug
 // validation interferisce.
 // =============================================================================
 
