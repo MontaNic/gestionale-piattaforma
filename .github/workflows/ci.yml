@@ -203,6 +203,8 @@ jobs:
           E2E_DEMO_PASSWORD=Admin123!
           E2E_ACME_EMAIL=manager@acme.local
           E2E_ACME_PASSWORD=Manager123!
+          E2E_DIREZIONE_EMAIL=direzione@demo.local
+          E2E_DIREZIONE_PASSWORD=Direzione123!
           EOF
 
       - name: Generate Prisma client

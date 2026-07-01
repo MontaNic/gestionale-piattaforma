@@ -3104,6 +3104,20 @@ Bug: in prod, loggato come operatore, il cambio lingua IT→EN non faceva nulla.
 
 ---
 
+## [2026-07-01] FE-5 drag-persist mappa tavoli + utente Direzione food + tiering STOP-gate ([ADR-0063](docs/architecture/ADR-0063-tiering-stop-gate.md) / [ADR-0064](docs/architecture/ADR-0064-seed-utente-per-ruolo-food-fe5.md))
+
+Chiuso il buco storico **FE-5**: il drag-drop della mappa sala (F2, ADR-0058) non era mai stato esercitato a livello browser (contract API coperta da `tables-crud #4` + `tables-rbac`, ma il pointer-event reale → PATCH no; deferito in #138). Radice: il seed dev assegnava a ogni utente food **solo** Super Admin → nessun non-super con `tavoli.gestisci` con cui provare il gating runtime.
+
+- **Tiering STOP-gate (ADR-0063):** il workflow STOP-gate diventa tiered per rischio. Tier ALTO (live/config-condivisa/migration/security/irreversibile) = STOP-gate pieno; tier BASSO (additivo+idempotente+coperto-da-CI+reversibile) = round-trip singolo, STOP solo a `gh pr create`. GATE invarianti in entrambi. Default in dubbio → alto. Questo task è **tier BASSO**.
+- **Seed (ADR-0064):** `seedDevDirezione(demo)` → `direzione@demo.local` (ruolo `Direzione`, non-super, `tavoli.visualizza`+`tavoli.gestisci`), clone del template come `seedDevCollaboratore`; `seedDevTavoli(demo)` → 2 tavoli demo (idempotenti su `numero`+tenant). `seedDevTenant`/Super Admin **non** toccati.
+- **Copertura FE-5:** `restaurant-web/e2e/mappa-drag-persist.spec.ts` — login `direzione@demo.local` → assert controlli gestione (`canManage===true`) → drag reale `page.mouse` → `PATCH /tables/:id` 200 → reload → posizione persistita. Handle: `data-testid` su canvas + token (solo attributi test).
+- **DB isolato (mitigazione TD-dev-env-punta-prod):** tutto il mutante girato su Postgres 16 throwaway (`gestionale_test_pg`, porta 55432, volume effimero) con `DATABASE_URL`/`DIRECT_URL` inline; prod `food.studiodesk.cloud` mai toccata (annullerebbe il purge #143).
+- **TD candidate registrati (ADR-0064):** (a) `seedDevTenant` assegna solo Super Admin (buco strutturale); (b) **TD-dev-env-punta-prod** — `.env` dev → DB prod, rischio sistemico, fix fuori scope.
+- **Tier BASSO — GATE self-check:** baseline BE e2e verde (70 pass/4 skip); permessi = **60** (array/DB count); `db:seed` ×2 idempotente; `migrate deploy` verde (CHECK-DB-1); spec FE-5 verde in isolamento + suite; PATCH 200 + persistenza; `next build` verde (CHECK-FE-4); FE-1/2/3 N/A (solo `data-testid`); CHECK-BE-1 non regredito.
+- Commit split: `docs(adr)` ADR-0063 / `feat(seed)` / `test(restaurant-web)` / `docs(adr)` ADR-0064 + PROGRESS.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
