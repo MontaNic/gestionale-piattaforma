@@ -50,6 +50,11 @@ jobs:
       - name: TypeScript typecheck
         run: pnpm typecheck
 
+      - name: Contratto ADR-0062 — nessuna route Next sotto /api/
+        # /api/* è riservato al backend NestJS same-origin (Caddy handle /api/*).
+        # Una route Next lì viene ingoiata dal proxy in prod → 404 (bug cambio lingua).
+        run: bash scripts/check-no-api-next-routes.sh
+
       - name: Vitest
         # turbo run test -> propaga ai workspace con script `test`.
         # Workspace senza spec files passano via --passWithNoTests.

@@ -3092,6 +3092,18 @@ Task #4 (ultimo dei 4 aperti il 2026-06-30): i due verticali dicevano entrambi "
 
 ---
 
+## [2026-07-01] Hotfix cambio lingua — route Next fuori da `/api/*` ([ADR-0062](docs/architecture/ADR-0062-no-next-route-under-api.md))
+
+Bug: in prod, loggato come operatore, il cambio lingua IT→EN non faceva nulla. **Diagnosi (discriminante empirico):** NON ruolo-specifico (Super Admin e Collaboratore rotti identici; il cliente non ha lo switcher sul portale) — è **generale e prod-only**. La route Next `POST /api/set-locale` cadeva in `handle /api/*` di Caddy → backend NestJS (prefix `api/v1`) → **404** (`E_NOT_FOUND`) → `setLocale` `res.ok=false` → cookie `NEXT_LOCALE` mai scritto → UI resta IT. Invisibile in dev (no Caddy). Vale su **entrambi** i verticali.
+
+- **Fix (asse: route mal-posizionata, non infra):** spostata `app/api/set-locale/` → `app/set-locale/` (path top-level `/set-locale`, fuori da `/api/*`) in accountant + restaurant; client `@gestionale/i18n` → `fetch('/set-locale')`; middleware matcher esclude `set-locale$` (anchor di segmento, non prefisso — verificato `/set-locale-foo`→404).
+- **Contratto eseguibile (ADR-0062):** guard CI `scripts/check-no-api-next-routes.sh` (job checks) fallisce se compare una route sotto `apps/*/src/app/api/**`, con messaggio che spiega il **perché** (Caddy ingoia `/api/*` → usa path top-level). Rende auto-enforced il contratto same-origin di ADR-0042.
+- **Regression guard:** mini-e2e switcher `locale-switcher.spec.ts` (restaurant) — click lingua → `POST /set-locale`=200 → cookie → UI cambia. Ambito dichiarato: copre la logica switcher, **non** la classe prod-routing (dev no Caddy) → quella è chiusa dal guard CI + verifica prod.
+- **Verifica dev:** `POST /set-locale` → 200 + `Set-Cookie NEXT_LOCALE` (entrambe); `/api/set-locale` → 404. GATE: `next build` ×2 ✅; FE-1/2/3/5/6 N/A (nessuna UI/stringa nuova); BE N/A. **Deploy prod** (rebuild web ×2, Caddy intatto) = step separato con verifica reale.
+- Commit split: `fix(i18n)` / `chore(ci)` (guard) / `docs`.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

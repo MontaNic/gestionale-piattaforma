@@ -74,6 +74,9 @@ export function middleware(req: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Match tutti i path eccetto Next.js static/image + favicon + API routes.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],
+  // Match tutti i path eccetto Next.js static/image + favicon + API routes +
+  // l'endpoint di meccanismo `/set-locale` (route Next, non pagina → il
+  // middleware non deve girarci). `set-locale$` àncora il SEGMENTO esatto: NON
+  // cattura per prefisso eventuali pagine `set-locale...` (nessuna oggi).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/|set-locale$).*)'],
 };
