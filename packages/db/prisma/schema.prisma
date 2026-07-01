@@ -89,6 +89,8 @@ model Tenant {
   rdlCounters          RdlCounter[]
   prestazioni          Prestazione[]
   tariffeOrarie        TariffaOraria[]
+  conti                Conto[]
+  contiRighe           ContoRiga[]
 
   @@map("tenants")
 }
@@ -603,6 +605,7 @@ model Article {
   recipe      Recipe?        @relation(fields: [recipeId], references: [id], onDelete: SetNull)
   pricingRule PricingRule?   @relation(fields: [pricingRuleId], references: [id], onDelete: SetNull)
   prices      ArticlePrice[]
+  contiRighe  ContoRiga[]
 
   // Unicità nome soft-delete-aware (TD-BZ, ADR-0023): partial unique index
   // `(tenant_id, category_id, name) WHERE deleted_at IS NULL` (vedi migration).
@@ -719,10 +722,84 @@ model Tavolo {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conti  Conto[]
 
   @@index([tenantId])
   @@map("tavoli")
+}
+
+// =============================================================================
+// Blocco COMANDE — aggregato Conto (PR-1, ADR-0067)
+// =============================================================================
+// Sequenza food: Comande → KDS → Cassa pre-fiscale → RT differito. Le comande
+// sono il primo sotto-blocco; l'aggregato dati è `Conto` (testata) → `ContoRiga`
+// (righe). Scope-lock (STOP 1):
+//   - 2 livelli. La Comanda (livello KDS) è DIFFERITA: si aggancerà in modo
+//     additivo con `comandaId` nullable sulla riga → PR-1 NON predispone campi.
+//   - Conto tenant-scoped come Tavolo (NO FK Tavolo→Sede ora; `sedeId` futuro
+//     sarà migration additiva nullable con trigger multi-sede).
+//   - Snapshot pricing (DP-C): la riga CONGELA prezzo/nome/reparto al momento
+//     dell'ordine — colonne indipendenti, nessuna derivazione live da Article.
+//   - Coerenza `tavoloId`↔`channel` = enforcement applicativo → PR-2 (non qui).
+//   - Audit food-pattern: createdAt/updatedAt/deletedAt (NO createdBy — i model
+//     food esistenti Menu/Article/Tavolo non lo hanno; solo Documento accountant).
+//   - RLS FORCE su ENTRAMBI i model (vincolo architetturale) + soft-delete.
+// =============================================================================
+
+enum StatoConto {
+  aperto
+  chiuso
+  annullato
+
+  @@map("stato_conto")
+}
+
+model Conto {
+  id        String     @id
+  tenantId  String     @map("tenant_id")
+  tavoloId  String?    @map("tavolo_id") // nullable: asporto/delivery non hanno tavolo
+  channel   Channel // riusa l'enum food esistente — binding canale↔pricing
+  coperti   Int? // nullable: asporto non ha coperti
+  stato     StatoConto @default(aperto)
+  apertoIl  DateTime   @default(now()) @map("aperto_il")
+  chiusoIl  DateTime?  @map("chiuso_il")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  deletedAt DateTime?  @map("deleted_at")
+
+  // Relations
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tavolo Tavolo?     @relation(fields: [tavoloId], references: [id], onDelete: SetNull)
+  righe  ContoRiga[]
+
+  @@index([tenantId])
+  @@index([tavoloId])
+  @@map("conti")
+}
+
+model ContoRiga {
+  id             String          @id
+  tenantId       String          @map("tenant_id") // RLS FORCE anche sulla riga (vincolo)
+  contoId        String          @map("conto_id")
+  articleId      String          @map("article_id")
+  nomeArticolo   String          @map("nome_articolo") // snapshot: robustezza storica
+  prezzoUnitario Decimal         @map("prezzo_unitario") @db.Decimal(10, 2) // snapshot congelato (DP-C)
+  quantita       Int
+  reparto        PrintDepartment // snapshot da Article.printDepartment (prepara KDS)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+
+  // Relations
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conto   Conto   @relation(fields: [contoId], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [articleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([contoId])
+  @@index([articleId])
+  @@map("conti_righe")
 }
 
 // =============================================================================
