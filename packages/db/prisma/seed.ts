@@ -1241,6 +1241,106 @@ async function seedDevCollaboratore(tenantId: string): Promise<void> {
   }
 }
 
+// Utente non-superuser per il tenant food `demo` (ADR-0064): sblocca i test di
+// gating runtime di `tavoli.*` — in particolare l'e2e drag-persist FE-5 e lo
+// smoke per-ruolo (ADR-0059) — che `admin@demo.local` (Super Admin) non esercita
+// mai. Clona il template "Direzione" (food, possiede tavoli.visualizza +
+// tavoli.gestisci) in un ruolo tenant-wide e assegna l'utente. Stesso impianto
+// idempotente di seedDevCollaboratore: find-then-create su email+tenantId, ruolo
+// (tenantId+name), mapping (roleId+permissionId), assignment tenant-wide (sedeId NULL).
+async function seedDevDirezione(tenantId: string): Promise<void> {
+  const ROLE_NAME = 'Direzione';
+  const EMAIL = 'direzione@demo.local';
+
+  // 1. Template "Direzione" + i suoi permessi (seedati a monte in main()).
+  const tpl = await prisma.systemRoleTemplate.findUnique({ where: { name: ROLE_NAME } });
+  if (!tpl) throw new Error(`System template '${ROLE_NAME}' missing`);
+  const tplPermissions = await prisma.systemRoleTemplatePermission.findMany({
+    where: { templateId: tpl.id },
+  });
+
+  // 2. User con password argon2id (find-then-create su tenantId+email).
+  const passwordHash = await argon2.hash('Direzione123!', { type: argon2.argon2id });
+  const user = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId, email: EMAIL } },
+    create: {
+      id: id(),
+      tenantId,
+      email: EMAIL,
+      passwordHash,
+      firstName: 'Direzione',
+      lastName: 'Demo',
+      isActive: true,
+    },
+    update: { passwordHash, isActive: true },
+  });
+  console.log(`  User '${EMAIL}': ${user.id}`);
+
+  // 3. Role "Direzione" tenant-scoped (clone dal template). TD-BZ (ADR-0023):
+  // find-then-create/update sulla chiave naturale (tenantId+name), come Super Admin.
+  const roleData = { description: tpl.description, isSystem: true };
+  const existingRole = await prisma.role.findFirst({ where: { tenantId, name: ROLE_NAME } });
+  const role = existingRole
+    ? await prisma.role.update({ where: { id: existingRole.id }, data: roleData })
+    : await prisma.role.create({
+        data: { id: id(), tenantId, name: ROLE_NAME, ...roleData },
+      });
+  console.log(`  Role '${ROLE_NAME}' (demo): ${role.id}`);
+
+  // 4. Copia mappings template -> role_permissions.
+  let rolePermCreated = 0;
+  let rolePermSkipped = 0;
+  for (const tp of tplPermissions) {
+    const existing = await prisma.rolePermission.findUnique({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: tp.permissionId } },
+    });
+    if (existing) {
+      rolePermSkipped++;
+    } else {
+      await prisma.rolePermission.create({
+        data: { roleId: role.id, permissionId: tp.permissionId },
+      });
+      rolePermCreated++;
+    }
+  }
+  console.log(
+    `  role_permissions (${ROLE_NAME} demo): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
+  );
+
+  // 5. Assignment user -> Direzione tenant-wide (sede_id NULL).
+  const existingAssignment = await prisma.userRole.findFirst({
+    where: { userId: user.id, roleId: role.id, sedeId: null },
+  });
+  if (!existingAssignment) {
+    await prisma.userRole.create({
+      data: { id: id(), userId: user.id, roleId: role.id, sedeId: null },
+    });
+    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) created`);
+  } else {
+    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) already exists`);
+  }
+}
+
+// Tavoli demo per il tenant food `demo` (ADR-0064): target draggabile stabile per
+// l'e2e drag-persist FE-5 (la mappa sala richiede ≥1 tavolo). Idempotente sulla
+// chiave naturale (tenantId + numero): find-then-create, nessun duplicato a doppia
+// esecuzione. Coordinate iniziali distinte così il drag ha una posizione nota.
+async function seedDevTavoli(tenantId: string): Promise<void> {
+  const demo: Array<{ numero: string; capienza: number; posX: number; posY: number }> = [
+    { numero: '1', capienza: 4, posX: 40, posY: 40 },
+    { numero: '2', capienza: 2, posX: 200, posY: 40 },
+  ];
+
+  let created = 0;
+  for (const tv of demo) {
+    const existing = await prisma.tavolo.findFirst({ where: { tenantId, numero: tv.numero } });
+    if (existing) continue;
+    await prisma.tavolo.create({ data: { id: id(), tenantId, ...tv } });
+    created++;
+  }
+  console.log(`  ✓ tavoli demo: ${created} created (${demo.length} total)`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Cliente demo del portale (ADR-0046 DP-defer §7): l'onboarding reale è via
 // invito (differito), qui seedo direttamente un utente tipo=cliente legato a
@@ -1955,6 +2055,14 @@ async function main(): Promise<void> {
     await seedDevMenu(demo.tenantId, demo.tenantSlug);
     await seedDevMenu(acme.tenantId, acme.tenantSlug);
 
+    // F2 Tavoli (ADR-0058) + utente per-ruolo food (ADR-0064): utente Direzione
+    // non-super (tavoli.gestisci) + tavoli demo sul tenant `demo`, per l'e2e
+    // drag-persist FE-5 e lo smoke per-ruolo (ADR-0059). NON tocca seedDevTenant
+    // né i ruoli Super Admin: aggiunto esplicitamente accanto ad admin@demo.local.
+    console.log('Dev data — dominio (F2 Tavoli, utente Direzione):');
+    await seedDevDirezione(demo.tenantId);
+    await seedDevTavoli(demo.tenantId);
+
     console.log('');
   } else {
     console.log('Dev data: SKIPPED (NODE_ENV=production)\n');
@@ -1970,6 +2078,7 @@ async function main(): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`  Dev tenants:`);
     console.log(`    - demo  (admin@demo.local / Admin123!)`);
+    console.log(`        + direzione@demo.local (ruolo Direzione, non-super — tavoli.gestisci)`);
     console.log(`    - acme  (manager@acme.local / Manager123!)`);
     console.log(`    - studio-demo  (admin@studio.local / Studio123!)`);
     console.log(`        + collaboratore@studio.local / Collaboratore123! (ruolo Collaboratore)`);
