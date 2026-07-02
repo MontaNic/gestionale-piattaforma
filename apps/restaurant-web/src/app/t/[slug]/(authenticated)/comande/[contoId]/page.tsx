@@ -24,6 +24,7 @@ import {
   updateRiga,
 } from '@/lib/conti-api';
 import { listArticlesByCategory, listCategories, listMenus } from '@/lib/menu-api';
+import { getTable } from '@/lib/table-api';
 import type { AddRigaInput, ContoRiga, ContoWithRighe } from '@/lib/conti-types';
 
 // =============================================================================
@@ -49,6 +50,9 @@ export default function ContoDetailPage(): JSX.Element {
   const canDelete = permissions.includes('comande.elimina');
 
   const [conto, setConto] = useState<ContoWithRighe | null>(null);
+  // Label tavolo risolta (numero) — fallback all'id grezzo se il fetch fallisce
+  // (es. utente senza tavoli.visualizza). Vedi risoluzione in `load`.
+  const [tavoloLabel, setTavoloLabel] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,6 +73,18 @@ export default function ContoDetailPage(): JSX.Element {
     try {
       const fetched = await getConto(contoId);
       setConto(fetched);
+      // Risolve il numero tavolo per la label (evita di mostrare l'id grezzo).
+      // Fetch singolo, solo se il conto ha un tavolo; su errore fallback all'id.
+      if (fetched.tavoloId) {
+        try {
+          const tavolo = await getTable(fetched.tavoloId);
+          setTavoloLabel(tavolo.numero);
+        } catch {
+          setTavoloLabel(null);
+        }
+      } else {
+        setTavoloLabel(null);
+      }
       // Catalogo articoli caricato solo se il conto è modificabile (evita chiamate
       // inutili su conti chiusi/annullati in sola lettura).
       if (fetched.stato === 'aperto') {
@@ -208,7 +224,7 @@ export default function ContoDetailPage(): JSX.Element {
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold">{t(`channel.${conto.channel}`)}</h1>
               <p className="text-sm text-muted-foreground">
-                {conto.tavoloId ? `${t('tavolo')} ${conto.tavoloId}` : t('noTavolo')}
+                {conto.tavoloId ? `${t('tavolo')} ${tavoloLabel ?? conto.tavoloId}` : t('noTavolo')}
                 {conto.coperti != null && ` · ${t('coperti')}: ${conto.coperti}`}
               </p>
             </div>

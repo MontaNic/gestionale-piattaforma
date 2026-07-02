@@ -35,6 +35,7 @@ import {
 } from '@gestionale/db';
 
 import { DbService } from '@gestionale/db/nest';
+import { catchUniqueViolation } from '@gestionale/platform';
 import type { TenantTx } from '../common/tenant-tx.type';
 import { PricingService } from '../pricing/pricing.service';
 import type { CreateContoDto } from './dto/create-conto.dto';
@@ -108,16 +109,24 @@ export class ContiService {
         }
       }
 
-      const conto = await tx.conto.create({
-        data: {
-          id: id(),
-          tenantId,
-          channel: dto.channel,
-          coperti: dto.coperti ?? null,
-          tavoloId: dto.tavoloId ?? null,
-          stato: 'aperto',
-        },
-      });
+      // DP-2 "un tavolo, un conto aperto": il partial unique index
+      // `conti_tenant_tavolo_aperto_uq` (migration 20260702090000) vincola a UN
+      // solo conto 'aperto' per tavolo. È l'UNICO unique index su `conti` → un
+      // P2002 da questa create è inequivocabilmente quel conflitto → 409.
+      const conto = await catchUniqueViolation(
+        () =>
+          tx.conto.create({
+            data: {
+              id: id(),
+              tenantId,
+              channel: dto.channel,
+              coperti: dto.coperti ?? null,
+              tavoloId: dto.tavoloId ?? null,
+              stato: 'aperto',
+            },
+          }),
+        'E_CONTO_TAVOLO_ALREADY_OPEN',
+      );
 
       await tx.auditLog.create({
         data: {

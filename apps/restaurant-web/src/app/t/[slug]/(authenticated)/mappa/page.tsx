@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Pencil, Plus, Trash2, Users } from 'lucide-react';
 
@@ -12,40 +13,65 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  Input,
   cn,
 } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
+import { ApiError } from '@gestionale/api-client';
 import { ConfirmDialog } from '@/components/menu/ConfirmDialog';
 import { TableForm } from '@/components/tavoli/TableForm';
 import { messageForError } from '@/lib/error-codes';
 import { createTable, deleteTable, listTables, updateTable } from '@/lib/table-api';
+import { createConto, listConti } from '@/lib/conti-api';
+import { usePollingRefresh } from '@/lib/usePollingRefresh';
 import type { CreateTableInput, Tavolo } from '@/lib/table-types';
+import type { Conto } from '@/lib/conti-types';
 
 // =============================================================================
-// mappa/page.tsx — Mappa sala drag-drop (F2 Tavoli, ADR-0058)
+// mappa/page.tsx — Mappa sala drag-drop + integrazione conti (F2 + PR-2 ADR-0068)
 // =============================================================================
-// Sostituisce <PlaceholderPage section="mappa">. Pattern FE nuovo da validare:
-// persistenza coordinate. Client component (pattern menu/page.tsx): fetch via
-// table-api, stato React locale, refetch on mutation (no react-query).
+// F2 (ADR-0058): i tavoli sono token assoluti a posX/posY dentro la canvas; il
+// drag (pointer events) persiste le coordinate via PATCH /tables/:id. Gating
+// drag/CRUD: `tavoli.gestisci`.
 //
-// Drag-drop: i tavoli sono token assoluti a posX/posY dentro la canvas. Il drag
-// (pointer events) aggiorna lo stato ottimistico; al rilascio (on-drop) persiste
-// via PATCH /tables/:id; su errore ricarica dal server (rollback). Gating: drag
-// e CRUD solo con `tavoli.gestisci`.
+// PR-2 (ADR-0068): la mappa deriva lo stato occupato/libero dai conti aperti
+// (`listConti({ stato: 'aperto' })` → un solo fetch, non per-tavolo) e permette
+// di aprire un conto `cassa` dal tavolo (tap) o navigare al conto aperto. Lo
+// stato NON è persistito sul Tavolo (TD-tavolo-stato-forward invariato) — è
+// derivato. Aggiornamento a polling leggero (no SSE/WebSocket, fuori scope).
 //
-// Responsive + a11y: la canvas ha min-width e scrolla orizzontalmente su mobile
-// (degrada a scroll, non a griglia). Il drag è pointer-only → l'ELENCO sotto la
-// canvas è la superficie CRUD accessibile da tastiera/AT (Modifica/Elimina come
-// <button>), valida anche da mobile. (ADR-0058 §a11y/responsive.)
+// Permessi PR-2 (disaccoppiati da `tavoli.gestisci`):
+//   - aprire conto da tavolo libero → `comande.crea`
+//   - navigare al conto di un tavolo occupato → `comande.visualizza`
+// Un cameriere con `comande.crea` ma senza `tavoli.gestisci` deve poter aprire
+// un conto: il tap è indipendente dal gate drag (che early-return su !canManage).
+//
+// Tap vs drag: il flag `moved` distingue i due gesti. Dopo un drag (moved) il
+// click sintetico che segue il pointer-up viene soppresso (`suppressClickRef`)
+// così un riposizionamento non apre per errore un conto.
 // =============================================================================
 
 const TOKEN_W = 104; // larghezza token tavolo (px)
 const TOKEN_H = 76; // altezza token tavolo (px)
 const CANVAS_H = 520; // altezza canvas (px)
 const CANVAS_MIN_W = 760; // min-width canvas → scroll orizzontale su mobile
+const POLL_MS = 20_000; // periodo refetch occupazione (mappa)
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Deriva la mappa tavoloId→Conto dei conti aperti. In presenza di >1 conto
+ * aperto per lo stesso tavolo (dato pre-index o edge), vince il più recente:
+ * il backend ordina `apertoIl desc`, quindi il primo incontrato è il più recente.
+ */
+function buildOccupancy(conti: Conto[]): Map<string, Conto> {
+  const map = new Map<string, Conto>();
+  for (const conto of conti) {
+    if (conto.tavoloId && !map.has(conto.tavoloId)) map.set(conto.tavoloId, conto);
+  }
+  return map;
 }
 
 interface DragState {
@@ -59,37 +85,72 @@ interface DragState {
 
 export default function MappaPage(): JSX.Element {
   const t = useTranslations('tavoli');
-  const { permissions } = useAuth();
+  const router = useRouter();
+  const { tenant, permissions } = useAuth();
   const canManage = permissions.includes('tavoli.gestisci');
+  const canViewComande = permissions.includes('comande.visualizza');
+  const canCreateComande = permissions.includes('comande.crea');
 
   const [tables, setTables] = useState<Tavolo[]>([]);
+  const [occupancy, setOccupancy] = useState<Map<string, Conto>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Tavolo | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Tavolo | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Apertura conto da tavolo (dialog): tavolo scelto + coperti opzionali.
+  const [openingTavolo, setOpeningTavolo] = useState<Tavolo | null>(null);
+  const [coperti, setCoperti] = useState('');
+  const [isOpening, setIsOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const suppressClickRef = useRef(false);
 
-  const load = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      setTables(await listTables());
-    } catch (err) {
-      setLoadError(messageForError(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // ── Fetch (tavoli + occupazione). `silent` = tick di polling: non tocca gli
+  //    stati di loading/errore (nessun flash "Caricamento…", errori transitori
+  //    ignorati → l'ultimo dato buono resta a schermo). ──────────────────────
+  const fetchData = useCallback(
+    async (silent = false): Promise<void> => {
+      if (!silent) {
+        setIsLoading(true);
+        setLoadError(null);
+      }
+      try {
+        const [tv, conti] = await Promise.all([
+          listTables(),
+          canViewComande ? listConti({ stato: 'aperto' }) : Promise.resolve<Conto[]>([]),
+        ]);
+        setTables(tv);
+        setOccupancy(buildOccupancy(conti));
+      } catch (err) {
+        if (!silent) setLoadError(messageForError(err));
+      } finally {
+        if (!silent) setIsLoading(false);
+      }
+    },
+    [canViewComande],
+  );
+
+  const load = useCallback((): Promise<void> => fetchData(false), [fetchData]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Polling leggero: refetch on-interval (solo a tab visibile) + on-focus.
+  usePollingRefresh(
+    useCallback(() => {
+      void fetchData(true);
+    }, [fetchData]),
+    { intervalMs: POLL_MS },
+  );
 
   // ── Drag-drop (pointer events, gated tavoli.gestisci) ──────────────────────
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>, tavolo: Tavolo): void {
@@ -124,13 +185,86 @@ export default function MappaPage(): JSX.Element {
   async function handlePointerUp(): Promise<void> {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (!drag || !drag.moved) return; // semplice tap senza spostamento → no-op
+    if (!drag || !drag.moved) return; // tap senza spostamento → lascia partire onClick
+    // Drag reale: sopprime il click sintetico che segue il pointer-up (non deve
+    // aprire un conto), poi persiste la nuova posizione.
+    suppressClickRef.current = true;
     setActionError(null);
     try {
       await updateTable(drag.id, { posX: Math.round(drag.lastX), posY: Math.round(drag.lastY) });
     } catch (err) {
       setActionError(messageForError(err));
       await load(); // rollback alla posizione server
+    }
+  }
+
+  // ── Tap tavolo → apri conto (libero) / vai al conto (occupato) ──────────────
+  function handleTavoloTap(tavolo: Tavolo): void {
+    if (suppressClickRef.current) {
+      // coda di un drag: consuma la soppressione e ignora questo click.
+      suppressClickRef.current = false;
+      return;
+    }
+    void handleTavoloAction(tavolo);
+  }
+
+  async function handleTavoloAction(tavolo: Tavolo): Promise<void> {
+    const openConto = occupancy.get(tavolo.id);
+    if (openConto) {
+      if (!canViewComande) return; // no-op senza permesso
+      router.push(`/t/${tenant.slug}/comande/${openConto.id}`);
+      return;
+    }
+    if (!canCreateComande) return; // no-op senza permesso
+    setOpenError(null);
+    setNotice(null);
+    setCoperti('');
+    setOpeningTavolo(tavolo);
+  }
+
+  /** Risolve il conto aperto di un tavolo (per il redirect post-409). null se assente/non leggibile. */
+  async function resolveOpenConto(tavoloId: string): Promise<Conto | null> {
+    try {
+      const list = await listConti({ stato: 'aperto', tavoloId }); // ordinati apertoIl desc
+      return list[0] ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleConfirmOpen(): Promise<void> {
+    if (!openingTavolo) return;
+    setIsOpening(true);
+    setOpenError(null);
+    const copertiNum = coperti.trim() === '' ? undefined : Number(coperti);
+    try {
+      const conto = await createConto({
+        channel: 'cassa',
+        tavoloId: openingTavolo.id,
+        coperti: copertiNum,
+      });
+      router.push(`/t/${tenant.slug}/comande/${conto.id}`);
+    } catch (err) {
+      // 409 "tavolo già occupato": redirect al conto esistente (refetch → risolvi).
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        err.errorCode === 'E_CONTO_TAVOLO_ALREADY_OPEN'
+      ) {
+        const existing = await resolveOpenConto(openingTavolo.id);
+        if (existing) {
+          router.push(`/t/${tenant.slug}/comande/${existing.id}`);
+          return;
+        }
+        // conto non risolvibile (permesso mancante o già chiuso): messaggio + refresh
+        setOpeningTavolo(null);
+        setIsOpening(false);
+        setNotice(t('apri.alreadyOpen'));
+        void fetchData(true);
+        return;
+      }
+      setOpenError(messageForError(err));
+      setIsOpening(false);
     }
   }
 
@@ -165,6 +299,8 @@ export default function MappaPage(): JSX.Element {
     await load();
   }
 
+  const copertiValid = /^([1-9]\d*)?$/.test(coperti.trim());
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <header className="flex items-start justify-between gap-3">
@@ -195,6 +331,11 @@ export default function MappaPage(): JSX.Element {
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
+      {notice && (
+        <Alert>
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">{t('loading')}</p>
@@ -211,63 +352,109 @@ export default function MappaPage(): JSX.Element {
               style={{ height: CANVAS_H, minWidth: CANVAS_MIN_W }}
               aria-hidden="true"
             >
-              {tables.map((tavolo) => (
-                <div
-                  key={tavolo.id}
-                  data-testid={`tavolo-${tavolo.id}`}
-                  onPointerDown={(e) => handlePointerDown(e, tavolo)}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={() => void handlePointerUp()}
-                  className={cn(
-                    'absolute flex select-none flex-col items-center justify-center rounded-lg border bg-card p-2 text-center shadow-sm',
-                    canManage ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-default',
-                  )}
-                  style={{ left: tavolo.posX, top: tavolo.posY, width: TOKEN_W, height: TOKEN_H }}
-                >
-                  <span className="text-sm font-semibold leading-tight">{tavolo.numero}</span>
-                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                    <Users className="h-3 w-3" />
-                    {t('seats', { count: tavolo.capienza })}
-                  </span>
-                </div>
-              ))}
+              {tables.map((tavolo) => {
+                const conto = occupancy.get(tavolo.id);
+                const occupato = conto != null;
+                const clickable = occupato ? canViewComande : canCreateComande;
+                return (
+                  <div
+                    key={tavolo.id}
+                    data-testid={`tavolo-${tavolo.id}`}
+                    data-occupato={occupato ? 'true' : 'false'}
+                    onPointerDown={(e) => handlePointerDown(e, tavolo)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={() => void handlePointerUp()}
+                    onClick={() => handleTavoloTap(tavolo)}
+                    className={cn(
+                      'absolute flex select-none flex-col items-center justify-center rounded-lg border p-2 text-center shadow-sm',
+                      occupato ? 'border-primary bg-primary/10 ring-1 ring-primary/40' : 'bg-card',
+                      canManage
+                        ? 'cursor-grab touch-none active:cursor-grabbing'
+                        : clickable
+                          ? 'cursor-pointer'
+                          : 'cursor-default',
+                    )}
+                    style={{ left: tavolo.posX, top: tavolo.posY, width: TOKEN_W, height: TOKEN_H }}
+                  >
+                    <span className="text-sm font-semibold leading-tight">{tavolo.numero}</span>
+                    {occupato && conto ? (
+                      <span className="mt-0.5 flex flex-col items-center text-xs leading-tight text-primary">
+                        <span className="font-medium">{t('stato.occupato')}</span>
+                        <span className="text-[11px]">{formatOpenInfo(conto, t)}</span>
+                      </span>
+                    ) : (
+                      <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        {t('seats', { count: tavolo.capienza })}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Elenco accessibile: superficie CRUD da tastiera/AT + mobile. */}
+          {/* Elenco accessibile: superficie CRUD + azione conto da tastiera/AT. */}
           <section className="space-y-2" aria-label={t('listAriaLabel')}>
             <h2 className="text-sm font-medium text-muted-foreground">{t('listTitle')}</h2>
             <ul className="divide-y rounded-lg border">
-              {tables.map((tavolo) => (
-                <li key={tavolo.id} className="flex items-center justify-between gap-3 px-4 py-2">
-                  <span className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{tavolo.numero}</span>
-                    <span className="text-muted-foreground">
-                      · {t('seats', { count: tavolo.capienza })}
+              {tables.map((tavolo) => {
+                const conto = occupancy.get(tavolo.id);
+                const occupato = conto != null;
+                const canAct = occupato ? canViewComande : canCreateComande;
+                return (
+                  <li key={tavolo.id} className="flex items-center justify-between gap-3 px-4 py-2">
+                    <span className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium">{tavolo.numero}</span>
+                      <span className="text-muted-foreground">
+                        · {t('seats', { count: tavolo.capienza })}
+                      </span>
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-xs font-medium',
+                          occupato
+                            ? 'bg-primary/15 text-primary'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {occupato ? t('stato.occupato') : t('stato.libero')}
+                      </span>
                     </span>
-                  </span>
-                  {canManage && (
                     <span className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(tavolo)}
-                        aria-label={t('editAria', { numero: tavolo.numero })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPendingDelete(tavolo)}
-                        aria-label={t('deleteAria', { numero: tavolo.numero })}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canAct && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleTavoloAction(tavolo)}
+                          aria-label={t('apri.actionAria', { numero: tavolo.numero })}
+                        >
+                          {occupato ? t('apri.vai') : t('apri.action')}
+                        </Button>
+                      )}
+                      {canManage && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(tavolo)}
+                            aria-label={t('editAria', { numero: tavolo.numero })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPendingDelete(tavolo)}
+                            aria-label={t('deleteAria', { numero: tavolo.numero })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
                     </span>
-                  )}
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         </>
@@ -295,6 +482,64 @@ export default function MappaPage(): JSX.Element {
         </DialogContent>
       </Dialog>
 
+      {/* Apri conto da tavolo (cassa) */}
+      <Dialog
+        open={openingTavolo !== null}
+        onOpenChange={(open) => {
+          if (!open && !isOpening) {
+            setOpeningTavolo(null);
+            setOpenError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {openingTavolo ? t('apri.dialogTitle', { numero: openingTavolo.numero }) : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('apri.channelFixed')}</p>
+            <div className="space-y-2">
+              <label htmlFor="apri-coperti" className="text-sm font-medium">
+                {t('apri.copertiLabel')}
+              </label>
+              <Input
+                id="apri-coperti"
+                type="number"
+                min={1}
+                placeholder="—"
+                value={coperti}
+                onChange={(e) => setCoperti(e.target.value)}
+              />
+            </div>
+            {openError && (
+              <Alert variant="destructive">
+                <AlertDescription>{openError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => void handleConfirmOpen()}
+                disabled={isOpening || !copertiValid}
+              >
+                {isOpening ? t('apri.opening') : t('apri.confirm')}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpeningTavolo(null);
+                  setOpenError(null);
+                }}
+                disabled={isOpening}
+              >
+                {t('apri.cancel')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => {
@@ -309,4 +554,20 @@ export default function MappaPage(): JSX.Element {
       />
     </div>
   );
+}
+
+/** Info compatta sul token occupato: coperti (se noti) + tempo da apertura. */
+function formatOpenInfo(conto: Conto, t: ReturnType<typeof useTranslations>): string {
+  const parts: string[] = [];
+  if (conto.coperti != null) parts.push(t('occupato.coperti', { count: conto.coperti }));
+  parts.push(formatElapsed(conto.apertoIl, t));
+  return parts.join(' · ');
+}
+
+/** Tempo trascorso dall'apertura, formato relativo semplice (min / ore). */
+function formatElapsed(apertoIl: string, t: ReturnType<typeof useTranslations>): string {
+  const started = new Date(apertoIl).getTime();
+  const minutes = Math.max(0, Math.floor((Date.now() - started) / 60_000));
+  if (minutes < 60) return t('occupato.daMinuti', { count: minutes });
+  return t('occupato.daOre', { count: Math.floor(minutes / 60) });
 }
