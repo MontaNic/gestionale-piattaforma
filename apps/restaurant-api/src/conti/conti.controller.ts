@@ -112,6 +112,15 @@ export class ContiController {
     return { data };
   }
 
+  @Post(':id/invia')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('comande.modifica')
+  async invia(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') contoId: string) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.conti.invia(user.tenantId, user.id, contoId);
+    return { data };
+  }
+
   @Post(':id/chiudi')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('comande.modifica')

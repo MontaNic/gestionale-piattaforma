@@ -23,6 +23,7 @@ import {
 import { AppController } from './app.controller';
 import { ArticlesModule } from './articles/articles.module';
 import { ContiModule } from './conti/conti.module';
+import { ComandeModule } from './comande/comande.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -55,6 +56,7 @@ import { TablesModule } from './tables/tables.module';
     PriceListsModule,
     TablesModule,
     ContiModule,
+    ComandeModule,
   ],
   controllers: [AppController],
   providers: [

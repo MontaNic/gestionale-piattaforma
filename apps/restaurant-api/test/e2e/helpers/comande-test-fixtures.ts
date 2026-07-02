@@ -23,7 +23,16 @@ export const COMANDE_PERMISSION_CODES = [
 export type ComandeGrant = 'full' | 'viewer';
 
 const GRANTED: Record<ComandeGrant, readonly string[]> = {
-  full: ['comande.crea', 'comande.modifica', 'comande.elimina', 'comande.visualizza'],
+  // 'full' = tutti i permessi comande OPERATIVI, incluso `comande.stato.cambia`
+  // (KDS: transizioni stato comanda). Non più orfano da quando il layer Comanda è
+  // attivo (ADR-attivazione-layer-comanda).
+  full: [
+    'comande.crea',
+    'comande.modifica',
+    'comande.elimina',
+    'comande.visualizza',
+    'comande.stato.cambia',
+  ],
   viewer: ['comande.visualizza'],
 };
 

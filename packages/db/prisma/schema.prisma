@@ -91,6 +91,7 @@ model Tenant {
   tariffeOrarie        TariffaOraria[]
   conti                Conto[]
   contiRighe           ContoRiga[]
+  comandas             Comanda[]
 
   @@map("tenants")
 }
@@ -755,6 +756,17 @@ enum StatoConto {
   @@map("stato_conto")
 }
 
+// Stato della Comanda (livello KDS, ADR-attivazione-layer-comanda). Forward-only:
+// inviata → in_preparazione → pronta (ammesso lo skip inviata → pronta). Nessuno
+// stato `servita` (fuori scope KDS-core).
+enum StatoComanda {
+  inviata
+  in_preparazione
+  pronta
+
+  @@map("stato_comanda")
+}
+
 model Conto {
   id        String     @id
   tenantId  String     @map("tenant_id")
@@ -769,9 +781,10 @@ model Conto {
   deletedAt DateTime?  @map("deleted_at")
 
   // Relations
-  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tavolo Tavolo?     @relation(fields: [tavoloId], references: [id], onDelete: SetNull)
-  righe  ContoRiga[]
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tavolo  Tavolo?     @relation(fields: [tavoloId], references: [id], onDelete: SetNull)
+  righe   ContoRiga[]
+  comande Comanda[]
 
   @@index([tenantId])
   @@index([tavoloId])
@@ -791,19 +804,62 @@ model ContoRiga {
   prezzoUnitario Decimal         @map("prezzo_unitario") @db.Decimal(10, 2) // snapshot congelato (DP-C)
   quantita       Int
   reparto        PrintDepartment // snapshot da Article.printDepartment (prepara KDS)
+  // KDS (ADR-attivazione-layer-comanda): riga "inviata" quando comandaId != null.
+  // Una riga inviata è IMMUTABILE (no update/storno) → semantica "non ancora
+  // inviate" di comande.modifica. `note` = annotazione cucina per-riga (AI/NL fuori scope).
+  comandaId      String?         @map("comanda_id")
+  note           String?
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   deletedAt      DateTime?       @map("deleted_at")
 
   // Relations
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  conto   Conto   @relation(fields: [contoId], references: [id], onDelete: Cascade)
-  article Article @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conto   Conto    @relation(fields: [contoId], references: [id], onDelete: Cascade)
+  article Article  @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  // onDelete SetNull: le comande NON si hard-deletano (soft-delete). SetNull è la
+  // valvola di sicurezza per il purge-tenant cascade (evita il deadlock RESTRICT
+  // tra le due cascade path conto→righe e conto→comande). Vedi ADR.
+  comanda Comanda? @relation(fields: [comandaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([contoId])
   @@index([articleId])
+  @@index([comandaId])
   @@map("conti_righe")
+}
+
+// =============================================================================
+// Comanda — livello KDS (ADR-attivazione-layer-comanda, attiva il differito 0067)
+// =============================================================================
+// Aggregato "invio-in-cucina di un sottoinsieme di righe": l'invio splitta le
+// righe pending del conto PER REPARTO → N comande (una per reparto presente).
+// Stato forward-only (StatoComanda). Tenant-scoped, RLS FORCE identico a
+// conti/conti_righe. Snapshot vive sulle righe (nomeArticolo/reparto/quantita/note);
+// la Comanda porta reparto (== reparto delle sue righe) + stato + timestamp.
+// =============================================================================
+model Comanda {
+  id               String          @id
+  tenantId         String          @map("tenant_id") // RLS FORCE (vincolo)
+  contoId          String          @map("conto_id")
+  reparto          PrintDepartment // reparto di destinazione (== reparto delle righe)
+  stato            StatoComanda    @default(inviata)
+  inviataIl        DateTime        @default(now()) @map("inviata_il")
+  inPreparazioneIl DateTime?       @map("in_preparazione_il")
+  prontaIl         DateTime?       @map("pronta_il")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  deletedAt        DateTime?       @map("deleted_at")
+
+  // Relations
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conto  Conto       @relation(fields: [contoId], references: [id], onDelete: Cascade)
+  righe  ContoRiga[]
+
+  @@index([tenantId])
+  @@index([contoId])
+  @@index([tenantId, stato, reparto]) // feed KDS: GET /comande?stato=&reparto=
+  @@map("comande")
 }
 
 // =============================================================================
