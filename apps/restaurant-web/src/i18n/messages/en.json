@@ -209,6 +209,27 @@
       "body": "Table “{numero}” will be removed from the map.",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
+    },
+    "stato": {
+      "libero": "Free",
+      "occupato": "Occupied"
+    },
+    "occupato": {
+      "coperti": "{count, plural, one {# cover} other {# covers}}",
+      "daMinuti": "{count} min ago",
+      "daOre": "{count, plural, one {# hr ago} other {# hrs ago}}"
+    },
+    "apri": {
+      "action": "Open tab",
+      "vai": "Go to tab",
+      "actionAria": "Open or go to the tab for table {numero}",
+      "dialogTitle": "Open tab — table {numero}",
+      "channelFixed": "Channel: Register",
+      "copertiLabel": "Covers (optional)",
+      "confirm": "Open tab",
+      "opening": "Opening…",
+      "cancel": "Cancel",
+      "alreadyOpen": "This table already has an open tab: taking you to the existing tab."
     }
   },
   "comande": {

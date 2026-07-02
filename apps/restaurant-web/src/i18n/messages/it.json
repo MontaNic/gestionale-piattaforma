@@ -209,6 +209,27 @@
       "body": "Il tavolo «{numero}» sarà rimosso dalla mappa.",
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
+    },
+    "stato": {
+      "libero": "Libero",
+      "occupato": "Occupato"
+    },
+    "occupato": {
+      "coperti": "{count, plural, one {# coperto} other {# coperti}}",
+      "daMinuti": "da {count} min",
+      "daOre": "{count, plural, one {da # ora} other {da # ore}}"
+    },
+    "apri": {
+      "action": "Apri conto",
+      "vai": "Vai al conto",
+      "actionAria": "Apri o vai al conto del tavolo {numero}",
+      "dialogTitle": "Apri conto — tavolo {numero}",
+      "channelFixed": "Canale: Cassa",
+      "copertiLabel": "Coperti (opzionale)",
+      "confirm": "Apri conto",
+      "opening": "Apertura…",
+      "cancel": "Annulla",
+      "alreadyOpen": "Questo tavolo ha già un conto aperto: ti portiamo al conto esistente."
     }
   },
   "comande": {

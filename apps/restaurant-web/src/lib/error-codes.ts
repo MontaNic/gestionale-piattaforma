@@ -114,6 +114,7 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_CONTO_RIGA_NOT_FOUND: 'Riga del conto non trovata.',
   E_CONTO_CHANNEL_INVALID: 'Canale del conto non valido.',
   E_CONTO_CHANNEL_TAVOLO_MISMATCH: 'Combinazione canale/tavolo non valida per il conto.',
+  E_CONTO_TAVOLO_ALREADY_OPEN: 'Questo tavolo ha già un conto aperto.',
   E_CONTO_TAVOLO_INVALID: 'Tavolo del conto non valido.',
   E_CONTO_COPERTI_INVALID: 'Il numero di coperti deve essere un intero maggiore o uguale a 1.',
   E_CONTO_STATO_INVALID: 'Stato del conto non valido.',
