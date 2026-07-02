@@ -210,5 +210,81 @@
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
     }
+  },
+  "comande": {
+    "listTitle": "Orders",
+    "listSubtitle": "Open tabs: open, add lines, close or cancel.",
+    "listEmpty": "No open tab yet. Open one to get started.",
+    "newConto": "New tab",
+    "open": "Open",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "noAccess": "You do not have permission to view orders.",
+    "coperti": "Covers",
+    "tavolo": "Table",
+    "noTavolo": "No table",
+    "totale": "Total",
+    "apertoIl": "Opened at",
+    "channel": {
+      "cassa": "Register",
+      "menu_online": "Online menu",
+      "asporto": "Takeaway",
+      "delivery": "Delivery"
+    },
+    "stato": {
+      "aperto": "Open",
+      "chiuso": "Closed",
+      "annullato": "Cancelled"
+    },
+    "form": {
+      "channelLabel": "Channel",
+      "copertiLabel": "Covers (optional)",
+      "create": "Open tab",
+      "creating": "Opening…",
+      "cancel": "Cancel"
+    },
+    "detail": {
+      "backToList": "Back to orders",
+      "notFound": "Tab not found.",
+      "readOnly": "Tab {stato}: read-only.",
+      "righeTitle": "Lines",
+      "righeEmpty": "No lines yet. Add an item.",
+      "reparto": "Station",
+      "quantita": "Qty",
+      "prezzo": "Price",
+      "subtotale": "Subtotal",
+      "chiudi": "Close tab",
+      "annulla": "Cancel tab",
+      "editQuantita": "Edit quantity",
+      "saveQuantita": "Save",
+      "deleteRiga": "Void line"
+    },
+    "addRiga": {
+      "title": "Add item",
+      "articleLabel": "Item",
+      "articlePlaceholder": "Select an item…",
+      "quantitaLabel": "Quantity",
+      "add": "Add",
+      "adding": "Adding…",
+      "cancel": "Cancel",
+      "noArticles": "No items available in the catalog.",
+      "ambiguousOption": "{name} — ambiguous price (price lists)",
+      "ambiguousNotice": "“{name}” has multiple active price lists on the channel: fix the price lists before adding it."
+    },
+    "dept": {
+      "cucina": "Kitchen",
+      "pizzeria": "Pizzeria",
+      "bar": "Bar"
+    },
+    "confirm": {
+      "chiudiTitle": "Close the tab?",
+      "chiudiBody": "The tab will be closed and can no longer be modified.",
+      "annullaTitle": "Cancel the tab?",
+      "annullaBody": "The tab will be cancelled and can no longer be modified.",
+      "stornoTitle": "Void the line?",
+      "stornoBody": "“{name}” will be removed from the tab.",
+      "confirmLabel": "Confirm",
+      "cancelLabel": "Cancel"
+    }
   }
 }

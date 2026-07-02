@@ -203,6 +203,101 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
   });
 
   // ===========================================================================
+  // Filtri GET /conti — ?stato= &tavoloId= (PR-1 FE, backward-compat)
+  // ===========================================================================
+  it('filtro: senza param ritorna tutti i conti (backward-compat)', async () => {
+    // aperto+cassa su tavolo, un asporto, poi chiudo il cassa → 2 conti totali
+    const cassaId = await apriCassa();
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'asporto' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`${API}/${cassaId}/chiudi`)
+      .set(auth(demoJwt))
+      .expect(200);
+
+    const res = await request(app.getHttpServer()).get(API).set(auth(demoJwt)).expect(200);
+    expect(res.body.data).toHaveLength(2);
+  });
+
+  it('filtro: ?stato=aperto esclude i conti chiusi', async () => {
+    const cassaId = await apriCassa();
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'asporto' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`${API}/${cassaId}/chiudi`)
+      .set(auth(demoJwt))
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .get(API)
+      .query({ stato: 'aperto' })
+      .set(auth(demoJwt))
+      .expect(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].stato).toBe('aperto');
+    expect(res.body.data[0].channel).toBe('asporto');
+  });
+
+  it('filtro: ?tavoloId= ritorna solo i conti di quel tavolo', async () => {
+    await apriCassa(); // conto su data.tavoloId
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'asporto' })
+      .expect(201); // senza tavolo
+
+    const res = await request(app.getHttpServer())
+      .get(API)
+      .query({ tavoloId: data.tavoloId })
+      .set(auth(demoJwt))
+      .expect(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].tavoloId).toBe(data.tavoloId);
+  });
+
+  it('filtro: ?stato=aperto&tavoloId= combinati', async () => {
+    const cassaId = await apriCassa(); // aperto su data.tavoloId
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'asporto' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`${API}/${cassaId}/chiudi`)
+      .set(auth(demoJwt))
+      .expect(200);
+
+    // il solo conto sul tavolo ora è chiuso → aperto+tavolo = 0
+    const res = await request(app.getHttpServer())
+      .get(API)
+      .query({ stato: 'aperto', tavoloId: data.tavoloId })
+      .set(auth(demoJwt))
+      .expect(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  // SKIP TD-BS Sub-2 (ADR-0019): nel harness E2E ValidationPipe non riceve
+  // design:paramtypes runtime → il DTO @Query non viene validato (stessa
+  // limitazione di articles/menus). In prod (nest build --builder swc, .swcrc
+  // decoratorMetadata) la validazione produce 400 E_VALIDATION. Constraint del
+  // DTO coperti da list-conti.query.dto.spec.ts (unit).
+  it.skip('filtro: ?stato= invalido → 400 E_VALIDATION — BLOCKED TD-BS Sub-2', async () => {
+    const res = await request(app.getHttpServer())
+      .get(API)
+      .query({ stato: 'inesistente' })
+      .set(auth(demoJwt));
+    expect(res.status).toBe(400);
+    expect(res.body.errorCode).toBe('E_VALIDATION');
+    expect(res.body.message).toContain('E_CONTO_STATO_INVALID');
+  });
+
+  // ===========================================================================
   // Coerenza canale↔tavolo (D3)
   // ===========================================================================
   it('coerenza: cassa SENZA tavolo → 400 E_CONTO_CHANNEL_TAVOLO_MISMATCH', async () => {

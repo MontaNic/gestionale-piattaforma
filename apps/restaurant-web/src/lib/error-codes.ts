@@ -38,6 +38,7 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
     'Accesso non autorizzato a questo tenant. Effettua nuovamente il login.',
   [AuthErrorCode.SESSION_INVALID]: 'Sessione non valida. Effettua nuovamente il login.',
   [CommonErrorCode.RATE_LIMITED]: 'Troppe richieste. Attendi qualche istante e riprova.',
+  E_AUTH_INSUFFICIENT_PERMISSIONS: 'Non hai i permessi per eseguire questa operazione.',
 
   // F1 Menu CRUD (sessione 17 ADR-0019)
   E_MENU_NOT_FOUND: 'Menu non trovato.',
@@ -106,6 +107,22 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_TABLE_NUMERO_EXISTS: 'Esiste già un tavolo con questo numero.',
   E_TABLE_CAPIENZA_INVALID: 'La capienza deve essere un numero intero maggiore o uguale a 1.',
   E_TABLE_POS_INVALID: 'Posizione del tavolo non valida.',
+
+  // Comande / Conto (PR-1 ADR-0067/0068)
+  E_CONTO_NOT_FOUND: 'Conto non trovato.',
+  E_CONTO_NOT_OPEN: 'Il conto non è più aperto: non può essere modificato.',
+  E_CONTO_RIGA_NOT_FOUND: 'Riga del conto non trovata.',
+  E_CONTO_CHANNEL_INVALID: 'Canale del conto non valido.',
+  E_CONTO_CHANNEL_TAVOLO_MISMATCH: 'Combinazione canale/tavolo non valida per il conto.',
+  E_CONTO_TAVOLO_INVALID: 'Tavolo del conto non valido.',
+  E_CONTO_COPERTI_INVALID: 'Il numero di coperti deve essere un intero maggiore o uguale a 1.',
+  E_CONTO_STATO_INVALID: 'Stato del conto non valido.',
+  E_CONTO_ARTICLE_INVALID: 'Articolo non valido.',
+  E_CONTO_ARTICLE_REQUIRED: "L'articolo è obbligatorio.",
+  E_CONTO_QUANTITA_INVALID: 'La quantità deve essere un intero maggiore o uguale a 1.',
+  E_TAVOLO_NOT_FOUND: 'Tavolo non trovato.',
+  E_PRICE_AMBIGUOUS:
+    'Prezzo ambiguo per questo articolo: più listini attivi coprono il canale. Correggi i listini prima di aggiungerlo.',
 
   // Fallback difensivo: `parseError` srotola `E_VALIDATION` → codice specifico
   // quando `message[0]` è un taxonomy code; se non lo è, resta questo messaggio.

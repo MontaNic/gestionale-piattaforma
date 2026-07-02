@@ -210,5 +210,81 @@
       "confirmLabel": "Elimina",
       "cancelLabel": "Annulla"
     }
+  },
+  "comande": {
+    "listTitle": "Comande",
+    "listSubtitle": "Conti aperti: apri, aggiungi righe, chiudi o annulla.",
+    "listEmpty": "Nessun conto aperto. Aprine uno per iniziare.",
+    "newConto": "Nuovo conto",
+    "open": "Apri",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "noAccess": "Non hai i permessi per visualizzare le comande.",
+    "coperti": "Coperti",
+    "tavolo": "Tavolo",
+    "noTavolo": "Senza tavolo",
+    "totale": "Totale",
+    "apertoIl": "Aperto il",
+    "channel": {
+      "cassa": "Cassa",
+      "menu_online": "Menu online",
+      "asporto": "Asporto",
+      "delivery": "Delivery"
+    },
+    "stato": {
+      "aperto": "Aperto",
+      "chiuso": "Chiuso",
+      "annullato": "Annullato"
+    },
+    "form": {
+      "channelLabel": "Canale",
+      "copertiLabel": "Coperti (opzionale)",
+      "create": "Apri conto",
+      "creating": "Apertura…",
+      "cancel": "Annulla"
+    },
+    "detail": {
+      "backToList": "Torna alle comande",
+      "notFound": "Conto non trovato.",
+      "readOnly": "Conto {stato}: sola lettura.",
+      "righeTitle": "Righe",
+      "righeEmpty": "Nessuna riga. Aggiungi un articolo.",
+      "reparto": "Reparto",
+      "quantita": "Q.tà",
+      "prezzo": "Prezzo",
+      "subtotale": "Subtotale",
+      "chiudi": "Chiudi conto",
+      "annulla": "Annulla conto",
+      "editQuantita": "Modifica quantità",
+      "saveQuantita": "Salva",
+      "deleteRiga": "Storna riga"
+    },
+    "addRiga": {
+      "title": "Aggiungi articolo",
+      "articleLabel": "Articolo",
+      "articlePlaceholder": "Seleziona un articolo…",
+      "quantitaLabel": "Quantità",
+      "add": "Aggiungi",
+      "adding": "Aggiunta…",
+      "cancel": "Annulla",
+      "noArticles": "Nessun articolo disponibile a catalogo.",
+      "ambiguousOption": "{name} — prezzo ambiguo (listini)",
+      "ambiguousNotice": "«{name}» ha più listini attivi sul canale: correggi i listini prima di aggiungerlo."
+    },
+    "dept": {
+      "cucina": "Cucina",
+      "pizzeria": "Pizzeria",
+      "bar": "Bar"
+    },
+    "confirm": {
+      "chiudiTitle": "Chiudere il conto?",
+      "chiudiBody": "Il conto verrà chiuso e non sarà più modificabile.",
+      "annullaTitle": "Annullare il conto?",
+      "annullaBody": "Il conto verrà annullato e non sarà più modificabile.",
+      "stornoTitle": "Stornare la riga?",
+      "stornoBody": "«{name}» verrà rimossa dal conto.",
+      "confirmLabel": "Conferma",
+      "cancelLabel": "Annulla"
+    }
   }
 }

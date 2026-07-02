@@ -26,6 +26,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -36,6 +37,7 @@ import { ContiService } from './conti.service';
 import { CreateContoDto } from './dto/create-conto.dto';
 import { AddRigaDto } from './dto/add-riga.dto';
 import { UpdateRigaDto } from './dto/update-riga.dto';
+import { ListContiQueryDto } from './dto/list-conti.query.dto';
 
 @Controller('conti')
 export class ContiController {
@@ -43,9 +45,15 @@ export class ContiController {
 
   @Get()
   @RequirePermissions('comande.visualizza')
-  async list(@CurrentUser() user: AuthenticatedUser | undefined) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Query() query: ListContiQueryDto,
+  ) {
     if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
-    const data = await this.conti.list(user.tenantId);
+    const data = await this.conti.list(user.tenantId, {
+      stato: query.stato,
+      tavoloId: query.tavoloId,
+    });
     return { data };
   }
 
