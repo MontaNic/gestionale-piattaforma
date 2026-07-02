@@ -442,6 +442,82 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
   });
 
   // ===========================================================================
+  // DP-2 "un tavolo, un conto aperto" — partial unique index
+  // conti_tenant_tavolo_aperto_uq (PR-2, migration 20260702090000)
+  // ===========================================================================
+  it('unico: crea conto cassa su tavolo libero → 201', async () => {
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'cassa', coperti: 2, tavoloId: data.tavoloId })
+      .expect(201);
+  });
+
+  it('unico: 2° conto cassa sullo stesso tavolo con conto aperto → 409 E_CONTO_TAVOLO_ALREADY_OPEN', async () => {
+    await apriCassa(); // primo conto aperto su data.tavoloId
+    const res = await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'cassa', coperti: 3, tavoloId: data.tavoloId });
+    expect(res.status).toBe(409);
+    expect(res.body.errorCode).toBe('E_CONTO_TAVOLO_ALREADY_OPEN');
+  });
+
+  it('unico: chiudi il primo → nuovo conto sullo stesso tavolo → 201 (l index vincola solo aperto)', async () => {
+    const primo = await apriCassa();
+    await request(app.getHttpServer())
+      .post(`${API}/${primo}/chiudi`)
+      .set(auth(demoJwt))
+      .expect(200);
+    // stato aperto liberato → nuova apertura sullo stesso tavolo consentita
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'cassa', coperti: 2, tavoloId: data.tavoloId })
+      .expect(201);
+  });
+
+  it('unico: N conti aperti SENZA tavolo (asporto/delivery) → tutti 201 (NULL non collide)', async () => {
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'asporto' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'delivery' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(API)
+      .set(auth(demoJwt))
+      .send({ channel: 'menu_online' })
+      .expect(201);
+  });
+
+  it('unico: stesso stato aperto su tavoli di due tenant diversi → entrambi 201 (index tenant-scoped)', async () => {
+    // demo apre sul proprio tavolo
+    await apriCassa();
+
+    // acme apre sul PROPRIO tavolo (tavolo_id distinto: FK a un tavolo acme-owned)
+    const acme = await seedSecondTenant(containers.databaseUrl);
+    await seedComandePermissions(containers.databaseUrl, {
+      tenantId: acme.tenantId,
+      userId: acme.adminUserId,
+      grant: 'full',
+    });
+    const acmeData = await seedComandeData(containers.databaseUrl, { tenantId: acme.tenantId });
+    await flushTenantSlugCache(containers.redisHost, containers.redisPort);
+    const acmeJwt = await loginAs(app, 'acme', 'admin@acme.local', 'Admin123!');
+
+    await request(app.getHttpServer())
+      .post(API)
+      .set({ Authorization: `Bearer ${acmeJwt}`, 'X-Tenant-Slug': 'acme' })
+      .send({ channel: 'cassa', coperti: 2, tavoloId: acmeData.tavoloId })
+      .expect(201);
+  });
+
+  // ===========================================================================
   // Audit-in-tx
   // ===========================================================================
   it('audit: apertura/chiusura/storno scrivono AuditLog atomico', async () => {

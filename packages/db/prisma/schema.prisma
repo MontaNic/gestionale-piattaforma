@@ -775,6 +775,10 @@ model Conto {
 
   @@index([tenantId])
   @@index([tavoloId])
+  // PR-2 (ADR-0068) DP-2 "un tavolo, un conto aperto": partial unique index
+  // `(tenant_id, tavolo_id) WHERE stato='aperto' AND tavolo_id IS NOT NULL`.
+  // Prisma 6 non esprime i partial index nel DSL → definito in raw SQL nella
+  // migration 20260702090000_add_conto_tavolo_aperto_unique (pattern *_active_uq).
   @@map("conti")
 }
 
