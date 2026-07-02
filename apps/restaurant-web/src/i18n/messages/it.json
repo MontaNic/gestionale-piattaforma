@@ -278,7 +278,12 @@
       "annulla": "Annulla conto",
       "editQuantita": "Modifica quantità",
       "saveQuantita": "Salva",
-      "deleteRiga": "Storna riga"
+      "deleteRiga": "Storna riga",
+      "pendingTitle": "Da inviare",
+      "pendingEmpty": "Nessuna riga da inviare. Aggiungi un articolo.",
+      "inviateTitle": "Inviate in cucina",
+      "note": "Nota",
+      "editRiga": "Modifica riga"
     },
     "addRiga": {
       "title": "Aggiungi articolo",
@@ -290,7 +295,9 @@
       "cancel": "Annulla",
       "noArticles": "Nessun articolo disponibile a catalogo.",
       "ambiguousOption": "{name} — prezzo ambiguo (listini)",
-      "ambiguousNotice": "«{name}» ha più listini attivi sul canale: correggi i listini prima di aggiungerlo."
+      "ambiguousNotice": "«{name}» ha più listini attivi sul canale: correggi i listini prima di aggiungerlo.",
+      "noteLabel": "Nota (opzionale)",
+      "notePlaceholder": "Es. senza glutine, ben cotto…"
     },
     "dept": {
       "cucina": "Cucina",
@@ -306,6 +313,14 @@
       "stornoBody": "«{name}» verrà rimossa dal conto.",
       "confirmLabel": "Conferma",
       "cancelLabel": "Annulla"
+    },
+    "invia": {
+      "button": "Invia in cucina",
+      "sentBadge": "Inviata",
+      "success": "{count, plural, =1 {# comanda inviata} other {# comande inviate}}: {reparti}",
+      "confirmTitle": "Inviare in cucina?",
+      "confirmBody": "{count, plural, =1 {# riga verrà inviata} other {# righe verranno inviate}} in cucina e non saranno più modificabili.",
+      "confirmLabel": "Invia"
     }
   }
 }
