@@ -30,6 +30,7 @@ import {
   type ContoRiga,
   id,
   Prisma,
+  type StatoConto,
   withTenantContextAtomicTx,
 } from '@gestionale/db';
 
@@ -53,9 +54,18 @@ export class ContiService {
 
   // --- reads -----------------------------------------------------------------
 
-  async list(tenantId: string): Promise<Conto[]> {
+  async list(
+    tenantId: string,
+    filters?: { stato?: StatoConto; tavoloId?: string },
+  ): Promise<Conto[]> {
+    // Filtri opzionali (PR-1 FE): applicati solo se presenti → nessun param =
+    // comportamento identico al precedente (backward-compat).
+    const where: Prisma.ContoWhereInput = { tenantId };
+    if (filters?.stato) where.stato = filters.stato;
+    if (filters?.tavoloId) where.tavoloId = filters.tavoloId;
+
     return this.db.prisma.conto.findMany({
-      where: { tenantId },
+      where,
       orderBy: [{ apertoIl: 'desc' }],
     });
   }
