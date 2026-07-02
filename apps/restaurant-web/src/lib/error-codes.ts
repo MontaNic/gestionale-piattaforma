@@ -121,7 +121,13 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_CONTO_ARTICLE_INVALID: 'Articolo non valido.',
   E_CONTO_ARTICLE_REQUIRED: "L'articolo è obbligatorio.",
   E_CONTO_QUANTITA_INVALID: 'La quantità deve essere un intero maggiore o uguale a 1.',
+  E_CONTO_NOTE_INVALID: 'Nota della riga non valida.',
+  E_CONTO_NOTE_TOO_LONG: 'La nota della riga non può superare 200 caratteri.',
   E_TAVOLO_NOT_FOUND: 'Tavolo non trovato.',
+
+  // KDS — invio comanda (ADR-0069)
+  E_RIGA_ALREADY_SENT: 'Questa riga è già stata inviata in cucina e non è più modificabile.',
+  E_COMANDA_NO_RIGHE_PENDING: 'Nessuna riga da inviare: aggiungi almeno una riga prima di inviare.',
   E_PRICE_AMBIGUOUS:
     'Prezzo ambiguo per questo articolo: più listini attivi coprono il canale. Correggi i listini prima di aggiungerlo.',
 

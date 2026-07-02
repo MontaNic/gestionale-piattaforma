@@ -308,6 +308,7 @@ export class ContiService {
           prezzoUnitario: snapshot.prezzoUnitario,
           quantita: dto.quantita,
           reparto: snapshot.reparto,
+          note: dto.note ?? null,
         },
       });
 
@@ -326,6 +327,7 @@ export class ContiService {
             prezzoUnitario: riga.prezzoUnitario.toString(),
             quantita: riga.quantita,
             reparto: riga.reparto,
+            note: riga.note,
           },
         },
       });
@@ -349,7 +351,10 @@ export class ContiService {
 
       const updated = await tx.contoRiga.update({
         where: { id: rigaId },
-        data: { quantita: dto.quantita },
+        // `dto.note === undefined` (campo omesso) → Prisma ignora la key → note
+        // invariata. Stringa (incl. "") → aggiornata. Solo su riga pending (l'invio
+        // congela la riga: assertRigaNotSent sopra).
+        data: { quantita: dto.quantita, note: dto.note },
       });
 
       await tx.auditLog.create({
@@ -360,8 +365,8 @@ export class ContiService {
           action: 'conto_riga.modificata',
           entityType: 'ContoRiga',
           entityId: rigaId,
-          beforeValue: { quantita: before.quantita },
-          afterValue: { quantita: updated.quantita },
+          beforeValue: { quantita: before.quantita, note: before.note },
+          afterValue: { quantita: updated.quantita, note: updated.note },
         },
       });
 

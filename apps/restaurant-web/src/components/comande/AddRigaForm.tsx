@@ -36,6 +36,8 @@ const addRigaSchema = z.object({
     .string()
     .trim()
     .regex(/^[1-9]\d*$/, 'La quantità deve essere un numero intero maggiore o uguale a 1'),
+  // Nota cucina opzionale (max 200 char, coerente con AddRigaDto BE).
+  note: z.string().trim().max(200, 'La nota non può superare 200 caratteri').optional(),
 });
 
 type AddRigaValues = z.infer<typeof addRigaSchema>;
@@ -71,7 +73,7 @@ export function AddRigaForm({ catalog, onAdd, onCancel }: AddRigaFormProps): JSX
 
   const form = useForm<AddRigaValues>({
     resolver: zodResolver(addRigaSchema),
-    defaultValues: { articleId: '', quantita: '1' },
+    defaultValues: { articleId: '', quantita: '1', note: '' },
   });
 
   const hasArticles = byId.size > 0;
@@ -79,8 +81,14 @@ export function AddRigaForm({ catalog, onAdd, onCancel }: AddRigaFormProps): JSX
   async function handleSubmit(values: AddRigaValues): Promise<void> {
     setServerError(null);
     if (ambiguousIds.has(values.articleId)) return; // opzione già bloccata
+    const note = values.note?.trim();
     try {
-      await onAdd({ articleId: values.articleId, quantita: Number(values.quantita) });
+      await onAdd({
+        articleId: values.articleId,
+        quantita: Number(values.quantita),
+        // Omessa se vuota: il BE distingue "nessuna nota" (null) da nota valorizzata.
+        note: note ? note : undefined,
+      });
     } catch (err) {
       if (err instanceof ApiError && err.errorCode === 'E_PRICE_AMBIGUOUS') {
         const name = byId.get(values.articleId)?.name ?? values.articleId;
@@ -142,6 +150,24 @@ export function AddRigaForm({ catalog, onAdd, onCancel }: AddRigaFormProps): JSX
                   <FormLabel>{t('addRiga.quantitaLabel')}</FormLabel>
                   <FormControl>
                     <Input type="number" min={1} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="note"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('addRiga.noteLabel')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      maxLength={200}
+                      placeholder={t('addRiga.notePlaceholder')}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

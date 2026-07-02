@@ -278,7 +278,12 @@
       "annulla": "Cancel tab",
       "editQuantita": "Edit quantity",
       "saveQuantita": "Save",
-      "deleteRiga": "Void line"
+      "deleteRiga": "Void line",
+      "pendingTitle": "To send",
+      "pendingEmpty": "No lines to send yet. Add an item.",
+      "inviateTitle": "Sent to kitchen",
+      "note": "Note",
+      "editRiga": "Edit line"
     },
     "addRiga": {
       "title": "Add item",
@@ -290,7 +295,9 @@
       "cancel": "Cancel",
       "noArticles": "No items available in the catalog.",
       "ambiguousOption": "{name} — ambiguous price (price lists)",
-      "ambiguousNotice": "“{name}” has multiple active price lists on the channel: fix the price lists before adding it."
+      "ambiguousNotice": "“{name}” has multiple active price lists on the channel: fix the price lists before adding it.",
+      "noteLabel": "Note (optional)",
+      "notePlaceholder": "e.g. gluten-free, well done…"
     },
     "dept": {
       "cucina": "Kitchen",
@@ -306,6 +313,14 @@
       "stornoBody": "“{name}” will be removed from the tab.",
       "confirmLabel": "Confirm",
       "cancelLabel": "Cancel"
+    },
+    "invia": {
+      "button": "Send to kitchen",
+      "sentBadge": "Sent",
+      "success": "{count, plural, =1 {# order sent} other {# orders sent}}: {reparti}",
+      "confirmTitle": "Send to kitchen?",
+      "confirmBody": "{count, plural, =1 {# line will be sent} other {# lines will be sent}} to the kitchen and can no longer be modified.",
+      "confirmLabel": "Send"
     }
   }
 }

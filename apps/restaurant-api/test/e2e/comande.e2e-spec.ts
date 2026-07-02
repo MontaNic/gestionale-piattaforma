@@ -802,6 +802,77 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
         .expect(200);
     });
 
+    // ── Note per-riga (KDS precursor, ADR-0069) ──────────────────────────────
+    // Il constraint maxLength(200)→400 vive negli unit spec dei DTO (add/update-
+    // riga.dto.spec): in E2E la ValidationPipe non valida il @Body (TD-BS Sub-2).
+    it('note: add con note → persistita e visibile nel GET conto', async () => {
+      const contoId = await apriCassa();
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe`)
+        .set(auth(demoJwt))
+        .send({ articleId: data.articleAId, quantita: 1, note: 'senza glutine' })
+        .expect(201);
+      expect(res.body.data.note).toBe('senza glutine');
+
+      const get = await request(app.getHttpServer())
+        .get(`${API}/${contoId}`)
+        .set(auth(demoJwt))
+        .expect(200);
+      const riga = get.body.data.righe.find((r: { id: string }) => r.id === res.body.data.id);
+      expect(riga.note).toBe('senza glutine');
+    });
+
+    it('note: add senza note → null nel GET (campo opzionale)', async () => {
+      const contoId = await apriCassa();
+      const add = await addRigaTo(contoId, data.articleAId);
+      const get = await request(app.getHttpServer())
+        .get(`${API}/${contoId}`)
+        .set(auth(demoJwt))
+        .expect(200);
+      const riga = get.body.data.righe.find((r: { id: string }) => r.id === add);
+      expect(riga.note).toBeNull();
+    });
+
+    it('note: update note su riga pending → aggiornata; quantità senza note la lascia invariata', async () => {
+      const contoId = await apriCassa();
+      const add = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe`)
+        .set(auth(demoJwt))
+        .send({ articleId: data.articleAId, quantita: 1, note: 'iniziale' })
+        .expect(201);
+      const rigaId = add.body.data.id as string;
+
+      // patch con nuova note → aggiornata
+      const upd = await request(app.getHttpServer())
+        .patch(`${API}/${contoId}/righe/${rigaId}`)
+        .set(auth(demoJwt))
+        .send({ quantita: 3, note: 'ben cotto' })
+        .expect(200);
+      expect(upd.body.data.note).toBe('ben cotto');
+      expect(upd.body.data.quantita).toBe(3);
+
+      // patch senza note → note invariata (undefined = key ignorata)
+      const upd2 = await request(app.getHttpServer())
+        .patch(`${API}/${contoId}/righe/${rigaId}`)
+        .set(auth(demoJwt))
+        .send({ quantita: 5 })
+        .expect(200);
+      expect(upd2.body.data.note).toBe('ben cotto');
+      expect(upd2.body.data.quantita).toBe(5);
+    });
+
+    it('note: update note su riga INVIATA → 409 E_RIGA_ALREADY_SENT (immutabilità)', async () => {
+      const contoId = await apriCassa();
+      const rigaInviata = await addRigaTo(contoId, data.articleAId, 1);
+      await invia(contoId);
+      const res = await request(app.getHttpServer())
+        .patch(`${API}/${contoId}/righe/${rigaInviata}`)
+        .set(auth(demoJwt))
+        .send({ quantita: 1, note: 'troppo tardi' });
+      expect(res.status).toBe(409);
+      expect(res.body.errorCode).toBe('E_RIGA_ALREADY_SENT');
+    });
+
     // ── Audit ────────────────────────────────────────────────────────────────
     it('audit: comanda.inviata + comanda.stato_cambiato scritti in tx', async () => {
       const contoId = await apriCassa();
