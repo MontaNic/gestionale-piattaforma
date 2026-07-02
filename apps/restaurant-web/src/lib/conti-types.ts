@@ -15,6 +15,7 @@ import type { Channel } from './menu-types';
 export type { Channel };
 export type StatoConto = 'aperto' | 'chiuso' | 'annullato';
 export type PrintDepartment = 'cucina' | 'pizzeria' | 'bar';
+export type StatoComanda = 'inviata' | 'in_preparazione' | 'pronta';
 
 /**
  * Canali che possono aprire un conto in PR-1: `cassa` è escluso perché richiede
@@ -49,6 +50,13 @@ export interface ContoRiga {
   prezzoUnitario: number;
   quantita: number;
   reparto: PrintDepartment;
+  /**
+   * KDS (ADR-0069): `null` = riga PENDING (da inviare, mutabile); valorizzato =
+   * riga INVIATA in cucina (immutabile). Il FE splitta le righe su questo campo.
+   */
+  comandaId: string | null;
+  /** Annotazione cucina per-riga (opzionale). */
+  note: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -73,10 +81,30 @@ export interface CreateContoInput {
 export interface AddRigaInput {
   articleId: string;
   quantita: number;
+  /** Annotazione cucina opzionale (AddRigaDto BE, max 200 char). */
+  note?: string;
 }
 
 export interface UpdateRigaInput {
   quantita: number;
+  /**
+   * Nota opzionale (UpdateRigaDto BE, max 200 char). Omessa → il BE lascia la
+   * nota invariata; stringa (incl. "") → aggiornata. Editabile solo su riga
+   * pending (riga inviata → 409 E_RIGA_ALREADY_SENT).
+   */
+  note?: string;
+}
+
+/**
+ * Esito di `POST /conti/:id/invia` (una Comanda per reparto presente tra le
+ * righe pending). `inviataIl` è `DateTime` Prisma → stringa ISO sul wire.
+ */
+export interface ComandaInviata {
+  id: string;
+  reparto: PrintDepartment;
+  stato: StatoComanda;
+  inviataIl: string;
+  righeCount: number;
 }
 
 export interface ListContiParams {

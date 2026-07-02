@@ -17,6 +17,7 @@ import { getAccessToken } from '@gestionale/auth-web';
 
 import type {
   AddRigaInput,
+  ComandaInviata,
   Conto,
   ContoRiga,
   ContoWithRighe,
@@ -82,6 +83,21 @@ export async function chiudiConto(contoId: string): Promise<Conto> {
 
 export async function annullaConto(contoId: string): Promise<Conto> {
   const res = await apiPost<Wrapped<Conto>>(`/conti/${contoId}/annulla`, undefined, authOptions());
+  return res.data;
+}
+
+/**
+ * Invia in cucina le righe pending del conto (split server-side per reparto).
+ * Ritorna una `ComandaInviata` per reparto: nessun campo Decimal → nessun
+ * mapper. Errori: 409 `E_COMANDA_NO_RIGHE_PENDING` (nessuna pending),
+ * 409 `E_CONTO_NOT_OPEN` (conto non aperto).
+ */
+export async function inviaConto(contoId: string): Promise<ComandaInviata[]> {
+  const res = await apiPost<Wrapped<ComandaInviata[]>>(
+    `/conti/${contoId}/invia`,
+    undefined,
+    authOptions(),
+  );
   return res.data;
 }
 
