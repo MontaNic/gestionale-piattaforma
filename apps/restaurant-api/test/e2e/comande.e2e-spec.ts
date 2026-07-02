@@ -547,4 +547,280 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
     expect(actions).toContain('conto_riga.stornata');
     expect(actions).toContain('conto.chiuso');
   });
+
+  // ===========================================================================
+  // KDS — layer Comanda (invio per reparto, feed, transizioni, immutabilità)
+  // ADR-attivazione-layer-comanda
+  // ===========================================================================
+  describe('KDS layer Comanda', () => {
+    const KDS = '/api/v1/comande';
+
+    async function addRigaTo(contoId: string, articleId: string, quantita = 1): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe`)
+        .set(auth(demoJwt))
+        .send({ articleId, quantita })
+        .expect(201);
+      return res.body.data.id as string;
+    }
+
+    async function invia(contoId: string): Promise<Array<Record<string, unknown>>> {
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/invia`)
+        .set(auth(demoJwt))
+        .expect(201);
+      return res.body.data as Array<Record<string, unknown>>;
+    }
+
+    // Conto asporto (SENZA tavolo): evita il partial-unique-index un-tavolo-un-conto
+    // (PR-2) quando servono più conti aperti contemporaneamente nello stesso test.
+    async function apriAsporto(): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post(API)
+        .set(auth(demoJwt))
+        .send({ channel: 'asporto' })
+        .expect(201);
+      return res.body.data.id as string;
+    }
+
+    // ── Invio: split per reparto ─────────────────────────────────────────────
+    it('invio: righe cucina+bar → 2 comande (una per reparto), righeCount corretto', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId, 2); // cucina
+      await addRigaTo(contoId, data.articleBId, 1); // bar
+      const comande = await invia(contoId);
+      expect(comande).toHaveLength(2);
+      const byReparto = Object.fromEntries(comande.map((c) => [c.reparto, c]));
+      expect(byReparto.cucina).toBeDefined();
+      expect(byReparto.bar).toBeDefined();
+      expect(byReparto.cucina.stato).toBe('inviata');
+      expect(byReparto.cucina.righeCount).toBe(1);
+      expect(byReparto.bar.righeCount).toBe(1);
+    });
+
+    it('invio: conto non-aperto → 409 E_CONTO_NOT_OPEN', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId);
+      await request(app.getHttpServer())
+        .post(`${API}/${contoId}/chiudi`)
+        .set(auth(demoJwt))
+        .expect(200);
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/invia`)
+        .set(auth(demoJwt));
+      expect(res.status).toBe(409);
+      expect(res.body.errorCode).toBe('E_CONTO_NOT_OPEN');
+    });
+
+    it('invio: nessuna riga pending → 409 E_COMANDA_NO_RIGHE_PENDING', async () => {
+      const contoId = await apriCassa();
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/invia`)
+        .set(auth(demoJwt));
+      expect(res.status).toBe(409);
+      expect(res.body.errorCode).toBe('E_COMANDA_NO_RIGHE_PENDING');
+    });
+
+    it('invio: secondo invio con nuove righe pending → nuova comanda; senza pending → 409', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId); // cucina
+      const first = await invia(contoId);
+      expect(first).toHaveLength(1);
+
+      // re-invio senza nuove pending → 409
+      const reInvioVuoto = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/invia`)
+        .set(auth(demoJwt));
+      expect(reInvioVuoto.status).toBe(409);
+      expect(reInvioVuoto.body.errorCode).toBe('E_COMANDA_NO_RIGHE_PENDING');
+
+      // nuova riga pending → secondo invio crea una nuova comanda
+      await addRigaTo(contoId, data.articleBId); // bar
+      const second = await invia(contoId);
+      expect(second).toHaveLength(1);
+      expect(second[0].reparto).toBe('bar');
+    });
+
+    // ── Feed KDS ─────────────────────────────────────────────────────────────
+    it('feed: default = non-pronte; shape righe con tavoloNumero e SENZA prezzi', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId, 3); // cucina
+      await addRigaTo(contoId, data.articleBId, 1); // bar
+      await invia(contoId);
+
+      const res = await request(app.getHttpServer()).get(KDS).set(auth(demoJwt)).expect(200);
+      expect(res.body.data).toHaveLength(2);
+      for (const item of res.body.data) {
+        expect(['inviata', 'in_preparazione']).toContain(item.stato);
+        expect(item.contoId).toBe(contoId);
+        expect(item.tavoloNumero).toBe('T1'); // join Conto→Tavolo
+        expect(Array.isArray(item.righe)).toBe(true);
+        for (const r of item.righe) {
+          expect(r.nomeArticolo).toBeDefined();
+          expect(r.quantita).toBeGreaterThan(0);
+          expect('note' in r).toBe(true);
+          expect(r.prezzoUnitario).toBeUndefined(); // MAI prezzi nel feed
+        }
+      }
+    });
+
+    it('feed: filtro reparto=cucina → solo la comanda cucina', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId); // cucina
+      await addRigaTo(contoId, data.articleBId); // bar
+      await invia(contoId);
+      const res = await request(app.getHttpServer())
+        .get(KDS)
+        .query({ reparto: 'cucina' })
+        .set(auth(demoJwt))
+        .expect(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].reparto).toBe('cucina');
+    });
+
+    it('feed: filtro stato=pronta esclude le comande appena inviate', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId);
+      await invia(contoId);
+      const res = await request(app.getHttpServer())
+        .get(KDS)
+        .query({ stato: 'pronta' })
+        .set(auth(demoJwt))
+        .expect(200);
+      expect(res.body.data).toHaveLength(0);
+    });
+
+    it('feed: FIFO inviataIl asc', async () => {
+      const c1 = await apriAsporto();
+      await addRigaTo(c1, data.articleAId);
+      const first = await invia(c1); // cucina, prima
+      const c2 = await apriAsporto();
+      await addRigaTo(c2, data.articleBId);
+      const second = await invia(c2); // bar, dopo
+
+      const res = await request(app.getHttpServer()).get(KDS).set(auth(demoJwt)).expect(200);
+      const ids = res.body.data.map((c: { id: string }) => c.id);
+      expect(ids.indexOf(first[0].id)).toBeLessThan(ids.indexOf(second[0].id));
+    });
+
+    it('feed: conto ANNULLATO → le sue comande escono dal feed; conto CHIUSO → restano (semantica i)', async () => {
+      // conto annullato
+      const annullato = await apriCassa();
+      await addRigaTo(annullato, data.articleAId);
+      await invia(annullato);
+      await request(app.getHttpServer())
+        .post(`${API}/${annullato}/annulla`)
+        .set(auth(demoJwt))
+        .expect(200);
+
+      // conto chiuso (pagato) — le comande restano visibili in cucina
+      const chiuso = await apriCassa();
+      await addRigaTo(chiuso, data.articleBId);
+      await invia(chiuso);
+      await request(app.getHttpServer())
+        .post(`${API}/${chiuso}/chiudi`)
+        .set(auth(demoJwt))
+        .expect(200);
+
+      const res = await request(app.getHttpServer()).get(KDS).set(auth(demoJwt)).expect(200);
+      const contoIds = res.body.data.map((c: { contoId: string }) => c.contoId);
+      expect(contoIds).not.toContain(annullato); // annullato escluso
+      expect(contoIds).toContain(chiuso); // chiuso resta
+    });
+
+    // ── Transizioni forward-only ─────────────────────────────────────────────
+    it('transizioni: inviata→in_preparazione→pronta (200); indietro → 409', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId);
+      const [comanda] = await invia(contoId);
+      const cid = comanda.id as string;
+
+      await request(app.getHttpServer())
+        .patch(`${KDS}/${cid}/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'in_preparazione' })
+        .expect(200);
+      await request(app.getHttpServer())
+        .patch(`${KDS}/${cid}/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'pronta' })
+        .expect(200);
+      // indietro pronta→in_preparazione → 409
+      const back = await request(app.getHttpServer())
+        .patch(`${KDS}/${cid}/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'in_preparazione' });
+      expect(back.status).toBe(409);
+      expect(back.body.errorCode).toBe('E_COMANDA_INVALID_TRANSITION');
+    });
+
+    it('transizioni: skip inviata→pronta ammesso (200)', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId);
+      const [comanda] = await invia(contoId);
+      await request(app.getHttpServer())
+        .patch(`${KDS}/${comanda.id}/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'pronta' })
+        .expect(200);
+    });
+
+    it('transizioni: comanda inesistente → 404 E_COMANDA_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`${KDS}/00000000-0000-0000-0000-000000000000/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'pronta' });
+      expect(res.status).toBe(404);
+      expect(res.body.errorCode).toBe('E_COMANDA_NOT_FOUND');
+    });
+
+    // ── Immutabilità righe inviate ───────────────────────────────────────────
+    it('immutabilità: update/storno riga inviata → 409 E_RIGA_ALREADY_SENT; riga pending resta mutabile', async () => {
+      const contoId = await apriCassa();
+      const rigaInviata = await addRigaTo(contoId, data.articleAId, 2);
+      await invia(contoId);
+
+      const upd = await request(app.getHttpServer())
+        .patch(`${API}/${contoId}/righe/${rigaInviata}`)
+        .set(auth(demoJwt))
+        .send({ quantita: 5 });
+      expect(upd.status).toBe(409);
+      expect(upd.body.errorCode).toBe('E_RIGA_ALREADY_SENT');
+
+      const del = await request(app.getHttpServer())
+        .delete(`${API}/${contoId}/righe/${rigaInviata}`)
+        .set(auth(demoJwt));
+      expect(del.status).toBe(409);
+      expect(del.body.errorCode).toBe('E_RIGA_ALREADY_SENT');
+
+      // riga aggiunta DOPO l'invio è pending → resta modificabile
+      const rigaPending = await addRigaTo(contoId, data.articleBId, 1);
+      await request(app.getHttpServer())
+        .patch(`${API}/${contoId}/righe/${rigaPending}`)
+        .set(auth(demoJwt))
+        .send({ quantita: 4 })
+        .expect(200);
+    });
+
+    // ── Audit ────────────────────────────────────────────────────────────────
+    it('audit: comanda.inviata + comanda.stato_cambiato scritti in tx', async () => {
+      const contoId = await apriCassa();
+      await addRigaTo(contoId, data.articleAId);
+      const [comanda] = await invia(contoId);
+      await request(app.getHttpServer())
+        .patch(`${KDS}/${comanda.id}/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'in_preparazione' })
+        .expect(200);
+
+      const audits = await pgRows(
+        containers.databaseUrl,
+        `SELECT action FROM audit_logs WHERE tenant_id = $1 AND entity_id = $2 ORDER BY timestamp ASC`,
+        [demoTenantId, comanda.id],
+      );
+      const actions = audits.map((a) => a.action);
+      expect(actions).toContain('comanda.inviata');
+      expect(actions).toContain('comanda.stato_cambiato');
+    });
+  });
 });

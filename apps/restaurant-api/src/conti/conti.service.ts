@@ -26,10 +26,12 @@ import {
 } from '@nestjs/common';
 import {
   Channel,
+  type Comanda,
   type Conto,
   type ContoRiga,
   id,
   Prisma,
+  type PrintDepartment,
   type StatoConto,
   withTenantContextAtomicTx,
 } from '@gestionale/db';
@@ -43,6 +45,15 @@ import type { AddRigaDto } from './dto/add-riga.dto';
 import type { UpdateRigaDto } from './dto/update-riga.dto';
 
 export type ContoWithRighe = Conto & { righe: ContoRiga[]; totale: string };
+
+/** Esito dell'invio: una Comanda creata per ogni reparto presente tra le righe pending. */
+export interface ComandaInviata {
+  id: string;
+  reparto: PrintDepartment;
+  stato: Comanda['stato'];
+  inviataIl: Date;
+  righeCount: number;
+}
 
 @Injectable()
 export class ContiService {
@@ -195,6 +206,80 @@ export class ContiService {
     });
   }
 
+  // --- invio comanda (KDS) ---------------------------------------------------
+
+  /**
+   * Invia in cucina le righe PENDING del conto (`comandaId IS NULL`, non stornate).
+   * Split server-side PER REPARTO: N comande, una per reparto presente. Le righe
+   * inviate ricevono `comandaId` → diventano immutabili. Audit-in-tx per comanda.
+   * @throws NotFound/Conflict E_CONTO_NOT_OPEN — conto assente o non `aperto`
+   * @throws Conflict E_COMANDA_NO_RIGHE_PENDING — nessuna riga pending da inviare
+   */
+  async invia(tenantId: string, userId: string, contoId: string): Promise<ComandaInviata[]> {
+    return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      await this.loadOpenConto(tx, tenantId, contoId);
+
+      // Pending = non ancora inviate; soft-deleted escluse dall'extension.
+      const pending = await tx.contoRiga.findMany({
+        where: { contoId, tenantId, comandaId: null },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (pending.length === 0) {
+        throw new ConflictException({
+          errorCode: 'E_COMANDA_NO_RIGHE_PENDING',
+          message: 'No pending rige to send',
+        });
+      }
+
+      // Raggruppa per reparto (ordine deterministico = prima occorrenza in createdAt asc).
+      const byReparto = new Map<PrintDepartment, ContoRiga[]>();
+      for (const riga of pending) {
+        const group = byReparto.get(riga.reparto) ?? [];
+        group.push(riga);
+        byReparto.set(riga.reparto, group);
+      }
+
+      const inviate: ComandaInviata[] = [];
+      for (const [reparto, righe] of byReparto) {
+        const comanda = await tx.comanda.create({
+          data: { id: id(), tenantId, contoId, reparto, stato: 'inviata' },
+        });
+        await tx.contoRiga.updateMany({
+          where: { id: { in: righe.map((r) => r.id) }, tenantId },
+          data: { comandaId: comanda.id },
+        });
+        await tx.auditLog.create({
+          data: {
+            id: id(),
+            tenantId,
+            userId,
+            action: 'comanda.inviata',
+            entityType: 'Comanda',
+            entityId: comanda.id,
+            afterValue: {
+              contoId,
+              reparto,
+              righeCount: righe.length,
+              righeIds: righe.map((r) => r.id),
+            },
+          },
+        });
+        inviate.push({
+          id: comanda.id,
+          reparto,
+          stato: comanda.stato,
+          inviataIl: comanda.inviataIl,
+          righeCount: righe.length,
+        });
+      }
+
+      this.logger.log(
+        `Comande inviate: conto=${contoId} reparti=${inviate.length} tenant=${tenantId}`,
+      );
+      return inviate;
+    });
+  }
+
   // --- righe -----------------------------------------------------------------
 
   async addRiga(
@@ -260,6 +345,7 @@ export class ContiService {
     return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
       await this.loadOpenConto(tx, tenantId, contoId);
       const before = await this.loadRiga(tx, tenantId, contoId, rigaId);
+      this.assertRigaNotSent(before);
 
       const updated = await tx.contoRiga.update({
         where: { id: rigaId },
@@ -292,6 +378,7 @@ export class ContiService {
     return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
       await this.loadOpenConto(tx, tenantId, contoId);
       const before = await this.loadRiga(tx, tenantId, contoId, rigaId);
+      this.assertRigaNotSent(before);
 
       // Soft-delete via update deletedAt (ADR-0021): mai tx.delete().
       await tx.contoRiga.update({ where: { id: rigaId }, data: { deletedAt: new Date() } });
@@ -333,6 +420,20 @@ export class ContiService {
       throw new BadRequestException({
         errorCode: 'E_CONTO_CHANNEL_TAVOLO_MISMATCH',
         message: `Channel '${channel}' must not have a tavoloId`,
+      });
+    }
+  }
+
+  /**
+   * Immutabilità righe inviate (KDS): una riga con `comandaId != null` è già in
+   * cucina → no update quantità, no storno. Implementa la semantica "non ancora
+   * inviate" del permesso `comande.modifica`.
+   */
+  private assertRigaNotSent(riga: ContoRiga): void {
+    if (riga.comandaId !== null) {
+      throw new ConflictException({
+        errorCode: 'E_RIGA_ALREADY_SENT',
+        message: 'Riga already sent to kitchen (comanda)',
       });
     }
   }
