@@ -3151,6 +3151,18 @@ Modulo `conti` (restaurant-api) sopra l'aggregato di PR-1. Tier **ALTO** (mutazi
 - **GATE-1 esercitato:** 6 unit + **16 e2e** (`comande.e2e-spec.ts`) con RBAC reale — ogni guardia *tentata* (pricing ambiguo, cassa senza tavolo→400, addRiga su conto chiuso→409, demo sui conti acme→404, storno invisibile+fisicamente presente, audit-in-tx).
 - Commit split: `feat(restaurant)` resolver / `feat(restaurant)` modulo conti / `test(restaurant)` e2e / `docs(adr)` ADR-0068 + PROGRESS.
 
+## [2026-07-02] Blocco COMANDE FE PR-1 — core comande (FE + filtro GET /conti)
+
+Primo FE del blocco COMANDE, consumer del BE #151/#152 (ADR-0067/0068). Sequenza FE in 2 PR: **PR-1 = core comande** (questa), **PR-2 = integrazione tavoli**. **Nessuno schema/migration, nessun permesso nuovo** (catalogo resta **60**). Split per rischio: commit BE (tier ALTO) isolato dal commit FE (tier BASSO).
+
+- **BE — filtro opzionale `GET /conti` (tier ALTO):** `ListContiQueryDto` (`?stato=` `@IsEnum(StatoConto)`, `?tavoloId=` `@IsString` — `id` è cuid/uuid, non `@IsUUID`); `list(tenantId, filters?)` costruisce il `where` condizionalmente. **Backward-compat provata:** STEP 0 ha confermato la firma reale (`findMany({where:{tenantId}, orderBy apertoIl desc})`, nessun filtro preesistente); 4 e2e (no-param/stato/tavoloId/combinati) verdi. Il test 400 su `?stato=` invalido è `it.skip` (**TD-BS Sub-2** — ValidationPipe non esercitabile in harness E2E, come articles/menus); constraint coperto da `list-conti.query.dto.spec.ts` (unit 6/6).
+- **FE — `lib/conti-api.ts` + tipi:** stampo di `menu-api`, **normalizzazione Decimal→number** nei mapper wire→dominio (`prezzoUnitario`, `totale`); la UI non vede mai la stringa raw. `listConti` non mappa (il `Conto` flat non espone Decimal — il totale vive solo in `getConto`).
+- **FE — pagina `/comande`:** lista conti aperti (`listConti stato=aperto`) + apertura conto inline **solo canali non-cassa** (asporto/delivery/menu_online — `cassa`+tavolo → PR-2). **La lista NON mostra il totale per conto** (assente dal serializer del `Conto` flat): scelta corretta per PR-1, il totale si vede entrando nel conto. Totale-in-lista, se servisse, → estendere il serializer BE del `Conto` flat in PR-2 (**non** N fetch).
+- **FE — vista `/comande/[contoId]`:** righe add/edit-quantità/storno, totale, chiudi/annulla con conferma; **sola lettura** se conto non aperto. **`E_PRICE_AMBIGUOUS` reso come blocco sul singolo articolo** (opzione `disabled` + avviso dedicato), non toast generico. Picker articoli composto dagli endpoint esistenti (`menu→categorie→articoli`).
+- **🆕 TD-articles-flat-endpoint** (ID verificato non collidente con TD-AW/TD-pricing-multilistino/TD-tavolo-stato-forward/TD-BS Sub-2): il picker fa fetch a cascata O(N) (`listMenus`→`listCategories`→`listArticlesByCategory`), che degrada con la scala. **Trigger:** primo consumer aggiuntivo di lista-articoli (KDS o Cassa) — che allora crea l'endpoint flat *una volta per tutti* — oppure catalogo reale oltre soglia categorie. Nessun fix ora (non inventare l'endpoint sul singolo consumer).
+- **RBAC FE inline** (`comande.visualizza/crea/modifica/elimina`), gate UX (i permessi sono oggi orfani → verificato che il gate nasconde le azioni senza crashare). Error code mappati in `error-codes.ts` (tutti `E_CONTO_*`, `E_PRICE_AMBIGUOUS`, `E_TAVOLO_NOT_FOUND`, `E_AUTH_INSUFFICIENT_PERMISSIONS`); i18n namespace `comande` (it/en). GATE FE verdi (typecheck/lint/build).
+- Commit split: `feat(restaurant-api)` filtro GET /conti / `feat(restaurant-web)` conti-api + pagine comande (+ PROGRESS).
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
