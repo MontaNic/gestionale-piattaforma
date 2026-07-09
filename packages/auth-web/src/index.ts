@@ -13,6 +13,7 @@
 
 export { AuthProvider, useAuth } from './AuthContext';
 export { AuthGate } from './AuthGate';
+export { authOptions, refreshAccessToken } from './auth-refresh';
 export {
   AUTH_CHANGE_EVENT,
   clearTokens,

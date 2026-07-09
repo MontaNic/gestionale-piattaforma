@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { apiGet, ApiError } from '@gestionale/api-client';
 
 import { AUTH_CHANGE_EVENT, clearTokens, getAccessToken } from './auth';
+import { authOptions } from './auth-refresh';
 import { performLogout } from './auth-logout';
 import type { MeResponse, MeRole, MeUser } from './types';
 
@@ -84,7 +85,12 @@ export function AuthProvider({
 
     setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
-      const res = await apiGet<MeResponse>('/me', { accessToken: token });
+      // `authOptions()` porta l'hook onUnauthorized: un /me in 401 (access token
+      // scaduto — è la riga bug §1) tenta il refresh single-flight e ritenta,
+      // invece di disconnettere. Refresh fallito → refreshAccessToken ha già
+      // clearTokens → il catch 401 sotto resetta (idempotente); il successivo
+      // loadProfile trova getAccessToken()=null e ritorna subito (no loop).
+      const res = await apiGet<MeResponse>('/me', authOptions());
       setState({
         user: res.data.user,
         roles: res.data.roles,
