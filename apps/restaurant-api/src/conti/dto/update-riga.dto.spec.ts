@@ -36,3 +36,23 @@ describe('UpdateRigaDto validation — note', () => {
     expect(await messagesFor({ note: 'ok' })).toContain('E_CONTO_QUANTITA_INVALID');
   });
 });
+
+describe('UpdateRigaDto normalizzazione note (Delta A: trim + empty→null)', () => {
+  // Rischio principale della modifica: un transform scritto male collassa
+  // `undefined` (campo omesso) in `null` e cancella la nota preesistente.
+  it('test 4 — note OMESSA resta undefined (NON diventa null → Prisma skip, nota invariata)', () => {
+    const dto = plainToInstance(UpdateRigaDto, { quantita: 2 });
+    expect(dto.note).toBeUndefined();
+    expect(dto.note).not.toBeNull();
+  });
+
+  it('test 5 — note di soli spazi → null (clear esplicito)', () => {
+    const dto = plainToInstance(UpdateRigaDto, { quantita: 2, note: '   ' });
+    expect(dto.note).toBeNull();
+  });
+
+  it('trimma il whitespace ai bordi su valore presente', () => {
+    const dto = plainToInstance(UpdateRigaDto, { quantita: 2, note: '  ben cotto  ' });
+    expect(dto.note).toBe('ben cotto');
+  });
+});
