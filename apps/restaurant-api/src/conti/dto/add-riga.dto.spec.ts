@@ -44,3 +44,30 @@ describe('AddRigaDto validation — note', () => {
     expect(await messagesFor({ ...base, note: 123 })).toContain('E_CONTO_NOTE_INVALID');
   });
 });
+
+describe('AddRigaDto normalizzazione note (Delta A: trim + empty→null)', () => {
+  it('test 1 — trimma il whitespace ai bordi', () => {
+    const dto = plainToInstance(AddRigaDto, { ...base, note: '  senza glutine  ' });
+    expect(dto.note).toBe('senza glutine');
+  });
+
+  it('test 2 — note assente resta undefined (create → null nel service)', () => {
+    const dto = plainToInstance(AddRigaDto, base);
+    expect(dto.note).toBeUndefined();
+  });
+
+  it('test 3 — note di soli spazi → null', () => {
+    const dto = plainToInstance(AddRigaDto, { ...base, note: '   ' });
+    expect(dto.note).toBeNull();
+  });
+
+  it('stringa vuota "" → null', () => {
+    const dto = plainToInstance(AddRigaDto, { ...base, note: '' });
+    expect(dto.note).toBeNull();
+  });
+
+  it('test 7 — MaxLength valuta il valore trimmato: 200 char + spazi ai bordi → valido', async () => {
+    const note = `  ${'a'.repeat(200)}  `;
+    expect(await messagesFor({ ...base, note })).toHaveLength(0);
+  });
+});

@@ -1,5 +1,7 @@
 import { IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
+import { TrimToNull } from './trim-to-null.transform';
+
 export class AddRigaDto {
   @IsString({ message: 'E_CONTO_ARTICLE_INVALID' })
   @MinLength(1, { message: 'E_CONTO_ARTICLE_REQUIRED' })
@@ -11,8 +13,10 @@ export class AddRigaDto {
 
   // Annotazione cucina per-riga (KDS, ADR-0069). Opzionale; max 200 char
   // (coerente con gli altri short-text del dominio). AI/NL fuori scope.
+  // Trim + empty→null (Delta A): il MaxLength valuta il valore già trimmato.
   @IsOptional()
+  @TrimToNull()
   @IsString({ message: 'E_CONTO_NOTE_INVALID' })
   @MaxLength(200, { message: 'E_CONTO_NOTE_TOO_LONG' })
-  note?: string;
+  note?: string | null;
 }
