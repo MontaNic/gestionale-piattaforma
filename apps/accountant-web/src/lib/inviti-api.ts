@@ -6,16 +6,12 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type { CreateInvitoInput, Invito } from './inviti-types';
 
 interface Wrapped<T> {
   data: T;
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 export async function listInviti(aziendaId: string): Promise<Invito[]> {

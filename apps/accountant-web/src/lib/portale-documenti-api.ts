@@ -9,7 +9,7 @@
 // =============================================================================
 
 import { apiGet } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions, getAccessToken } from '@gestionale/auth-web';
 
 import type { VisibilitaDocumento } from './documenti-types';
 
@@ -32,9 +32,7 @@ export interface PortaleDocumento {
 }
 
 export async function getPortaleDocumenti(): Promise<PortaleDocumento[]> {
-  const res = await apiGet<Wrapped<PortaleDocumento[]>>('/portale/documenti', {
-    accessToken: getAccessToken() ?? undefined,
-  });
+  const res = await apiGet<Wrapped<PortaleDocumento[]>>('/portale/documenti', authOptions());
   return res.data;
 }
 

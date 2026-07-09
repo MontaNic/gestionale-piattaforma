@@ -12,7 +12,7 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type {
   Article,
@@ -34,11 +34,6 @@ import type {
 
 interface Wrapped<T> {
   data: T;
-}
-
-/** Header auth comune a tutte le chiamate Menu (route protette JwtAuthGuard). */
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 // ── Menu ─────────────────────────────────────────────────────────────────────

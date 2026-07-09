@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type {
   Circolare,
@@ -20,10 +20,6 @@ import type {
 
 interface Wrapped<T> {
   data: T;
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 export interface GetCircolariParams {

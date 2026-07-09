@@ -6,16 +6,12 @@
 // =============================================================================
 
 import { apiGet, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type { StatoMandato } from './mandati-api';
 
 interface Wrapped<T> {
   data: T;
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 export interface MargineRow {

@@ -11,14 +11,10 @@
 // =============================================================================
 
 import { apiGet, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 interface Wrapped<T> {
   data: T;
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 /** Riga lista (ClienteCircolareListView). Date ISO sul filo (DateTime → stringa). */
