@@ -3163,6 +3163,14 @@ Primo FE del blocco COMANDE, consumer del BE #151/#152 (ADR-0067/0068). Sequenza
 - **RBAC FE inline** (`comande.visualizza/crea/modifica/elimina`), gate UX (i permessi sono oggi orfani → verificato che il gate nasconde le azioni senza crashare). Error code mappati in `error-codes.ts` (tutti `E_CONTO_*`, `E_PRICE_AMBIGUOUS`, `E_TAVOLO_NOT_FOUND`, `E_AUTH_INSUFFICIENT_PERMISSIONS`); i18n namespace `comande` (it/en). GATE FE verdi (typecheck/lint/build).
 - Commit split: `feat(restaurant-api)` filtro GET /conti / `feat(restaurant-web)` conti-api + pagine comande (+ PROGRESS).
 
+## [2026-07-09] Registrazione TD-rbac-tavolo-write-subset (docs-only, STOP 0 read-only) → [ADR-0058](docs/architecture/ADR-0058-tavoli-mappa-sala-f2.md)
+
+Micro-PR **solo-docs** (tier BASSO): nessun codice/schema/seed/permesso toccato. Uno STOP 0 read-only sul precursor KDS ha riclassificato il residuo di test della scrittura-posizione-tavolo.
+
+- **🆕 TD-rbac-tavolo-write-subset** (ID verificato non collidente): il path RBAC **negativo** su un tenant reale — ruolo con **sottoinsieme** di permessi che riceve un `403` (corretto o indebito) dal `PermissionsGuard` su `PATCH /tables/:id` — non è mai stato esercitato. **Trigger:** primo ruolo non-admin creato su un tenant restaurant reale. Tier BASSO (verifica runtime). Dipendenza esplicita: si attiva insieme a `TD-bootstrap-verticale` (i ruoli clonano i template cross-verticale).
+- **#138 è chiuso da FE-5 (2026-07-01, sopra), non è un pending aperto:** in questo file compare solo nella narrativa di chiusura FE-5. Nessuna rimozione fatta. Il residuo riclassificato è **RBAC, non RLS**: `app.is_super_admin` (SET LOCAL di `rls.ts`) è costante `false` in ogni entrypoint JWT (`true` solo da `withSystemContext`/`withSuperAdminContext`, seed/bootstrap) → l'RLS sulla scrittura tavolo era già esercitata anche da FE-5 (Direzione non-super, DB throwaway). Dettaglio in ADR-0058 (nota RLS-vs-RBAC).
+- Commit: `docs(adr)` ADR-0058 + PROGRESS.
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
