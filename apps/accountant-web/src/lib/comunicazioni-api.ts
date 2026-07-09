@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions, getAccessToken } from '@gestionale/auth-web';
 
 import type {
   ComAllegato,
@@ -28,10 +28,6 @@ interface Wrapped<T> {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
-}
 
 export interface GetComunicazioniParams {
   aziendaId?: string;

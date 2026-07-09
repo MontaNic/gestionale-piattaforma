@@ -15,7 +15,7 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type {
   CreatePreventivoInput,
@@ -114,10 +114,6 @@ function mapPreventivo(r: RawPreventivo): Preventivo {
 
 function mapWithVoci(r: RawPreventivo): PreventivoWithVoci {
   return { ...mapPreventivo(r), voci: (r.voci ?? []).map(mapVoce) };
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 export async function listPreventivi(aziendaId: string): Promise<Preventivo[]> {

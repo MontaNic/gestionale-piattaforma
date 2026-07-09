@@ -124,3 +124,60 @@ describe('api-client — taxonomy ApiError', () => {
     expect(err.errorCode).toBe('E_VALIDATION');
   });
 });
+
+describe('api-client — interceptor onUnauthorized (precursor auth-refresh)', () => {
+  it('test 1 — 401 + onUnauthorized → refresh e retry singolo con il token NUOVO', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonRes({ errorCode: 'E_AUTH_TOKEN_EXPIRED' }, 401))
+      .mockResolvedValueOnce(jsonRes({ data: 'ok' }));
+    const onUnauthorized = vi.fn().mockResolvedValue('newtok');
+    const out = await apiGet<{ data: string }>('/protected', {
+      accessToken: 'stale',
+      onUnauthorized,
+    });
+    expect(out).toEqual({ data: 'ok' });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // il retry usa il token fresco ritornato da onUnauthorized, non quello stale
+    const retryHeaders = (fetchMock.mock.calls[1]?.[1] as { headers: Record<string, string> })
+      .headers;
+    expect(retryHeaders['Authorization']).toBe('Bearer newtok');
+  });
+
+  it('test 7 — retry singolo: se il retry prende ancora 401, l errore risale (nessun 2° refresh)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonRes({ errorCode: 'E_AUTH_TOKEN_EXPIRED' }, 401))
+      .mockResolvedValueOnce(jsonRes({ errorCode: 'E_AUTH_TOKEN_EXPIRED' }, 401));
+    const onUnauthorized = vi.fn().mockResolvedValue('newtok');
+    const err = await rejected(apiGet('/protected', { accessToken: 'stale', onUnauthorized }));
+    expect(err.status).toBe(401);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1); // solo il primo 401 tenta il refresh
+    expect(fetchMock).toHaveBeenCalledTimes(2); // originale + 1 retry, mai un terzo
+  });
+
+  it('onUnauthorized ritorna null (refresh fallito) → 401 risale, nessun retry', async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes({ errorCode: 'E_AUTH_TOKEN_EXPIRED' }, 401));
+    const onUnauthorized = vi.fn().mockResolvedValue(null);
+    const err = await rejected(apiGet('/protected', { accessToken: 'stale', onUnauthorized }));
+    expect(err.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('test 9 — 401 senza onUnauthorized → errore risale, comportamento invariato', async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes({ errorCode: 'E_AUTH_TOKEN_EXPIRED' }, 401));
+    const err = await rejected(apiGet('/protected', { accessToken: 'stale' }));
+    expect(err.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('test 5 (api-client side) — skipAuthRetry: un 401 NON tenta il refresh (anti-ricorsione)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes({ errorCode: 'E_AUTH_INVALID_REFRESH_TOKEN' }, 401));
+    const onUnauthorized = vi.fn().mockResolvedValue('newtok');
+    const err = await rejected(
+      apiPost('/auth/refresh', { refreshToken: 'r' }, { onUnauthorized, skipAuthRetry: true }),
+    );
+    expect(err.status).toBe(401);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

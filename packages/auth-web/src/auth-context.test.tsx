@@ -89,7 +89,13 @@ describe('AuthProvider / useAuth', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('auth').textContent).toBe('true'));
-    expect(apiGet).toHaveBeenCalledWith('/me', { accessToken: 'access-xyz' });
+    // /me ora usa authOptions(): access token + hook di refresh single-flight
+    // (precursor auth-refresh). Il 401 su token scaduto tenta il refresh invece
+    // di disconnettere subito.
+    expect(apiGet).toHaveBeenCalledWith(
+      '/me',
+      expect.objectContaining({ accessToken: 'access-xyz', onUnauthorized: expect.any(Function) }),
+    );
     expect(screen.getByTestId('email').textContent).toBe('mario@acme.it');
     expect(screen.getByTestId('perms').textContent).toBe('menu:read');
   });

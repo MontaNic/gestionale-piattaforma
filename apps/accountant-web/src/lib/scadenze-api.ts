@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type {
   CreateScadenzaCategoriaInput,
@@ -53,10 +53,6 @@ function toDateOnly(v: string): string {
 
 function mapScadenza(r: RawScadenza): Scadenza {
   return { ...r, dataScadenza: toDateOnly(r.dataScadenza) };
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 export interface GetScadenzeParams {

@@ -41,6 +41,19 @@ export interface RequestOptions {
   tenantSlug?: string;
   /** Access token JWT per header `Authorization: Bearer <token>` (post-auth). */
   accessToken?: string;
+  /**
+   * Hook invocato su `401`: ritorna un access token NUOVO (→ retry singolo della
+   * richiesta con quel token) oppure `null` (→ l'errore 401 risale, nessun retry).
+   * Inversione di dipendenza (precursor auth-refresh §4.1): `api-client` resta
+   * ignaro di COME il token viene rinnovato — il single-flight vive in `auth-web`.
+   */
+  onUnauthorized?: () => Promise<string | null>;
+  /**
+   * Se true, un `401` NON tenta il refresh. Impostato (a) sul retry, per garantire
+   * un tentativo solo (nessun loop); (b) sulla chiamata a `/auth/refresh` stessa
+   * (anti-ricorsione §4.3: il refresh non deve ri-triggerare un refresh).
+   */
+  skipAuthRetry?: boolean;
 }
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -102,7 +115,25 @@ async function request<T>(
     ...(hasBody ? { body: JSON.stringify(body) } : {}),
   });
 
-  if (!res.ok) throw await parseError(res);
+  if (!res.ok) {
+    // 401 + hook di refresh disponibile + non già in retry/refresh → un solo
+    // tentativo: rinnova il token e ri-esegui la richiesta con quello fresco.
+    // `skipAuthRetry: true` sul retry garantisce che un 401 di ritorno risalga
+    // come errore (nessun secondo refresh, nessun loop). `res` non è ancora
+    // stato letto qui, quindi `parseError(res)` sotto resta valido nel ramo null.
+    if (res.status === 401 && options.onUnauthorized && !options.skipAuthRetry) {
+      const refreshedToken = await options.onUnauthorized();
+      if (refreshedToken !== null) {
+        return request<T>(
+          method,
+          path,
+          { ...options, accessToken: refreshedToken, skipAuthRetry: true },
+          body,
+        );
+      }
+    }
+    throw await parseError(res);
+  }
   // 204 No Content: pattern NestJS @HttpCode(NO_CONTENT). Caller dovrebbe usare
   // <void> e non leggere il return value.
   if (res.status === 204) return undefined as T;

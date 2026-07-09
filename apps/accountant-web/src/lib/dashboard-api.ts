@@ -8,16 +8,12 @@
 // =============================================================================
 
 import { apiGet } from '@gestionale/api-client';
-import { getAccessToken } from '@gestionale/auth-web';
+import { authOptions } from '@gestionale/auth-web';
 
 import type { DashboardStats } from './dashboard-types';
 
 interface Wrapped<T> {
   data: T;
-}
-
-function authOptions(): { accessToken?: string } {
-  return { accessToken: getAccessToken() ?? undefined };
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
