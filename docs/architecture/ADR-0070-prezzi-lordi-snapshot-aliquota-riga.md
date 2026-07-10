@@ -39,6 +39,8 @@ NOT NULL e non nullable: una riga senza aliquota è un dato che la cassa non sap
 
 `ContoRiga.articleId` è FK required → il backfill dall'aliquota **corrente** dell'articolo è sempre risolvibile (verificato: 0 orfani, 0 articoli con `vat_percent` NULL in produzione). **Limite dichiarato:** l'aliquota vigente al momento dell'ordine non è ricostruibile (mai salvata) → le righe pre-migration ricevono l'aliquota corrente (best-effort); dal deploy in poi il valore è uno snapshot vero. Accettabile: i dati esistenti sono demo, non contabilità reale.
 
+**Invariante di deploy (verificato CI+prod, throwaway 2-tenant RLS FORCE):** la `UPDATE` di backfill è cross-tenant e `conti_righe` ha RLS `FORCE` → tocca tutte le righe **solo perché le migration girano come `DIRECT_URL = postgres`** (`rolsuper=t`, `rolbypassrls=t`; Prisma usa `directUrl` per le DDL). Sotto l'app role `gestionale_app` (NOSUPERUSER/NOBYPASSRLS, nessun `app.tenant_id`) la stessa `UPDATE` tocca **0 righe** → il `SET NOT NULL` fallirebbe. **Vale per ogni futura data-migration cross-tenant:** dipende da `DIRECT_URL` = superuser. Non puntare `DIRECT_URL` all'app role.
+
 ## Confini / Fuori scope (con trigger)
 
 - **Scorporo imponibile/IVA, documento commerciale, RT.** _Trigger = blocco CASSA pre-fiscale._
