@@ -306,6 +306,7 @@ export class ContiService {
           articleId: dto.articleId,
           nomeArticolo: snapshot.nomeArticolo,
           prezzoUnitario: snapshot.prezzoUnitario,
+          vatPercent: snapshot.vatPercent,
           quantita: dto.quantita,
           reparto: snapshot.reparto,
           note: dto.note ?? null,
