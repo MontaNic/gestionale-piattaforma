@@ -802,6 +802,10 @@ model ContoRiga {
   articleId      String          @map("article_id")
   nomeArticolo   String          @map("nome_articolo") // snapshot: robustezza storica
   prezzoUnitario Decimal         @map("prezzo_unitario") @db.Decimal(10, 2) // snapshot congelato (DP-C)
+  // Prezzi LORDI (IVA inclusa, ADR-0070): il totale è Σ prezzo×qta, nessuna IVA
+  // aggiunta. `vatPercent` è snapshot da Article.vatPercent per lo scorporo
+  // differito alla cassa — congelato all'ordine, come nome/prezzo/reparto.
+  vatPercent     Int             @map("vat_percent")
   quantita       Int
   reparto        PrintDepartment // snapshot da Article.printDepartment (prepara KDS)
   // KDS (ADR-attivazione-layer-comanda): riga "inviata" quando comandaId != null.
