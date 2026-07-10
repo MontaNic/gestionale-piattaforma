@@ -894,4 +894,70 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
       expect(actions).toContain('comanda.stato_cambiato');
     });
   });
+
+  // ===========================================================================
+  // Snapshot vatPercent su riga (ADR-0070) — prezzi lordi, scorporo differito
+  // ===========================================================================
+  // Seed: articleA vat 10 (Spaghetti, cucina), articleB vat 22 (Birra, bar).
+  describe('vatPercent snapshot (ADR-0070)', () => {
+    async function addRiga(contoId: string, articleId: string, quantita = 1): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe`)
+        .set(auth(demoJwt))
+        .send({ articleId, quantita })
+        .expect(201);
+      return res.body.data.id as string;
+    }
+    const vatOf = async (rigaId: string): Promise<number | null> => {
+      const rows = await pgRows(
+        containers.databaseUrl,
+        'SELECT vat_percent FROM conti_righe WHERE id = $1',
+        [rigaId],
+      );
+      return (rows[0]?.vat_percent as number | null) ?? null;
+    };
+
+    it('test 1+5 — snapshot da Article.vatPercent (articleA=10, articleB=22)', async () => {
+      const contoId = await apriCassa();
+      const rigaA = await addRiga(contoId, data.articleAId);
+      const rigaB = await addRiga(contoId, data.articleBId);
+      expect(await vatOf(rigaA)).toBe(10);
+      expect(await vatOf(rigaB)).toBe(22);
+    });
+
+    it('test 2 — modificare Article.vatPercent NON altera le righe già create (immutabilità)', async () => {
+      const contoId = await apriCassa();
+      const rigaA = await addRiga(contoId, data.articleAId);
+      expect(await vatOf(rigaA)).toBe(10);
+      // cambia l'aliquota dell'articolo a valle
+      await pgRows(containers.databaseUrl, 'UPDATE articles SET vat_percent = 4 WHERE id = $1', [
+        data.articleAId,
+      ]);
+      // la riga già scritta resta congelata a 10
+      expect(await vatOf(rigaA)).toBe(10);
+    });
+
+    it('test 3 — computeTotale invariato: somma lorda pura, nessuno scorporo IVA', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId, 2); // override 8.00 × 2 = 16.00
+      await addRiga(contoId, data.articleBId, 1); // basePrice 5.00 × 1 = 5.00
+      const get = await request(app.getHttpServer())
+        .get(`${API}/${contoId}`)
+        .set(auth(demoJwt))
+        .expect(200);
+      // Σ prezzo×qta = 21.00, invariato malgrado le aliquote 10/22 (nessuna IVA aggiunta/scorporata)
+      expect(get.body.data.totale).toBe('21.00');
+    });
+
+    it('test 4 — nessuna riga con vat_percent NULL (NOT NULL a runtime)', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId);
+      await addRiga(contoId, data.articleBId);
+      const rows = await pgRows(
+        containers.databaseUrl,
+        'SELECT count(*)::int AS n FROM conti_righe WHERE vat_percent IS NULL',
+      );
+      expect(rows[0].n).toBe(0);
+    });
+  });
 });
