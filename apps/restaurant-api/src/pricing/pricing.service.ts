@@ -21,6 +21,9 @@ export interface LineSnapshot {
   prezzoUnitario: Prisma.Decimal;
   nomeArticolo: string;
   reparto: PrintDepartment;
+  // Aliquota IVA congelata all'ordine (ADR-0070): prezzi lordi, scorporo differito
+  // alla cassa. Snapshot da Article.vatPercent, non riletto a valle.
+  vatPercent: number;
 }
 
 @Injectable()
@@ -38,7 +41,7 @@ export class PricingService {
   ): Promise<LineSnapshot> {
     const article = await tx.article.findFirst({
       where: { id: articleId, tenantId },
-      select: { name: true, printDepartment: true, basePrice: true },
+      select: { name: true, printDepartment: true, basePrice: true, vatPercent: true },
     });
     if (!article) {
       throw new NotFoundException({
@@ -69,7 +72,12 @@ export class PricingService {
         matchingActiveListIds,
         overrideByListId,
       });
-      return { prezzoUnitario, nomeArticolo: article.name, reparto: article.printDepartment };
+      return {
+        prezzoUnitario,
+        nomeArticolo: article.name,
+        reparto: article.printDepartment,
+        vatPercent: article.vatPercent,
+      };
     } catch (err) {
       if (err instanceof PriceAmbiguousError) {
         throw new ConflictException({ errorCode: err.errorCode, message: err.message });
