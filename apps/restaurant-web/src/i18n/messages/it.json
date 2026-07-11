@@ -226,6 +226,7 @@
       "dialogTitle": "Apri conto — tavolo {numero}",
       "channelFixed": "Canale: Cassa",
       "copertiLabel": "Coperti (opzionale)",
+      "copertiOverCapienza": "Coperti ({coperti}) oltre la capienza del tavolo ({capienza})",
       "confirm": "Apri conto",
       "opening": "Apertura…",
       "cancel": "Annulla",

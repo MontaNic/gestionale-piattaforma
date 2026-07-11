@@ -300,6 +300,13 @@ export default function MappaPage(): JSX.Element {
   }
 
   const copertiValid = /^([1-9]\d*)?$/.test(coperti.trim());
+  // Warning SOFT (non bloccante): coperti oltre la capienza del tavolo. Ortogonale
+  // a copertiValid — il submit resta abilitato, è solo un segnale visivo.
+  const copertiOverCapienza =
+    openingTavolo !== null &&
+    copertiValid &&
+    coperti.trim() !== '' &&
+    Number(coperti.trim()) > openingTavolo.capienza;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -361,6 +368,7 @@ export default function MappaPage(): JSX.Element {
                     key={tavolo.id}
                     data-testid={`tavolo-${tavolo.id}`}
                     data-occupato={occupato ? 'true' : 'false'}
+                    data-capienza={tavolo.capienza}
                     onPointerDown={(e) => handlePointerDown(e, tavolo)}
                     onPointerMove={handlePointerMove}
                     onPointerUp={() => void handlePointerUp()}
@@ -512,6 +520,18 @@ export default function MappaPage(): JSX.Element {
                 value={coperti}
                 onChange={(e) => setCoperti(e.target.value)}
               />
+              {copertiOverCapienza && openingTavolo && (
+                <p
+                  data-testid="coperti-warning"
+                  role="status"
+                  className="text-sm text-amber-600 dark:text-amber-500"
+                >
+                  {t('apri.copertiOverCapienza', {
+                    coperti: Number(coperti.trim()),
+                    capienza: openingTavolo.capienza,
+                  })}
+                </p>
+              )}
             </div>
             {openError && (
               <Alert variant="destructive">
