@@ -280,6 +280,8 @@
       "editQuantita": "Edit quantity",
       "saveQuantita": "Save",
       "deleteRiga": "Void line",
+      "stornaInviata": "Void",
+      "stornato": "Voided",
       "pendingTitle": "To send",
       "pendingEmpty": "No lines to send yet. Add an item.",
       "inviateTitle": "Sent to kitchen",
@@ -312,6 +314,8 @@
       "annullaBody": "The tab will be cancelled and can no longer be modified.",
       "stornoTitle": "Void the line?",
       "stornoBody": "“{name}” will be removed from the tab.",
+      "stornoInviataTitle": "Void a line already sent?",
+      "stornoInviataBody": "“{name}” is already in the kitchen. It will be marked as voided (revoked) and excluded from the total. This action is irreversible.",
       "confirmLabel": "Confirm",
       "cancelLabel": "Cancel"
     },

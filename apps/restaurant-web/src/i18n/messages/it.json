@@ -280,6 +280,8 @@
       "editQuantita": "Modifica quantità",
       "saveQuantita": "Salva",
       "deleteRiga": "Storna riga",
+      "stornaInviata": "Storna",
+      "stornato": "Stornato",
       "pendingTitle": "Da inviare",
       "pendingEmpty": "Nessuna riga da inviare. Aggiungi un articolo.",
       "inviateTitle": "Inviate in cucina",
@@ -312,6 +314,8 @@
       "annullaBody": "Il conto verrà annullato e non sarà più modificabile.",
       "stornoTitle": "Stornare la riga?",
       "stornoBody": "«{name}» verrà rimossa dal conto.",
+      "stornoInviataTitle": "Stornare la riga già inviata?",
+      "stornoInviataBody": "«{name}» è già in cucina. Verrà segnata come stornata (revocata) ed esclusa dal totale. L'azione è irreversibile.",
       "confirmLabel": "Conferma",
       "cancelLabel": "Annulla"
     },
