@@ -226,6 +226,7 @@
       "dialogTitle": "Open tab — table {numero}",
       "channelFixed": "Channel: Register",
       "copertiLabel": "Covers (optional)",
+      "copertiOverCapienza": "Covers ({coperti}) exceed the table capacity ({capienza})",
       "confirm": "Open tab",
       "opening": "Opening…",
       "cancel": "Cancel",
