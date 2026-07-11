@@ -112,6 +112,21 @@ export class ContiController {
     return { data };
   }
 
+  // Storno di una riga INVIATA (ADR-storno). Distinto dal DELETE (pending): la
+  // riga è già in cucina → marcata `stornata`, non cancellata. Stesso permesso
+  // `comande.elimina` (rimuove un piatto).
+  @Post(':id/righe/:rigaId/storna')
+  @RequirePermissions('comande.elimina')
+  async stornaRigaInviata(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') contoId: string,
+    @Param('rigaId') rigaId: string,
+  ) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.conti.stornaRigaInviata(user.tenantId, user.id, contoId, rigaId);
+    return { data };
+  }
+
   @Post(':id/invia')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('comande.modifica')
