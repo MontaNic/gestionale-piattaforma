@@ -3171,6 +3171,14 @@ Micro-PR **solo-docs** (tier BASSO): nessun codice/schema/seed/permesso toccato.
 - **#138 è chiuso da FE-5 (2026-07-01, sopra), non è un pending aperto:** in questo file compare solo nella narrativa di chiusura FE-5. Nessuna rimozione fatta. Il residuo riclassificato è **RBAC, non RLS**: `app.is_super_admin` (SET LOCAL di `rls.ts`) è costante `false` in ogni entrypoint JWT (`true` solo da `withSystemContext`/`withSuperAdminContext`, seed/bootstrap) → l'RLS sulla scrittura tavolo era già esercitata anche da FE-5 (Direzione non-super, DB throwaway). Dettaglio in ADR-0058 (nota RLS-vs-RBAC).
 - Commit: `docs(adr)` ADR-0058 + PROGRESS.
 
+## [2026-07-12] Registrazione TD-ci-e2e-testcontainers-be (docs-only) → [ADR-0071](docs/architecture/ADR-0071-ci-e2e-testcontainers-be-non-gated.md)
+
+Micro-PR **solo-docs** (nasce da una scoperta sul pipeline durante #163, non dallo storno). **La e2e testcontainers di `restaurant-api` (`comande.e2e-spec` ecc.) NON gira in CI**: il job "Lint·Typecheck·Format·Test" fa `turbo run test` = `--project=unit`; il job Playwright fa `test:e2e:ci` = `playwright test` (solo FE). Nessuno step invoca `vitest run --project=e2e` del BE.
+
+- **🆕 TD-ci-e2e-testcontainers-be** (ID collision-checked, 0 occorrenze): il **comportamento** di comande/conti (pricing, RBAC, state machine, storno, feed, isolamento, audit) è validato **solo in locale** → una regressione comportamentale non verrebbe colta dalla CI. Vale retroattivamente per #158/#161/#163 (test e2e BE eseguiti solo in locale). **Severità ALTA** (sicurezza-di-regressione su superficie live). **Trigger:** prossima sessione dedicata (non "quando capita" — degrada ogni CI-verde futuro su restaurant-api). **Fix:** serve un Postgres nel runner per testcontainers; il job Playwright ne ha già uno → agganciare la e2e BE lì o dargliene uno dedicato (STOP 0 a sé). Distinto da TD-BS (ADR-0019, "ValidationPipe non gira nell'harness"): qui l'harness e2e BE non gira affatto in CI.
+- Fino al fix: chi tocca comande/conti esegue la e2e BE in locale e lo dichiara nello STOP 2 ("validato in locale, non in CI").
+- Commit: `docs(adr)` ADR-0071 + PROGRESS.
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
