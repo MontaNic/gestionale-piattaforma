@@ -97,10 +97,13 @@ export class ContiService {
   }
 
   private computeTotale(righe: ContoRiga[]): string {
-    const totale = righe.reduce(
-      (acc, r) => acc.plus(r.prezzoUnitario.times(r.quantita)),
-      new Prisma.Decimal(0),
-    );
+    // Escluse le stornate (ADR-storno): il cliente non paga una riga revocata.
+    // Le soft-deleted sono già fuori (getById filtra deletedAt); qui filtriamo
+    // `stornata` che NON è coperto dalla soft-delete extension (boolean normale).
+    // Le righe stornate restano però nel payload `righe` per il rendering (barrata).
+    const totale = righe
+      .filter((r) => !r.stornata)
+      .reduce((acc, r) => acc.plus(r.prezzoUnitario.times(r.quantita)), new Prisma.Decimal(0));
     return totale.toFixed(2);
   }
 
@@ -408,6 +411,76 @@ export class ContiService {
 
       this.logger.log(`ContoRiga stornata: ${rigaId} conto=${contoId} tenant=${tenantId}`);
       return { id: rigaId, deleted: true };
+    });
+  }
+
+  /**
+   * Storno di una riga INVIATA (ADR-storno). Distinto da `stornaRiga` (pending,
+   * soft-delete): qui la riga è già in cucina (`comandaId != null`), non si
+   * cancella — si marca `stornata=true` (resta visibile, esce dal totale). La
+   * perdita post-preparazione è ricostruibile via audit `conto_riga.storno_inviata`
+   * (filtrabile per action) con lo `StatoComanda` corrente nel payload.
+   * @throws Conflict E_RIGA_NOT_SENT — riga pending (usa DELETE /righe)
+   * @throws Conflict E_RIGA_ALREADY_STORNATA — già stornata (idempotenza esplicita)
+   */
+  async stornaRigaInviata(
+    tenantId: string,
+    userId: string,
+    contoId: string,
+    rigaId: string,
+  ): Promise<{ id: string; stornata: true }> {
+    return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      await this.loadOpenConto(tx, tenantId, contoId);
+      const before = await this.loadRiga(tx, tenantId, contoId, rigaId);
+
+      if (before.comandaId === null) {
+        throw new ConflictException({
+          errorCode: 'E_RIGA_NOT_SENT',
+          message: 'Riga not sent (pending) — use DELETE to remove it',
+        });
+      }
+      if (before.stornata) {
+        throw new ConflictException({
+          errorCode: 'E_RIGA_ALREADY_STORNATA',
+          message: 'Riga already stornata',
+        });
+      }
+
+      // Stato comanda al momento dello storno → distingue "annulla prima che parta"
+      // (inviata) da "perdita" (in_preparazione/pronta). Salvato in audit.
+      const comanda = await tx.comanda.findFirst({
+        where: { id: before.comandaId, tenantId },
+        select: { stato: true },
+      });
+
+      await tx.contoRiga.update({
+        where: { id: rigaId },
+        data: { stornata: true, stornataIl: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          id: id(),
+          tenantId,
+          userId,
+          action: 'conto_riga.storno_inviata',
+          entityType: 'ContoRiga',
+          entityId: rigaId,
+          beforeValue: {
+            articleId: before.articleId,
+            nomeArticolo: before.nomeArticolo,
+            prezzoUnitario: before.prezzoUnitario.toString(),
+            quantita: before.quantita,
+            comandaId: before.comandaId,
+          },
+          afterValue: { comandaStato: comanda?.stato ?? null },
+        },
+      });
+
+      this.logger.log(
+        `ContoRiga stornata (inviata): ${rigaId} conto=${contoId} tenant=${tenantId}`,
+      );
+      return { id: rigaId, stornata: true };
     });
   }
 

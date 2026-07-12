@@ -119,3 +119,12 @@ export async function updateRiga(
 export async function deleteRiga(contoId: string, rigaId: string): Promise<void> {
   await apiDelete<Wrapped<unknown>>(`/conti/${contoId}/righe/${rigaId}`, authOptions());
 }
+
+/** Storno di una riga INVIATA (ADR-storno): marca `stornata`, non cancella. */
+export async function stornaRigaInviata(contoId: string, rigaId: string): Promise<void> {
+  await apiPost<Wrapped<unknown>>(
+    `/conti/${contoId}/righe/${rigaId}/storna`,
+    undefined,
+    authOptions(),
+  );
+}

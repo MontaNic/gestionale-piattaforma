@@ -813,6 +813,13 @@ model ContoRiga {
   // inviate" di comande.modifica. `note` = annotazione cucina per-riga (AI/NL fuori scope).
   comandaId      String?         @map("comanda_id")
   note           String?
+  // Storno di una riga INVIATA (ADR-storno): distinto da `deletedAt` (che = "mai
+  // ordinato / rimosso da pending"). `stornata=true` = "è esistita, la cucina
+  // l'ha vista, è stata revocata" → esclusa dal totale (computeTotale) ma resta
+  // visibile marcata (getConto + feed KDS). La perdita post-preparazione è in
+  // audit (`conto_riga.storno_inviata` con lo StatoComanda). Terminale (no toggle).
+  stornata       Boolean         @default(false)
+  stornataIl     DateTime?       @map("stornata_il")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   deletedAt      DateTime?       @map("deleted_at")

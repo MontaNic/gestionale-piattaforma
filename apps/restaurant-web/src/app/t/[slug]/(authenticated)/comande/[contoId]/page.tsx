@@ -22,6 +22,7 @@ import {
   deleteRiga,
   getConto,
   inviaConto,
+  stornaRigaInviata,
   updateRiga,
 } from '@/lib/conti-api';
 import { listArticlesByCategory, listCategories, listMenus } from '@/lib/menu-api';
@@ -92,6 +93,7 @@ export default function ContoDetailPage(): JSX.Element {
   const [editQuantita, setEditQuantita] = useState('1');
   const [editNote, setEditNote] = useState('');
   const [pendingStorno, setPendingStorno] = useState<ContoRiga | null>(null);
+  const [pendingStornoInviata, setPendingStornoInviata] = useState<ContoRiga | null>(null);
   const [pendingChiudi, setPendingChiudi] = useState(false);
   const [pendingAnnulla, setPendingAnnulla] = useState(false);
   const [pendingInvia, setPendingInvia] = useState(false);
@@ -210,6 +212,22 @@ export default function ContoDetailPage(): JSX.Element {
     } catch (err) {
       setActionError(messageForError(err));
       setPendingStorno(null);
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function handleConfirmStornoInviata(): Promise<void> {
+    if (!pendingStornoInviata) return;
+    setActionError(null);
+    setIsPending(true);
+    try {
+      await stornaRigaInviata(contoId, pendingStornoInviata.id);
+      setPendingStornoInviata(null);
+      await load();
+    } catch (err) {
+      setActionError(messageForError(err));
+      setPendingStornoInviata(null);
     } finally {
       setIsPending(false);
     }
@@ -343,11 +361,19 @@ export default function ContoDetailPage(): JSX.Element {
   // Riga INVIATA: immutabile (nessuna azione edit/storno — il BE le rifiuta con
   // 409 E_RIGA_ALREADY_SENT, il gate UI evita l'errore). Sola lettura + note.
   function renderInviataRiga(riga: ContoRiga): JSX.Element {
+    const struck = riga.stornata ? 'line-through text-muted-foreground' : '';
     return (
       <li key={riga.id} className="flex items-start justify-between gap-3 p-3">
         <div className="min-w-0 space-y-0.5">
-          <p className="truncate font-medium">{riga.nomeArticolo}</p>
-          <p className="text-xs text-muted-foreground">{formatEuro(riga.prezzoUnitario)}</p>
+          <p className={`truncate font-medium ${struck}`}>{riga.nomeArticolo}</p>
+          {riga.stornata && (
+            <span className="inline-block rounded bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+              {t('detail.stornato')}
+            </span>
+          )}
+          <p className={`text-xs text-muted-foreground ${struck}`}>
+            {formatEuro(riga.prezzoUnitario)}
+          </p>
           {riga.note && (
             <p className="text-xs italic text-muted-foreground">
               {t('detail.note')}: {riga.note}
@@ -355,12 +381,23 @@ export default function ContoDetailPage(): JSX.Element {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="tabular-nums text-sm">
+          <span className={`tabular-nums text-sm ${struck}`}>
             {t('detail.quantita')}: {riga.quantita}
           </span>
-          <span className="w-20 text-right font-medium tabular-nums">
+          <span className={`w-20 text-right font-medium tabular-nums ${struck}`}>
             {formatEuro(riga.prezzoUnitario * riga.quantita)}
           </span>
+          {/* Storno riga inviata (ADR-storno): gated `comande.elimina`, non su una già stornata. */}
+          {isOpen && canDelete && !riga.stornata && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive"
+              onClick={() => setPendingStornoInviata(riga)}
+            >
+              {t('detail.stornaInviata')}
+            </Button>
+          )}
         </div>
       </li>
     );
@@ -532,6 +569,22 @@ export default function ContoDetailPage(): JSX.Element {
         confirmLabel={t('confirm.confirmLabel')}
         cancelLabel={t('confirm.cancelLabel')}
         onConfirm={() => void handleConfirmStorno()}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={pendingStornoInviata !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingStornoInviata(null);
+        }}
+        title={t('confirm.stornoInviataTitle')}
+        description={
+          pendingStornoInviata
+            ? t('confirm.stornoInviataBody', { name: pendingStornoInviata.nomeArticolo })
+            : ''
+        }
+        confirmLabel={t('confirm.confirmLabel')}
+        cancelLabel={t('confirm.cancelLabel')}
+        onConfirm={() => void handleConfirmStornoInviata()}
         isPending={isPending}
       />
       <ConfirmDialog

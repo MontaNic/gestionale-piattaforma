@@ -60,6 +60,12 @@ export interface ContoRiga {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  /**
+   * Storno riga INVIATA (ADR-storno): `true` = revocata (resa barrata, esclusa
+   * dal totale). Distinto da `deletedAt` (pending rimossa). Terminale.
+   */
+  stornata: boolean;
+  stornataIl: string | null;
 }
 
 export interface ContoWithRighe extends Conto {

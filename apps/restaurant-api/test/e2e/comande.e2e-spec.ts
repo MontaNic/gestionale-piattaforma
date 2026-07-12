@@ -960,4 +960,195 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
       expect(rows[0].n).toBe(0);
     });
   });
+
+  // ===========================================================================
+  // Storno riga INVIATA (ADR-storno) — flag distinto, feed marcato, audit-perdita
+  // ===========================================================================
+  describe('storno riga inviata (ADR-storno)', () => {
+    async function addRiga(contoId: string, articleId: string, quantita = 1): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe`)
+        .set(auth(demoJwt))
+        .send({ articleId, quantita })
+        .expect(201);
+      return res.body.data.id as string;
+    }
+    async function invia(contoId: string): Promise<{ id: string; reparto: string }[]> {
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/invia`)
+        .set(auth(demoJwt))
+        .expect(201);
+      return res.body.data as { id: string; reparto: string }[];
+    }
+    const storna = (contoId: string, rigaId: string) =>
+      request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe/${rigaId}/storna`)
+        .set(auth(demoJwt));
+    const rigaDb = async (rigaId: string): Promise<Record<string, unknown>> =>
+      (
+        await pgRows(
+          containers.databaseUrl,
+          'SELECT stornata, stornata_il, deleted_at FROM conti_righe WHERE id = $1',
+          [rigaId],
+        )
+      )[0];
+    const getConto = async (contoId: string) =>
+      (await request(app.getHttpServer()).get(`${API}/${contoId}`).set(auth(demoJwt)).expect(200))
+        .body.data;
+
+    it('test 1 — storno inviata → stornata=true, stornataIl valorizzato, NON soft-deleted', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      await invia(contoId);
+      const res = await storna(contoId, rigaId);
+      expect(res.status).toBe(201);
+      expect(res.body.data.stornata).toBe(true);
+      const row = await rigaDb(rigaId);
+      expect(row.stornata).toBe(true);
+      expect(row.stornata_il).not.toBeNull();
+      expect(row.deleted_at).toBeNull(); // NON soft-deleted (distinto)
+    });
+
+    it('test 2 — computeTotale esclude la stornata', async () => {
+      const contoId = await apriCassa();
+      const rA = await addRiga(contoId, data.articleAId, 2); // 8.00×2 = 16.00
+      await addRiga(contoId, data.articleBId, 1); // 5.00
+      await invia(contoId);
+      expect((await getConto(contoId)).totale).toBe('21.00');
+      await storna(contoId, rA).expect(201);
+      expect((await getConto(contoId)).totale).toBe('5.00'); // solo articleB
+    });
+
+    it('test 3 — audit conto_riga.storno_inviata registra lo StatoComanda (perdita ricostruibile)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      const [comanda] = await invia(contoId);
+      // porta la comanda a in_preparazione → storno = PERDITA (piatto in cottura)
+      await request(app.getHttpServer())
+        .patch(`/api/v1/comande/${comanda.id}/stato`)
+        .set(auth(demoJwt))
+        .send({ stato: 'in_preparazione' })
+        .expect(200);
+      await storna(contoId, rigaId).expect(201);
+      const audit = await pgRows(
+        containers.databaseUrl,
+        `SELECT after_value->>'comandaStato' AS stato FROM audit_logs
+         WHERE action = 'conto_riga.storno_inviata' AND entity_id = $1`,
+        [rigaId],
+      );
+      expect(audit).toHaveLength(1);
+      expect(audit[0].stato).toBe('in_preparazione');
+    });
+
+    it('test 4 — storno su riga PENDING (non inviata) → 409 E_RIGA_NOT_SENT', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId); // NON inviata
+      const res = await storna(contoId, rigaId);
+      expect(res.status).toBe(409);
+      expect(res.body.errorCode).toBe('E_RIGA_NOT_SENT');
+    });
+
+    it('test 5 — doppio storno → 409 E_RIGA_ALREADY_STORNATA (non silenzioso)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      await invia(contoId);
+      await storna(contoId, rigaId).expect(201);
+      const res = await storna(contoId, rigaId);
+      expect(res.status).toBe(409);
+      expect(res.body.errorCode).toBe('E_RIGA_ALREADY_STORNATA');
+    });
+
+    it('test 6 — la riga stornata RESTA nel feed KDS con stornata:true (sana il silenzio)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      await invia(contoId);
+      await storna(contoId, rigaId).expect(201);
+      const feed = await request(app.getHttpServer())
+        .get('/api/v1/comande')
+        .set(auth(demoJwt))
+        .expect(200);
+      const righe = (feed.body.data as { righe: { id: string; stornata: boolean }[] }[]).flatMap(
+        (c) => c.righe,
+      );
+      const riga = righe.find((r) => r.id === rigaId);
+      expect(riga).toBeDefined();
+      expect(riga?.stornata).toBe(true);
+    });
+
+    it('test 6b — la riga stornata esce anche in getConto con stornata:true (consumer FE immediato)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      await invia(contoId);
+      await storna(contoId, rigaId).expect(201);
+      const conto = await getConto(contoId);
+      const riga = (conto.righe as { id: string; stornata: boolean }[]).find(
+        (r) => r.id === rigaId,
+      );
+      expect(riga).toBeDefined();
+      expect(riga?.stornata).toBe(true);
+    });
+
+    it('test 7 — comanda con TUTTE le righe stornate → card visibile (non nascosta)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId); // unica riga → 1 comanda
+      const [comanda] = await invia(contoId);
+      await storna(contoId, rigaId).expect(201);
+      const feed = await request(app.getHttpServer())
+        .get('/api/v1/comande')
+        .set(auth(demoJwt))
+        .expect(200);
+      const card = (feed.body.data as { id: string; righe: { stornata: boolean }[] }[]).find(
+        (c) => c.id === comanda.id,
+      );
+      expect(card).toBeDefined(); // NON nascosta
+      expect(card?.righe.every((r) => r.stornata)).toBe(true);
+    });
+
+    it('test 8 — riga stornata immutabile: PATCH → 409 (terminale, no de-storna)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      await invia(contoId);
+      await storna(contoId, rigaId).expect(201);
+      const res = await request(app.getHttpServer())
+        .patch(`${API}/${contoId}/righe/${rigaId}`)
+        .set(auth(demoJwt))
+        .send({ quantita: 3 });
+      expect(res.status).toBe(409); // E_RIGA_ALREADY_SENT (inviata → immutabile)
+    });
+
+    it('test 9 — cross-tenant: acme non può stornare una riga di demo (RLS → 404)', async () => {
+      const contoId = await apriCassa();
+      const rigaId = await addRiga(contoId, data.articleAId);
+      await invia(contoId);
+      // secondo tenant
+      const acme = await seedSecondTenant(containers.databaseUrl);
+      await seedComandePermissions(containers.databaseUrl, {
+        tenantId: acme.tenantId,
+        userId: acme.adminUserId,
+        grant: 'full',
+      });
+      await flushTenantSlugCache(containers.redisHost, containers.redisPort);
+      const acmeJwt = await loginAs(app, 'acme', 'admin@acme.local', 'Admin123!');
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe/${rigaId}/storna`)
+        .set({ Authorization: `Bearer ${acmeJwt}`, 'X-Tenant-Slug': 'acme' });
+      expect(res.status).toBe(404); // RLS: la riga di demo è invisibile ad acme
+      // e la riga di demo NON è stata stornata
+      expect((await rigaDb(rigaId)).stornata).toBe(false);
+    });
+
+    it('test 10 — totale con mix (attiva + stornata + soft-deleted) → conta solo l attiva', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId); // 8.00 — resterà attiva (unica nel totale finale)
+      const rB = await addRiga(contoId, data.articleBId); // 5.00 — sarà stornata
+      const rC = await addRiga(contoId, data.articleAId); // 8.00 — sarà soft-deleted (pending)
+      await request(app.getHttpServer())
+        .delete(`${API}/${contoId}/righe/${rC}`)
+        .set(auth(demoJwt))
+        .expect(200); // storno PENDING = soft-delete
+      await invia(contoId); // invia rA, rB (rC è già soft-deleted)
+      await storna(contoId, rB).expect(201);
+      expect((await getConto(contoId)).totale).toBe('8.00'); // solo rA
+    });
+  });
 });

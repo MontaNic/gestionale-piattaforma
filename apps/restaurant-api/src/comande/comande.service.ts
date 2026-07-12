@@ -75,9 +75,19 @@ export class ComandeService {
       include: {
         conto: { select: { tavoloId: true, tavolo: { select: { numero: true } } } },
         righe: {
+          // `stornata` NON esclusa (ADR-storno): la riga revocata resta visibile
+          // marcata finché la comanda è nel feed → sana la sparizione silenziosa.
+          // Solo le soft-deleted (pending rimosse) restano fuori.
           where: { deletedAt: null },
           orderBy: { createdAt: 'asc' },
-          select: { id: true, nomeArticolo: true, quantita: true, note: true, reparto: true },
+          select: {
+            id: true,
+            nomeArticolo: true,
+            quantita: true,
+            note: true,
+            reparto: true,
+            stornata: true,
+          },
         },
       },
     });
