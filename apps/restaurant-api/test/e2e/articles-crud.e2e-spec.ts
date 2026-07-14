@@ -232,6 +232,32 @@ describe('Articles CRUD E2E — /api/v1/articles', () => {
     expect(JSON.stringify(res.body)).toContain('E_MENU_CATEGORY_NOT_FOUND');
   });
 
+  it('9. portata: create con valore esplicito persiste; senza → default nessuna; PATCH aggiorna', async () => {
+    // Create CON portata esplicita
+    const withPortata = await request(app.getHttpServer())
+      .post('/api/v1/articles')
+      .set('Authorization', `Bearer ${adminJwt}`)
+      .send({ ...ARTICLE_BASE, categoryId: categoryAId, name: 'Tartare', portata: 'antipasto' })
+      .expect(201);
+    expect(withPortata.body.data.portata).toBe('antipasto');
+
+    // Create SENZA portata → default schema 'nessuna' (pattern availability)
+    const withoutPortata = await request(app.getHttpServer())
+      .post('/api/v1/articles')
+      .set('Authorization', `Bearer ${adminJwt}`)
+      .send({ ...ARTICLE_BASE, categoryId: categoryAId, name: 'Acqua' })
+      .expect(201);
+    expect(withoutPortata.body.data.portata).toBe('nessuna');
+
+    // PATCH aggiorna la portata
+    const patch = await request(app.getHttpServer())
+      .patch(`/api/v1/articles/${withoutPortata.body.data.id}`)
+      .set('Authorization', `Bearer ${adminJwt}`)
+      .send({ portata: 'bevanda' })
+      .expect(200);
+    expect(patch.body.data.portata).toBe('bevanda');
+  });
+
   // SKIP TD-BS Sub-2 (deferred): integrazione ValidationPipe→400 E2E bloccata
   // dal harness (no design:paramtypes runtime — vedi ADR-0019 §TD-BS sessione
   // 18). Constraint DTO (incluso VAT @IsIn[4,10,22]) coperti da
