@@ -110,6 +110,7 @@
       "vat": "VAT",
       "printDepartment": "Print department",
       "availability": "Availability",
+      "portata": "Course",
       "prepTime": "Preparation time (min)",
       "priceListName": "Price list name",
       "channels": "Sales channels",
@@ -127,6 +128,15 @@
       "in_carta": "On menu",
       "esaurito": "Sold out",
       "sospeso": "Suspended"
+    },
+    "portata": {
+      "antipasto": "Starter",
+      "primo": "First course",
+      "secondo": "Main course",
+      "contorno": "Side",
+      "dolce": "Dessert",
+      "bevanda": "Drink",
+      "nessuna": "None"
     },
     "meta": {
       "vat": "VAT {value}%",
@@ -306,6 +316,15 @@
       "cucina": "Kitchen",
       "pizzeria": "Pizzeria",
       "bar": "Bar"
+    },
+    "portata": {
+      "antipasto": "Starter",
+      "primo": "First course",
+      "secondo": "Main course",
+      "contorno": "Side",
+      "dolce": "Dessert",
+      "bevanda": "Drink",
+      "nessuna": "None"
     },
     "confirm": {
       "chiudiTitle": "Close the tab?",

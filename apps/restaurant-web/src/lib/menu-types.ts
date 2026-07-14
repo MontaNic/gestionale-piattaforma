@@ -39,11 +39,30 @@ export interface MenuCategory {
 
 export type PrintDepartment = 'cucina' | 'pizzeria' | 'bar';
 export type ArticleAvailability = 'in_carta' | 'esaurito' | 'sospeso';
+/** Portata/corso (ADR-portata). Ordine = ordine di servizio; `nessuna` = fallback. */
+export type Portata =
+  | 'antipasto'
+  | 'primo'
+  | 'secondo'
+  | 'contorno'
+  | 'dolce'
+  | 'bevanda'
+  | 'nessuna';
 
 /** Aliquote IVA IT ammesse (BRIEF L305 / CreateArticleDto `@IsIn`). */
 export const VAT_RATES = [4, 10, 22] as const;
 export const PRINT_DEPARTMENTS: readonly PrintDepartment[] = ['cucina', 'pizzeria', 'bar'];
 export const AVAILABILITIES: readonly ArticleAvailability[] = ['in_carta', 'esaurito', 'sospeso'];
+/** Ordine di dichiarazione = ordine di servizio (allineato all'enum backend). */
+export const PORTATE: readonly Portata[] = [
+  'antipasto',
+  'primo',
+  'secondo',
+  'contorno',
+  'dolce',
+  'bevanda',
+  'nessuna',
+];
 
 export interface Article {
   id: string;
@@ -61,6 +80,7 @@ export interface Article {
   printDepartment: PrintDepartment;
   preparationTimeMinutes: number | null;
   availability: ArticleAvailability;
+  portata: Portata;
   sortOrder: number;
   channelVisibility: string[];
   createdAt: string;
@@ -98,6 +118,7 @@ export interface CreateArticleInput {
   vatPercent: number;
   printDepartment: PrintDepartment;
   availability?: ArticleAvailability;
+  portata?: Portata;
   preparationTimeMinutes?: number;
   sortOrder?: number;
 }
