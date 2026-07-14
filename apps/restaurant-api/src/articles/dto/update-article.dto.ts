@@ -3,6 +3,7 @@ import {
   Allergen,
   Channel,
   DietaryTag,
+  Portata,
   PrintDepartment,
 } from '@gestionale/db';
 import { Type } from 'class-transformer';
@@ -85,6 +86,10 @@ export class UpdateArticleDto {
   @IsOptional()
   @IsEnum(ArticleAvailability, { message: 'E_ARTICLE_AVAILABILITY_INVALID' })
   availability?: ArticleAvailability;
+
+  @IsOptional()
+  @IsEnum(Portata, { message: 'E_ARTICLE_PORTATA_INVALID' })
+  portata?: Portata;
 
   @IsOptional()
   @IsInt({ message: 'E_ARTICLE_SORT_ORDER_INVALID' })

@@ -3,6 +3,7 @@ import {
   Allergen,
   Channel,
   DietaryTag,
+  Portata,
   PrintDepartment,
 } from '@gestionale/db';
 import { Type } from 'class-transformer';
@@ -83,6 +84,13 @@ export class CreateArticleDto {
   @IsOptional()
   @IsEnum(ArticleAvailability, { message: 'E_ARTICLE_AVAILABILITY_INVALID' })
   availability?: ArticleAvailability;
+
+  // Portata/corso: opzionale, default schema `nessuna` (pattern `availability`,
+  // non `printDepartment` che è required). Il raggruppamento KDS la usa; l'omissione
+  // → `nessuna` (non-classificato).
+  @IsOptional()
+  @IsEnum(Portata, { message: 'E_ARTICLE_PORTATA_INVALID' })
+  portata?: Portata;
 
   @IsOptional()
   @IsInt({ message: 'E_ARTICLE_SORT_ORDER_INVALID' })
