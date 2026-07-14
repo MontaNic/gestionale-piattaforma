@@ -137,11 +137,13 @@ export async function seedComandeData(
        VALUES ($1, $2, $3, 'Primi', 0, NOW(), NOW());`,
       [categoryId, t, menuId],
     );
+    // articleA: portata 'primo' esplicita → esercita lo snapshot di una portata reale.
     await client.query(
-      `INSERT INTO articles (id, tenant_id, category_id, name, description_short, base_price, vat_percent, print_department, created_at, updated_at)
-       VALUES ($1, $2, $3, 'Spaghetti', 'Al pomodoro', 10.00, 10, $4::"print_department", NOW(), NOW());`,
+      `INSERT INTO articles (id, tenant_id, category_id, name, description_short, base_price, vat_percent, print_department, portata, created_at, updated_at)
+       VALUES ($1, $2, $3, 'Spaghetti', 'Al pomodoro', 10.00, 10, $4::"print_department", 'primo'::"portata", NOW(), NOW());`,
       [articleAId, t, categoryId, 'cucina'],
     );
+    // articleB: NESSUNA portata specificata → default DDL 'nessuna' (path default).
     await client.query(
       `INSERT INTO articles (id, tenant_id, category_id, name, description_short, base_price, vat_percent, print_department, created_at, updated_at)
        VALUES ($1, $2, $3, 'Birra', 'Media', 5.00, 22, $4::"print_department", NOW(), NOW());`,

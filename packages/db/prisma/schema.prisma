@@ -523,6 +523,24 @@ enum ArticleAvailability {
   @@map("article_availability")
 }
 
+// Portata/corso di servizio (raggruppamento, NON sequenziamento uscita — fuori
+// scope, trigger board KDS live). L'ordine di dichiarazione = ordine di servizio
+// (Postgres enum ordina per posizione, come PrintDepartment): nessun campo
+// `ordine` esplicito. `bevanda` è una portata vera in coda; `nessuna` = default
+// per il non-classificato (bevande non mappate, coperto futuro, righe storiche)
+// → nessun backfill (colonna NOT NULL default, come `stornata`).
+enum Portata {
+  antipasto
+  primo
+  secondo
+  contorno
+  dolce
+  bevanda
+  nessuna
+
+  @@map("portata")
+}
+
 enum Channel {
   cassa
   menu_online
@@ -591,6 +609,8 @@ model Article {
   printDepartment        PrintDepartment     @map("print_department")
   preparationTimeMinutes Int?                @map("preparation_time_minutes")
   availability           ArticleAvailability @default(in_carta)
+  // Portata/corso per il raggruppamento KDS (default `nessuna` → no backfill).
+  portata                Portata             @default(nessuna)
   sortOrder              Int                 @default(0) @map("sort_order")
   channelVisibility      Channel[]           @map("channel_visibility")
   co2KgEq                Decimal?            @map("co2_kg_eq") @db.Decimal(10, 4) // [PRE F2 B14]
@@ -808,6 +828,10 @@ model ContoRiga {
   vatPercent     Int             @map("vat_percent")
   quantita       Int
   reparto        PrintDepartment // snapshot da Article.printDepartment (prepara KDS)
+  // Snapshot da Article.portata (congelato all'ordine, come reparto/vatPercent):
+  // il raggruppamento per portata di un conto storico non cambia se l'articolo
+  // cambia portata dopo. Default `nessuna` → nessun backfill sulle righe esistenti.
+  portata        Portata         @default(nessuna)
   // KDS (ADR-attivazione-layer-comanda): riga "inviata" quando comandaId != null.
   // Una riga inviata è IMMUTABILE (no update/storno) → semantica "non ancora
   // inviate" di comande.modifica. `note` = annotazione cucina per-riga (AI/NL fuori scope).

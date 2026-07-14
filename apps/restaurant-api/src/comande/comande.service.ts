@@ -14,6 +14,7 @@ import { ConflictException, Inject, Injectable, Logger, NotFoundException } from
 import {
   id,
   Prisma,
+  type Portata,
   type PrintDepartment,
   type StatoComanda,
   withTenantContextAtomicTx,
@@ -28,6 +29,9 @@ export interface ComandaFeedRiga {
   quantita: number;
   note: string | null;
   reparto: PrintDepartment;
+  // Portata/corso snapshottata (ADR-portata): predisposizione per il raggruppamento
+  // della board KDS (nessun consumer FE oggi — la board è placeholder).
+  portata: Portata;
 }
 
 export interface ComandaFeedItem {
@@ -86,6 +90,7 @@ export class ComandeService {
             quantita: true,
             note: true,
             reparto: true,
+            portata: true,
             stornata: true,
           },
         },

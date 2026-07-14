@@ -14,6 +14,7 @@ import { Textarea } from '@gestionale/ui';
 import { messageForError } from '@/lib/error-codes';
 import {
   AVAILABILITIES,
+  PORTATE,
   PRINT_DEPARTMENTS,
   VAT_RATES,
   type Article,
@@ -60,6 +61,7 @@ const articleFormSchema = z.object({
   vatPercent: z.enum(['4', '10', '22']),
   printDepartment: z.enum(['cucina', 'pizzeria', 'bar']),
   availability: z.enum(['in_carta', 'esaurito', 'sospeso']),
+  portata: z.enum(['antipasto', 'primo', 'secondo', 'contorno', 'dolce', 'bevanda', 'nessuna']),
   preparationTimeMinutes: z.string().trim().regex(/^\d*$/, 'Inserire un numero intero di minuti'),
   sortOrder: z
     .string()
@@ -91,6 +93,7 @@ export function ArticleForm({ article, onSubmit, onCancel }: ArticleFormProps): 
       vatPercent: (article ? String(article.vatPercent) : '10') as ArticleFormValues['vatPercent'],
       printDepartment: article?.printDepartment ?? 'cucina',
       availability: article?.availability ?? 'in_carta',
+      portata: article?.portata ?? 'nessuna',
       preparationTimeMinutes:
         article?.preparationTimeMinutes != null ? String(article.preparationTimeMinutes) : '',
       sortOrder: String(article?.sortOrder ?? 0),
@@ -109,6 +112,7 @@ export function ArticleForm({ article, onSubmit, onCancel }: ArticleFormProps): 
         vatPercent: Number(values.vatPercent),
         printDepartment: values.printDepartment,
         availability: values.availability,
+        portata: values.portata,
         preparationTimeMinutes:
           values.preparationTimeMinutes === '' ? undefined : Number(values.preparationTimeMinutes),
         sortOrder: Number(values.sortOrder),
@@ -241,6 +245,25 @@ export function ArticleForm({ article, onSubmit, onCancel }: ArticleFormProps): 
                     {AVAILABILITIES.map((value) => (
                       <option key={value} value={value}>
                         {t(`avail.${value}`)}
+                      </option>
+                    ))}
+                  </select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="portata"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('fields.portata')}</FormLabel>
+                <FormControl>
+                  <select className={SELECT_CLASS} {...field}>
+                    {PORTATE.map((value) => (
+                      <option key={value} value={value}>
+                        {t(`portata.${value}`)}
                       </option>
                     ))}
                   </select>

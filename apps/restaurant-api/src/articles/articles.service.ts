@@ -87,6 +87,7 @@ export class ArticlesService {
               printDepartment: dto.printDepartment,
               preparationTimeMinutes: dto.preparationTimeMinutes,
               availability: dto.availability,
+              portata: dto.portata,
               sortOrder: dto.sortOrder ?? 0,
               channelVisibility: dto.channelVisibility ?? [],
             },
@@ -107,6 +108,7 @@ export class ArticlesService {
             name: article.name,
             basePrice: article.basePrice.toString(),
             vatPercent: article.vatPercent,
+            portata: article.portata,
           },
         },
       });
@@ -184,6 +186,7 @@ export class ArticlesService {
               printDepartment: dto.printDepartment,
               preparationTimeMinutes: dto.preparationTimeMinutes,
               availability: dto.availability,
+              portata: dto.portata,
               sortOrder: dto.sortOrder,
               channelVisibility: dto.channelVisibility,
             },
@@ -205,6 +208,7 @@ export class ArticlesService {
             basePrice: before.basePrice.toString(),
             vatPercent: before.vatPercent,
             availability: before.availability,
+            portata: before.portata,
           },
           afterValue: {
             name: updated.name,
@@ -212,6 +216,7 @@ export class ArticlesService {
             basePrice: updated.basePrice.toString(),
             vatPercent: updated.vatPercent,
             availability: updated.availability,
+            portata: updated.portata,
           },
         },
       });

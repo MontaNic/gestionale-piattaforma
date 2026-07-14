@@ -312,6 +312,7 @@ export class ContiService {
           vatPercent: snapshot.vatPercent,
           quantita: dto.quantita,
           reparto: snapshot.reparto,
+          portata: snapshot.portata,
           note: dto.note ?? null,
         },
       });

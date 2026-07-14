@@ -691,6 +691,7 @@ interface ArticleSeed {
   vatPercent: number;
   categoryName: 'Antipasti' | 'Primi' | 'Pizze';
   printDepartment: 'cucina' | 'pizzeria' | 'bar';
+  portata: 'antipasto' | 'primo' | 'secondo' | 'contorno' | 'dolce' | 'bevanda' | 'nessuna';
   allergens: string[];
   dietaryTags: string[];
   preparationTimeMinutes: number;
@@ -706,6 +707,7 @@ const DEMO_ARTICLES: ArticleSeed[] = [
     vatPercent: 10,
     categoryName: 'Antipasti',
     printDepartment: 'cucina',
+    portata: 'antipasto',
     allergens: ['cereali_glutine'],
     dietaryTags: ['vegetariano', 'vegano'],
     preparationTimeMinutes: 5,
@@ -718,6 +720,7 @@ const DEMO_ARTICLES: ArticleSeed[] = [
     vatPercent: 10,
     categoryName: 'Antipasti',
     printDepartment: 'cucina',
+    portata: 'antipasto',
     allergens: ['uova'],
     dietaryTags: [],
     preparationTimeMinutes: 8,
@@ -730,6 +733,7 @@ const DEMO_ARTICLES: ArticleSeed[] = [
     vatPercent: 10,
     categoryName: 'Primi',
     printDepartment: 'cucina',
+    portata: 'primo',
     allergens: ['cereali_glutine', 'uova', 'latte'],
     dietaryTags: [],
     preparationTimeMinutes: 12,
@@ -742,6 +746,7 @@ const DEMO_ARTICLES: ArticleSeed[] = [
     vatPercent: 10,
     categoryName: 'Pizze',
     printDepartment: 'pizzeria',
+    portata: 'secondo',
     allergens: ['cereali_glutine', 'latte'],
     dietaryTags: ['vegetariano'],
     preparationTimeMinutes: 7,
@@ -754,6 +759,7 @@ const DEMO_ARTICLES: ArticleSeed[] = [
     vatPercent: 10,
     categoryName: 'Pizze',
     printDepartment: 'pizzeria',
+    portata: 'secondo',
     allergens: ['cereali_glutine', 'latte'],
     dietaryTags: ['piccante'],
     preparationTimeMinutes: 7,
@@ -830,6 +836,8 @@ async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> 
       dietaryTags: a.dietaryTags as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       printDepartment: a.printDepartment as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      portata: a.portata as any,
       preparationTimeMinutes: a.preparationTimeMinutes,
       sortOrder: a.sortOrder,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

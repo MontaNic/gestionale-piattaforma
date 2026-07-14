@@ -110,6 +110,7 @@
       "vat": "IVA",
       "printDepartment": "Reparto di stampa",
       "availability": "Disponibilità",
+      "portata": "Portata",
       "prepTime": "Tempo di preparazione (min)",
       "priceListName": "Nome listino",
       "channels": "Canali di vendita",
@@ -127,6 +128,15 @@
       "in_carta": "In carta",
       "esaurito": "Esaurito",
       "sospeso": "Sospeso"
+    },
+    "portata": {
+      "antipasto": "Antipasto",
+      "primo": "Primo",
+      "secondo": "Secondo",
+      "contorno": "Contorno",
+      "dolce": "Dolce",
+      "bevanda": "Bevanda",
+      "nessuna": "Nessuna"
     },
     "meta": {
       "vat": "IVA {value}%",
@@ -306,6 +316,15 @@
       "cucina": "Cucina",
       "pizzeria": "Pizzeria",
       "bar": "Bar"
+    },
+    "portata": {
+      "antipasto": "Antipasto",
+      "primo": "Primo",
+      "secondo": "Secondo",
+      "contorno": "Contorno",
+      "dolce": "Dolce",
+      "bevanda": "Bevanda",
+      "nessuna": "Nessuna"
     },
     "confirm": {
       "chiudiTitle": "Chiudere il conto?",

@@ -12,7 +12,7 @@
 // =============================================================================
 
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { type Channel, type Prisma, type PrintDepartment } from '@gestionale/db';
+import { type Channel, type Portata, type Prisma, type PrintDepartment } from '@gestionale/db';
 
 import type { TenantTx } from '../common/tenant-tx.type';
 import { PriceAmbiguousError, resolveUnitPrice } from './price-resolution';
@@ -24,6 +24,9 @@ export interface LineSnapshot {
   // Aliquota IVA congelata all'ordine (ADR-0070): prezzi lordi, scorporo differito
   // alla cassa. Snapshot da Article.vatPercent, non riletto a valle.
   vatPercent: number;
+  // Portata/corso congelata all'ordine (ADR-portata): snapshot da Article.portata
+  // per il raggruppamento KDS. Come reparto/vatPercent: non rilette a valle.
+  portata: Portata;
 }
 
 @Injectable()
@@ -41,7 +44,13 @@ export class PricingService {
   ): Promise<LineSnapshot> {
     const article = await tx.article.findFirst({
       where: { id: articleId, tenantId },
-      select: { name: true, printDepartment: true, basePrice: true, vatPercent: true },
+      select: {
+        name: true,
+        printDepartment: true,
+        basePrice: true,
+        vatPercent: true,
+        portata: true,
+      },
     });
     if (!article) {
       throw new NotFoundException({
@@ -77,6 +86,7 @@ export class PricingService {
         nomeArticolo: article.name,
         reparto: article.printDepartment,
         vatPercent: article.vatPercent,
+        portata: article.portata,
       };
     } catch (err) {
       if (err instanceof PriceAmbiguousError) {

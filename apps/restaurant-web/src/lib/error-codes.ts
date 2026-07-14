@@ -79,6 +79,7 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_ARTICLE_PRINT_DEPARTMENT_INVALID: 'Reparto di stampa non valido.',
   E_ARTICLE_PREP_TIME_INVALID: 'Tempo di preparazione non valido.',
   E_ARTICLE_AVAILABILITY_INVALID: 'Stato disponibilità articolo non valido.',
+  E_ARTICLE_PORTATA_INVALID: 'Portata non valida.',
   E_ARTICLE_SORT_ORDER_INVALID: "Ordine di visualizzazione dell'articolo non valido.",
   E_ARTICLE_CHANNEL_VISIBILITY_INVALID: 'Visibilità per canale non valida.',
 

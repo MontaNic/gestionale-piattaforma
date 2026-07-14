@@ -16,6 +16,15 @@ export type { Channel };
 export type StatoConto = 'aperto' | 'chiuso' | 'annullato';
 export type PrintDepartment = 'cucina' | 'pizzeria' | 'bar';
 export type StatoComanda = 'inviata' | 'in_preparazione' | 'pronta';
+/** Portata/corso (ADR-portata). Ordine = ordine di servizio; `nessuna` = fallback. */
+export type Portata =
+  | 'antipasto'
+  | 'primo'
+  | 'secondo'
+  | 'contorno'
+  | 'dolce'
+  | 'bevanda'
+  | 'nessuna';
 
 /**
  * Canali che possono aprire un conto in PR-1: `cassa` è escluso perché richiede
@@ -50,6 +59,8 @@ export interface ContoRiga {
   prezzoUnitario: number;
   quantita: number;
   reparto: PrintDepartment;
+  /** Portata/corso snapshottata (ADR-portata): raggruppamento KDS/vista conto. */
+  portata: Portata;
   /**
    * KDS (ADR-0069): `null` = riga PENDING (da inviare, mutabile); valorizzato =
    * riga INVIATA in cucina (immutabile). Il FE splitta le righe su questo campo.

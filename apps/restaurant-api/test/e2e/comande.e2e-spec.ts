@@ -962,6 +962,101 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
   });
 
   // ===========================================================================
+  // Portata snapshot (ADR-portata) — raggruppamento KDS, stesso pattern di vat.
+  // Fixture: articleA portata='primo' esplicita; articleB senza → default 'nessuna'.
+  // ===========================================================================
+  describe('portata snapshot (ADR-portata)', () => {
+    async function addRiga(contoId: string, articleId: string, quantita = 1): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post(`${API}/${contoId}/righe`)
+        .set(auth(demoJwt))
+        .send({ articleId, quantita })
+        .expect(201);
+      return res.body.data.id as string;
+    }
+    async function invia(contoId: string): Promise<void> {
+      await request(app.getHttpServer())
+        .post(`${API}/${contoId}/invia`)
+        .set(auth(demoJwt))
+        .expect(201);
+    }
+    const portataOf = async (rigaId: string): Promise<string | null> => {
+      const rows = await pgRows(
+        containers.databaseUrl,
+        'SELECT portata FROM conti_righe WHERE id = $1',
+        [rigaId],
+      );
+      return (rows[0]?.portata as string | null) ?? null;
+    };
+
+    it('test 1 (snapshot) + default — riga eredita Article.portata; articleB (non impostata) → nessuna', async () => {
+      const contoId = await apriCassa();
+      const rigaA = await addRiga(contoId, data.articleAId);
+      const rigaB = await addRiga(contoId, data.articleBId);
+      expect(await portataOf(rigaA)).toBe('primo'); // snapshot da Article.portata
+      expect(await portataOf(rigaB)).toBe('nessuna'); // default DDL (articleB non la imposta)
+    });
+
+    it('test 3 (immutabilità) — modificare Article.portata NON altera le righe già create', async () => {
+      const contoId = await apriCassa();
+      const rigaA = await addRiga(contoId, data.articleAId);
+      expect(await portataOf(rigaA)).toBe('primo');
+      // cambia la portata dell'articolo a valle
+      await pgRows(containers.databaseUrl, `UPDATE articles SET portata = 'dolce' WHERE id = $1`, [
+        data.articleAId,
+      ]);
+      // la riga già scritta resta congelata su 'primo' (raggruppamento storico stabile)
+      expect(await portataOf(rigaA)).toBe('primo');
+    });
+
+    it('test 5 — getConto espone portata per riga', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId);
+      const get = await request(app.getHttpServer())
+        .get(`${API}/${contoId}`)
+        .set(auth(demoJwt))
+        .expect(200);
+      expect(get.body.data.righe[0].portata).toBe('primo');
+    });
+
+    it('test 6 — feed KDS espone portata nel payload (predisposizione board)', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId); // cucina, primo
+      await invia(contoId);
+      const feed = await request(app.getHttpServer())
+        .get('/api/v1/comande')
+        .set(auth(demoJwt))
+        .expect(200);
+      const righe = feed.body.data.flatMap((c: { righe: unknown[] }) => c.righe);
+      expect(righe.length).toBeGreaterThan(0);
+      expect(righe[0].portata).toBe('primo');
+    });
+
+    it('test 8 — computeTotale invariato: la portata non tocca il totale', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId, 2); // primo, 8.00 × 2 = 16.00
+      await addRiga(contoId, data.articleBId, 1); // nessuna, 5.00 × 1 = 5.00
+      const get = await request(app.getHttpServer())
+        .get(`${API}/${contoId}`)
+        .set(auth(demoJwt))
+        .expect(200);
+      // Σ prezzo×qta = 21.00, identico ai casi vat: la portata è raggruppamento, non prezzo.
+      expect(get.body.data.totale).toBe('21.00');
+    });
+
+    it('test 4-analogo — nessuna riga con portata NULL (NOT NULL a runtime)', async () => {
+      const contoId = await apriCassa();
+      await addRiga(contoId, data.articleAId);
+      await addRiga(contoId, data.articleBId);
+      const rows = await pgRows(
+        containers.databaseUrl,
+        'SELECT count(*)::int AS n FROM conti_righe WHERE portata IS NULL',
+      );
+      expect(rows[0].n).toBe(0);
+    });
+  });
+
+  // ===========================================================================
   // Storno riga INVIATA (ADR-storno) — flag distinto, feed marcato, audit-perdita
   // ===========================================================================
   describe('storno riga inviata (ADR-storno)', () => {

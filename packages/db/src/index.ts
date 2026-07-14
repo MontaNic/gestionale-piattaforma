@@ -102,6 +102,7 @@ export {
   DietaryTag,
   PrintDepartment,
   ArticleAvailability,
+  Portata,
   Channel,
   StatoConto,
   StatoComanda,

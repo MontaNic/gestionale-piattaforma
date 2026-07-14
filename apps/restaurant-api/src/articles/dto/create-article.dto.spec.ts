@@ -7,7 +7,7 @@
 // `unit` (il problema TD-BS era SOLO il harness E2E SWC, non il codice DTO).
 // =============================================================================
 
-import { Allergen, Channel, DietaryTag, PrintDepartment } from '@gestionale/db';
+import { Allergen, Channel, DietaryTag, Portata, PrintDepartment } from '@gestionale/db';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { describe, expect, it } from 'vitest';
@@ -115,6 +115,24 @@ describe('CreateArticleDto validation', () => {
   it('rejects invalid channelVisibility enum → E_ARTICLE_CHANNEL_VISIBILITY_INVALID', async () => {
     expect(await messagesFor({ ...VALID_PAYLOAD, channelVisibility: ['carrozza'] })).toContain(
       'E_ARTICLE_CHANNEL_VISIBILITY_INVALID',
+    );
+  });
+
+  // Portata: opzionale (pattern `availability`, default schema `nessuna`) — l'omissione
+  // NON è un errore. Valore fuori enum → E_ARTICLE_PORTATA_INVALID.
+  it('accepts a valid portata enum value', async () => {
+    expect(await messagesFor({ ...VALID_PAYLOAD, portata: Portata.primo })).toHaveLength(0);
+  });
+
+  it('accepts omitted portata (optional, defaults server-side to nessuna)', async () => {
+    const { portata: _omit, ...rest } = VALID_PAYLOAD;
+    void _omit;
+    expect(await messagesFor(rest)).toHaveLength(0);
+  });
+
+  it('rejects invalid portata enum → E_ARTICLE_PORTATA_INVALID', async () => {
+    expect(await messagesFor({ ...VALID_PAYLOAD, portata: 'aperitivo' })).toContain(
+      'E_ARTICLE_PORTATA_INVALID',
     );
   });
 });

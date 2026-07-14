@@ -275,7 +275,9 @@ export default function ContoDetailPage(): JSX.Element {
         <div className="min-w-0 space-y-0.5">
           <p className="truncate font-medium">{riga.nomeArticolo}</p>
           <p className="text-xs text-muted-foreground">
-            {t('detail.reparto')}: {t(`dept.${riga.reparto}`)} · {formatEuro(riga.prezzoUnitario)}
+            {t('detail.reparto')}: {t(`dept.${riga.reparto}`)}
+            {riga.portata !== 'nessuna' && ` · ${t(`portata.${riga.portata}`)}`} ·{' '}
+            {formatEuro(riga.prezzoUnitario)}
           </p>
           {!isEditing && riga.note && (
             <p className="text-xs italic text-muted-foreground">
@@ -372,6 +374,7 @@ export default function ContoDetailPage(): JSX.Element {
             </span>
           )}
           <p className={`text-xs text-muted-foreground ${struck}`}>
+            {riga.portata !== 'nessuna' && `${t(`portata.${riga.portata}`)} · `}
             {formatEuro(riga.prezzoUnitario)}
           </p>
           {riga.note && (
