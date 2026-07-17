@@ -3179,6 +3179,22 @@ Micro-PR **solo-docs** (nasce da una scoperta sul pipeline durante #163, non dal
 - Fino al fix: chi tocca comande/conti esegue la e2e BE in locale e lo dichiara nello STOP 2 ("validato in locale, non in CI").
 - Commit: `docs(adr)` ADR-0071 + PROGRESS.
 
+## [2026-07-15] Sync log — blocco restaurant #155–#165 (feature mai loggate) + deploy prod
+
+Colmata la lacuna emersa nel preflight HANDOFF: PROGRESS copriva solo fino a #154; #159/#164 erano registrazioni docs-only; il blocco feature intermedio (KDS / vat / storno / portata) non era mai entrato nel log. Sync **sintetico**, una riga per feature con cross-link — la ricostruzione narrativa vive negli ADR.
+
+- **#155** — integrazione TAVOLI↔COMANDE: un-tavolo-un-conto + apertura conto dalla mappa sala ([ADR-0068](docs/architecture/ADR-0068-operativita-comande.md)).
+- **#156** — KDS PR-1: attivazione layer Comanda (invio per reparto, feed KDS, transizioni, immutabilità righe inviate) ([ADR-0069](docs/architecture/ADR-0069-attivazione-layer-comanda.md)). `comande.stato.cambia` **non è più orfano** (qui trova il consumer).
+- **#157** — KDS PR-2: vista conto con invio comande + note riga.
+- **#158** — fix: trim e normalizzazione `empty→null` su note riga conto.
+- **#160** — auth-refresh FE single-flight (401 → refresh → retry) su **entrambi** i verticali; consolidate 21 `authOptions()` in helper condiviso. Merged `ebce256`, e2e Playwright CI verde. Residuo aperto: **`TD-blob-download-no-refresh`** (3 blob-download accountant fuori da `request()`, mai fatto).
+- **#161** — semantica prezzi lordi + snapshot `vatPercent` su `ContoRiga` ([ADR-0070](docs/architecture/ADR-0070-prezzi-lordi-snapshot-aliquota-riga.md)). Sblocca la Cassa pre-fiscale.
+- **#162** — warning coperti oltre capienza tavolo (FE restaurant-web).
+- **#163** — storno riga **inviata** (flag distinto `stornata`, feed marcato, audit-perdita); riusa `comande.elimina`, nessun permesso nuovo.
+- **#165** — portata/corso (raggruppamento) su `Article` + snapshot su `ContoRiga` (enum `Portata` nuda, no backfill; BE non riordina).
+
+**Deploy prod (verificato 2026-07-15, docker/DB):** restaurant `web`/`api` a `167cb3d` (build 07-14, marker `stornoInviata`+`portata` nel bundle); DB prod = **32 migration**, ultima `add_portata`. Accountant ridistribuito **10/07** per #160 (~main@10/07, post-#160 pre-#161), non fermo al cutover. Catalogo permessi invariato = **60**. 10 tag `:rollback-*` vivi. Dettaglio in [HANDOFF](docs/handoff/HANDOFF.md).
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire
