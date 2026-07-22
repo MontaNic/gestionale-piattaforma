@@ -54,6 +54,8 @@
     "smoke:rls-core": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- tsx scripts/smoke-rls-core.ts",
     "purge-tenant": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- tsx scripts/purge-tenant.ts",
     "db:seed": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- prisma db seed",
+    "devdb:migrate": "dotenv -e ../../.env.devdb -e ../../.env -- prisma migrate deploy",
+    "devdb:seed": "dotenv -e ../../.env.devdb -e ../../.env -- prisma db seed",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

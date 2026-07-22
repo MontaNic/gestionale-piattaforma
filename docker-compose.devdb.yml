@@ -1,0 +1,71 @@
+# =============================================================================
+# docker-compose.devdb.yml — DB dev ISOLATO da prod (TD-dev-env-punta-prod Sub-B)
+# =============================================================================
+# STANDALONE: lanciare DA SOLO, MAI nel merge prod.
+#   docker compose -f docker-compose.devdb.yml up -d --wait
+#   docker compose -f docker-compose.devdb.yml down          # preserva il volume
+#   docker compose -f docker-compose.devdb.yml down -v       # RESET (cancella i dati)
+#
+# Isolamento vs prod (DP-1/2/3):
+#   - PROCESSO+VOLUME: container `gestionale_postgres_dev` + volume `postgres_dev_data`
+#     (distinti da `gestionale_postgres` / `postgres_data` di docker-compose.dev.yml).
+#   - PORTA: host 127.0.0.1:55432 (prod = 5432). 55432 != 5432 -> il guard Sub-A
+#     (assert-safe-db-target) NON matcha -> passa; resta difesa in profondita.
+#   - RETE: `gestionale_devdb_network` dedicata (NON `gestionale_network`). I dev
+#     server girano su host e raggiungono il DB via port-mapping, non serve
+#     condividere rete coi container prod (e non condividerla e piu sicuro).
+#   - CREDENZIALI: dev-dedicate, in chiaro qui sotto, DIVERSE da prod (DP-2).
+#     Nessun riuso delle password prod (che vivono nel `.env` root, non toccato).
+#
+# Init dir riusata (DP-5): monta ./infra/postgres/init -> 01-create-app-role.sh
+# gira al primo bootstrap del volume vuoto e crea `gestionale_app` con la
+# password dev (APP_DB_PASSWORD sotto). Niente placeholder, niente ALTER ROLE
+# post-migrate. Essendo un'istanza separata, nessuna collisione col ruolo prod
+# (i ruoli sono cluster-global ma questo e un cluster diverso).
+# =============================================================================
+
+# Project name ESPLICITO e distinto: senza, Compose usa la basename della dir
+# (`gestionale`) = lo stesso progetto dei container prod -> quelli comparirebbero
+# come "orphan" e un `down --remove-orphans` li spazzerebbe via. `gestionale-devdb`
+# isola completamente questo stack dal prod.
+name: gestionale-devdb
+
+services:
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: gestionale_postgres_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      # Credenziali DEV: in chiaro, dev-dedicate, DIVERSE da prod (DP-2).
+      POSTGRES_PASSWORD: devsuperlocal
+      POSTGRES_DB: gestionale
+      # Propagata a 01-create-app-role.sh per CREATE ROLE gestionale_app.
+      APP_DB_PASSWORD: devapplocal
+    ports:
+      # 127.0.0.1-only come i binding dev (raggiungibile dai dev server host,
+      # non dall'esterno). Porta host 55432 (prod = 5432).
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      # Init: gira SOLO al primo bootstrap (volume vuoto). Crea gestionale_app.
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - gestionale_devdb_network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # Primo bootstrap: initdb + 01-create-app-role.sh + restart -> serve piu
+      # margine di 10s, altrimenti `up --wait` fallisce mentre il DB e ancora in init.
+      start_period: 40s
+
+networks:
+  gestionale_devdb_network:
+    name: gestionale_devdb_network
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+    name: postgres_dev_data

@@ -4,7 +4,7 @@
   "private": true,
   "description": "NestJS API per la piattaforma Gestionale (consumer di @gestionale/db). F1 scaffold con healthcheck — auth e business logic in macro-task successivi.",
   "scripts": {
-    "dev": "dotenv -e ../../.env -- ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev": "dotenv -e ../../.env.devdb -e ../../.env -- ts-node-dev --respawn --transpile-only src/main.ts",
     "build": "nest build --builder swc",
     "start:prod": "dotenv -e ../../.env -- node dist/src/main.js",
     "typecheck": "tsc --noEmit",
