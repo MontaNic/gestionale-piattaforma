@@ -3245,6 +3245,26 @@ Preflight read-only su una segnalazione «bug `app.is_super_admin` nei flussi JW
 
 ---
 
+## [2026-07-23] `TD-dev-env-punta-prod` CHIUSO — Sub-B (dev env isolato) + 2 discovery a runtime
+
+Sub-B completa il TD: Sub-A (guard meccanizzato, #168) + Sub-B (ambiente dev isolato dev-by-default) = `TD-dev-env-punta-prod` **risolto**. Residuo aperto solo **Sub-2** (verifica full-stack blob/multipart contro BE reale), ora **eseguibile**. Branch `feat/dev-db-isolated`, PR unica.
+
+**Cosa fatto:**
+- **DB dev isolato** ([`docker-compose.devdb.yml`](docker-compose.devdb.yml)) STANDALONE, project name `gestionale-devdb` (mai nel merge prod): container `gestionale_postgres_dev` + volume `postgres_dev_data` + porta `127.0.0.1:55432` + rete `gestionale_devdb_network` dedicata, credenziali dev ≠ prod. `55432 ≠ 5432` → guard Sub-A non matcha (difesa in profondità intatta).
+- **Env injection dev-by-default** senza toccare `.env` root: `.env.devdb` committato (solo i 2 url dev, zero segreti prod) + script `dev` delle 2 API con `dotenv -e ../../.env.devdb -e ../../.env`. **Verificato empiricamente** (micro-check Commit 1) che dotenv-cli fa vincere il **primo** `-e`; una var già in `process.env` e `-v` vincono a loro volta → i 2 url dev vincono, il resto (JWT/SMTP/…) cade sul `.env` root intatto. Inversione: **dev-by-default, prod richiede intenzione**.
+- **Script** `devdb:up/down/migrate/seed/setup` + `verify:guard-runtime`. `devdb:seed` **non** forza `ALLOW_PROD_DB_ACCESS` (footgun evitato: dev non ne ha bisogno, e il flag mascherrebbe un mistargeting).
+- **GATE passato**: `devdb:setup` idempotente → 32 migrazioni + 4 tenant seedati; **login HTTP reale** `studio-demo` (`admin@studio.local`) contro il DB dev → 201 con `accessToken`. Prod (`gestionale_postgres`) mai toccato.
+
+**Discovery #1 (runtime) — init app-role rotto → fix `fix(infra)` (tocca infra condivisa prod).** [`01-create-app-role.sh`](infra/postgres/init/01-create-app-role.sh) falliva al cold-boot: `:'app_db_password'` era **dentro** un blocco `DO $$…$$` e psql non interpola `:var` nel dollar-quoting → `syntax error at or near ":"` → il role veniva poi creato dalla migration con **`PLACEHOLDER_MUST_BE_ROTATED`** → seed auth-fail. **Fix**: interpolazione fuori dal DO block (`format(…, %L) … WHERE NOT EXISTS \gexec`, idempotente) + **fail-loud** (post-check → `exit 1` se il role manca, così un init rotto non passa più inosservato). **Impatto cross-verticale**: `infra/postgres/init` è condivisa; **prod running non impattato** (init inerte su volume di 3 settimane); il fix ripara il **bootstrap fresco** per entrambi i verticali (dev ora, ricostruzione volume prod futura) → da bug latente di disaster-recovery a bootstrap affidabile. Verificato via login `gestionale_app`/pw-dev su **TCP-over-bridge (scram)**, non loopback-trust.
+
+**Discovery #2 (runtime) — il guard Sub-A era INERTE sull'host (dist stale).** I dev server importano il **`dist` buildato** di `packages/db`, non il src; il `dist` sull'host era del **2026-07-14 (pre-Sub-A)** e **non conteneva** `assertSafeDbTarget` → sull'host il guard non proteggeva i dev server. Verificato: prima del rebuild l'API partiva e **tentava il connect a prod:5432**; dopo `pnpm --filter @gestionale/db build` il guard **aborta** (`ProdDbAccessBlockedError`) prima di qualunque connessione (0 connessioni `guard_probe` su prod). Nuance: root `pnpm dev` fa il `^build` Turbo (dist fresco), ma `pnpm --filter <api> dev` diretto no → serve build esplicito. Prod containers non impattati (build in Docker + `NODE_ENV=production` → guard inerte by design). Lo script `verify:guard-runtime` (check[0]) cattura la regressione "guard assente nel dist". Runbook README aggiornato con l'avvertenza build-currency.
+
+**Lezione (senior empirical re-validation):** una lettura consolidata non è verità eterna. STOP 0/1 avevano letto i *commenti* dell'init ("crea il role con la pw reale") e dato per **attivo** il guard; il runtime — abilitato proprio da Sub-B — ha smentito **entrambi**. Il DB dev isolato è lo strumento di verifica che mancava. Convenzione catturata in [ADR-0072](docs/architecture/ADR-0072-dev-db-isolated-and-init-conventions.md).
+
+**Prossimo:** Sub-2 (full-stack blob/multipart contro BE reale) ora eseguibile — login reale + download/upload + assert `/auth/refresh` singola lato BE, contro il DB dev.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
