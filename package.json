@@ -21,6 +21,11 @@
     "smoke": "pnpm smoke:accountant && pnpm smoke:restaurant",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
+    "devdb:up": "docker compose -f docker-compose.devdb.yml up -d --wait",
+    "devdb:down": "docker compose -f docker-compose.devdb.yml down",
+    "devdb:migrate": "pnpm --filter @gestionale/db devdb:migrate",
+    "devdb:seed": "pnpm --filter @gestionale/db devdb:seed",
+    "devdb:setup": "pnpm devdb:up && pnpm devdb:migrate && pnpm devdb:seed",
     "prepare": "husky"
   },
   "devDependencies": {

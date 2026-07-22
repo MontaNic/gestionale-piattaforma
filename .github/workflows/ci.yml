@@ -260,8 +260,17 @@ jobs:
       - name: Start API server (background)
         # ts-node-dev background; PID salvato per cleanup.
         # nohup + redirect log per debug post-mortem se test FAIL.
+        #
+        # DB target in CI = service Postgres (postgres:5432/gestionale_test), NON il
+        # DB dev host (.env.devdb -> 127.0.0.1:55432). Lo script `dev` della API
+        # carica `.env.devdb` per primo (dev-by-default, Sub-B) e vincerebbe sul
+        # `.env` root: qui esportiamo DATABASE_URL come env REALE, che per
+        # precedenza dotenv-cli vince su qualunque file `-e` (override esplicito).
+        # Solo DATABASE_URL (runtime + guard); DIRECT_URL non serve a runtime
+        # (migrate only). Valore dal `.env` post-rotate (step "Update .env").
         run: |
           mkdir -p /tmp/ci-logs
+          export DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | cut -d= -f2-)"
           cd apps/restaurant-api
           nohup pnpm dev > /tmp/ci-logs/api.log 2>&1 &
           echo $! > /tmp/ci-logs/api.pid

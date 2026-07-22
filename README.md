@@ -116,6 +116,32 @@ Per fresh bootstrap docker (volume nuovo): lo script [`infra/postgres/init/01-cr
 
 Tech debt F2 documentata in [ADR-0009](./docs/architecture/ADR-0009-rls-real.md) sezione "Tech debt registrato": integrare secret manager (Vault / AWS Secrets Manager) per evitare il pattern placeholder-then-rotate in staging/prod.
 
+#### Dev DB isolato (dev-by-default) — Sub-B `TD-dev-env-punta-prod`
+
+Sull'host la prod gira su `127.0.0.1:5432/gestionale`. Per **non** puntare mai i dev server a quel DB, esiste un Postgres dev **isolato** (container/volume/istanza separati) su `127.0.0.1:55432`, in un compose **standalone** ([`docker-compose.devdb.yml`](./docker-compose.devdb.yml), project name `gestionale-devdb`, credenziali dev ≠ prod). Gli script `dev` delle 2 API vi puntano **by-default** via `dotenv -e ../../.env.devdb -e ../../.env` (il primo `-e` vince → `DATABASE_URL`/`DIRECT_URL` dal file dev; il `.env` root resta intatto coi segreti prod).
+
+```bash
+# One-shot: alza il container dev + migrate (32) + seed (4 tenant well-known)
+pnpm devdb:setup
+# equivalente a: pnpm devdb:up && pnpm devdb:migrate && pnpm devdb:seed
+
+# Poi avvia le API: puntano al DB dev by-default (55432)
+pnpm --filter @gestionale/restaurant-api dev   # oppure accountant-api
+# login: admin@studio.local / Studio123! (X-Tenant-Slug: studio-demo), ecc. (vedi seed summary)
+
+pnpm devdb:down        # ferma il container (PRESERVA il volume/dati)
+docker compose -f docker-compose.devdb.yml down -v   # RESET completo (cancella i dati)
+```
+
+⚠️ **Build-currency del guard.** Il guard anti-prod-da-host ([`assert-safe-db-target.ts`](./packages/db/src/assert-safe-db-target.ts)) vive in `packages/db`; i dev server importano il **`dist` buildato**, non il src. Un `dist` stale = guard **inerte**. Root `pnpm dev` fa il `^build` di Turbo (dist fresco); un `pnpm --filter <api> dev` diretto **no** → esegui prima `pnpm --filter @gestionale/db build`. Verifica che il guard sia effettivo nel dist:
+
+```bash
+pnpm --filter @gestionale/db verify:guard-runtime
+# prod-shaped -> abort; dev target -> ok; whitelist -> ok
+```
+
+Il DB dev usa lo **stesso** schema Prisma condiviso di prod: **entrambe** le API (accountant + restaurant) puntano allo stesso dev DB, esattamente come in prod condividono `gestionale` (modello previsto, non asimmetria).
+
 ```bash
 # Applica migrations pendenti (dev)
 pnpm --filter @gestionale/db prisma:migrate:dev

@@ -4,7 +4,7 @@
   "private": true,
   "description": "NestJS API per il verticale commercialisti (StudioDesk). Walking skeleton core-only (boot + auth/login + me); dominio in macro-task successivi.",
   "scripts": {
-    "dev": "dotenv -e ../../.env -v PORT=3002 -v CORS_ORIGIN=http://localhost:3003 -- ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev": "dotenv -e ../../.env.devdb -e ../../.env -v PORT=3002 -v CORS_ORIGIN=http://localhost:3003 -- ts-node-dev --respawn --transpile-only src/main.ts",
     "build": "nest build --builder swc",
     "start:prod": "dotenv -e ../../.env -- node dist/src/main.js",
     "typecheck": "tsc --noEmit",
