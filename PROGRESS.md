@@ -3211,6 +3211,22 @@ Completamento naturale di #160: i 5 `fetch` raw di accountant-web (3 download bl
 
 ---
 
+## [2026-07-22] `TD-dev-env-punta-prod` / Sub-A — guard anti-prod-da-host (meccanismo, non disciplina)
+
+Un solo Postgres sull'host, condiviso prod+dev (`127.0.0.1:5432/gestionale`). Il near-incident: un dev server lanciato da host eredita il `.env` root e punta al DB **prod** con `NODE_ENV`≠production. Fermato solo da auto-correzione manuale, nessun guard. Sub-A trasforma la difesa da disciplina a guard meccanizzato. Branch `fix/db-prod-guard`, 3 commit, **non mergiato**.
+
+- **Commit 1 — `feat(db)`:** funzione **pura** `assertSafeDbTarget(url, ctx)` (nuovo `packages/db/src/assert-safe-db-target.ts`) + `ProdDbAccessBlockedError`. Match su **host:porta:db** (`{127.0.0.1|localhost}:5432/gestionale`), ignora user/password → copre sia `DATABASE_URL` (app-role) sia `DIRECT_URL` (superuser). Inerte se `NODE_ENV=production` o `ALLOW_PROD_DB_ACCESS=1`; url malformata → no-op (non è compito del guard validarla). Wired in `createPrismaClient()` **prima** di istanziare il client (nient'altro toccato nel factory). **9 test puri** (nessuna connessione): near-incident, whitelist, container prod, normalizzazione localhost + default-port, Testcontainers, dev-env-isolato futuro (Sub-B, porta diversa), db diverso, url malformata.
+- **Commit 2 — `fix(db)`:** `purge-tenant.ts` (client diretto su `DIRECT_URL`, non passa dalla factory) chiama il guard esplicitamente sull'url effettivo. I **5 wrapper** di manutenzione host-run legittima (`db:seed`, `smoke:rls-core`, `smoke:rls-e2e`, `smoke:soft-delete`, `purge-tenant`) prefissati con `ALLOW_PROD_DB_ACCESS=1` → passano il guard via `pnpm`, abortano se lanciati "nudi". Prefisso inline (host Linux); `cross-env` non introdotto (non in uso).
+- **GATE:** 9 nuovi test + suite db esistente (3) verdi invariati (12/12); typecheck + lint verdi. **Verificato (non assunto):** il vitest config di `packages/db` inietta `localhost:5432/**test**` (db `test`≠`gestionale`) → guard inerte al require-time del singleton. **Nessuno script eseguito contro prod.**
+
+**Scope chiuso da Sub-A:** il **vettore** del near-incident (factory + `purge-tenant`). **Non** l'intero TD: resta **Sub-B** (dev env con DB isolato), che sbloccherà anche **Sub-2** (verifica full-stack blob/multipart contro BE reale). La verifica runtime end-to-end del guard (vederlo abortire davvero) appartiene a Sub-B, dove è osservabile senza rischio prod.
+
+**TD registrato:** **`TD-prisma-studio-prod-unguarded`** (tier BASSO-MEDIO) — `prisma studio` è Prisma CLI, non attraversa `createPrismaClient()` → fuori dal guard; editor visuale su prod resta apribile da host. Trigger + opzioni in [HANDOFF](docs/handoff/HANDOFF.md).
+
+**Nota di rettifica (V5 del preflight):** in STOP 0 avevo segnalato come "anomalia" che le web-app FE condividessero `gestionale_network` con Postgres, in apparente contrasto con `reference_web_network_isolation`. **Rettifica verificata:** quella memoria riguarda la rete docker **esterna** `web` (host hobby di terzi), non il tier FE del gestionale; postgres/API sono confinati a `gestionale_network` e la rete `web` contiene solo i container hobby + `gestionale_caddy` (l'unico ponte, by design). La memoria è **corretta**, non stale — la V5 era un mio misread. **Nessuna correzione doc dovuta.**
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
