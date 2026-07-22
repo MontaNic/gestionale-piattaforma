@@ -32,6 +32,8 @@
 
 import { PrismaClient } from '@prisma/client';
 
+import { assertSafeDbTarget } from '../src/assert-safe-db-target';
+
 const WELL_KNOWN = ['demo', 'acme', 'studio-demo', 'oneplatform'];
 
 /** count(*) ritorna sempre una riga; estrae n in modo type-safe (strict index). */
@@ -124,6 +126,15 @@ async function main(): Promise<number> {
     console.error('❌ DIRECT_URL assente. Esegui via: pnpm purge-tenant (carica ../../.env)');
     return 2;
   }
+
+  // Guard anti-prod-da-host: questo client NON passa dalla factory, quindi il
+  // guard va richiamato qui esplicitamente sull'url effettivo (DIRECT_URL).
+  // purge-tenant DEVE poter girare su prod (è il suo scopo) → il wrapper npm
+  // lo lancia con ALLOW_PROD_DB_ACCESS=1; lanciato "nudo" aborta. Vedi Sub-A §2.4.
+  assertSafeDbTarget(process.env.DIRECT_URL, {
+    nodeEnv: process.env.NODE_ENV,
+    allowProdDb: process.env.ALLOW_PROD_DB_ACCESS === '1',
+  });
 
   // Superuser, RLS bypassata, nessuna estensione RLS.
   const prisma = new PrismaClient({ datasources: { db: { url: process.env.DIRECT_URL } } });
