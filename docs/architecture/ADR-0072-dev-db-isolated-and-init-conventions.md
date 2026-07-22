@@ -30,9 +30,11 @@ Secondo container Postgres (`postgres-dev`) in un compose **standalone** ([`dock
 - **Idempotente** (`WHERE NOT EXISTS` / guard equivalente): re-boot su volume esistente non deve rompere.
 - **Fail-loud**: post-check che il role esista con gli attributi attesi, altrimenti `exit 1`. Un init rotto deve **impedire** al container di diventare healthy, non passare inosservato.
 
-### 3. Build-currency del guard è parte del contratto
+### 3. Build-currency del guard è parte del contratto (`TD-db-dist-stale-runtime`)
 
-Il guard vive in `packages/db`; i consumer (dev server) importano il **`dist` buildato**, non il src. Un `dist` stale = guard **inerte**. Regola operativa: il guard è garantito solo con `packages/db` buildato aggiornato. Root `pnpm dev` fa il `^build` Turbo; un `pnpm --filter <api> dev` diretto no → build esplicito. Lo script `verify:guard-runtime` (check[0]) fallisce se il guard è assente dal `dist`.
+Il guard vive in `packages/db`; i consumer (dev server) importano il **`dist` buildato**, non il src. Un `dist` stale = guard **inerte**. Questo non è un dettaglio: **Sub-A è stato inerte a runtime sull'host** dal merge di #168 (15/07) fino al rebuild di Sub-B — nel sorgente TS e nei 9 unit test era attivo, nel `dist` (2026-07-14, pre-Sub-A) no. Per tutta quella finestra il near-incident era ancora possibile sull'host. **L'ha rivelato la verifica runtime abilitata da Sub-B** — la stessa che era stata rinviata, il che ha prolungato l'inerzia. Lezione: **test verdi sul sorgente non provano il comportamento a runtime host quando in mezzo c'è un artefatto compilato; il GATE non prova la sicurezza.**
+
+Regola operativa: il guard è garantito solo con `packages/db` buildato aggiornato. Root `pnpm dev` fa il `^build` Turbo (mecanizzato); `pnpm --filter <api> dev` diretto **no** (nessun `predev`) — path più comune e forma stessa del near-incident. `verify:guard-runtime` (check[0]) fallisce se il guard è assente dal `dist`, ma gira **on-demand**. Tracciato come **`TD-db-dist-stale-runtime`** (tier MEDIO): trigger = mecanizzare il rebuild (`predev` build, o risoluzione `@gestionale/db` al sorgente TS per i dev server via conditional exports/tsconfig paths, o `verify:guard-runtime` in CI/pre-commit) così il gap non possa ricorrere.
 
 ## Consequences
 
