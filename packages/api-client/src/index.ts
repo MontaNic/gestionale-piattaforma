@@ -140,6 +140,91 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
+// =============================================================================
+// Blob / multipart — verbi per download e upload che bypassavano l'interceptor
+// =============================================================================
+// TD-blob-download-no-refresh: 5 `fetch` raw in accountant-web (3 download blob
+// + 2 upload multipart) non passavano dal single-flight refresh di #160 → 401
+// silenzioso a token scaduto. `request()` decodifica sempre JSON e serializza il
+// body con `JSON.stringify`, quindi non è riusabile per Blob/FormData.
+//
+// `fetchWithAuthRetry` estrae la SOLA decisione 401→refresh→retry (identica a
+// `request()`) ritornando la `Response` grezza — chi chiama decide come leggere
+// il body (blob vs json). `request()` NON è rifattorizzato sopra questo core in
+// questo fix: la duplicazione è deliberata e tracciata da TD-blob-retry-
+// duplication (path critico condiviso di entrambi i verticali, tier ALTO).
+
+/** Opzioni auth per i verbi blob/multipart — sottoinsieme di `RequestOptions`. */
+type AuthRetryOptions = Pick<RequestOptions, 'accessToken' | 'onUnauthorized' | 'skipAuthRetry'>;
+
+/** Inietta `Authorization: Bearer` in `init.headers` (merge non distruttivo). */
+function withAuthHeader(init: RequestInit, accessToken?: string): RequestInit {
+  if (!accessToken) return init;
+  return {
+    ...init,
+    headers: {
+      ...(init.headers as Record<string, string> | undefined),
+      Authorization: `Bearer ${accessToken}`,
+    },
+  };
+}
+
+/**
+ * Esegue `fetch` con la stessa logica single-flight 401→refresh→retry di
+ * `request()`, ma ritorna la `Response` grezza (nessun `res.json()`, nessuna
+ * serializzazione del body). Un solo retry: `skipAuthRetry: true` sul secondo
+ * tentativo (anti-loop, identico a `request()`).
+ */
+async function fetchWithAuthRetry(
+  input: string,
+  init: RequestInit,
+  options: AuthRetryOptions,
+): Promise<Response> {
+  const res = await fetch(input, withAuthHeader(init, options.accessToken));
+  if (res.status === 401 && options.onUnauthorized && !options.skipAuthRetry) {
+    const refreshedToken = await options.onUnauthorized();
+    if (refreshedToken !== null) {
+      return fetchWithAuthRetry(input, init, {
+        ...options,
+        accessToken: refreshedToken,
+        skipAuthRetry: true,
+      });
+    }
+  }
+  return res;
+}
+
+/**
+ * GET → `Blob`. Download autenticati (allegati/documenti): l'endpoint richiede
+ * `Authorization: Bearer`, quindi non è un `<a href>` diretto. Il save lato
+ * browser (createObjectURL → `<a download>`) resta nel call-site FE.
+ */
+export async function apiGetBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const res = await fetchWithAuthRetry(`${API_BASE}${path}`, { method: 'GET' }, options);
+  if (!res.ok) throw await parseError(res);
+  return res.blob();
+}
+
+/**
+ * POST multipart (`FormData`) → JSON tipizzato. Upload di file: NON si setta
+ * `Content-Type` manualmente — il browser lo imposta col `boundary` corretto a
+ * partire dalla `FormData`. `request()` non è usabile qui (serializza `body`
+ * con `JSON.stringify` e forza `application/json`).
+ */
+export async function apiPostMultipart<T>(
+  path: string,
+  formData: FormData,
+  options: RequestOptions = {},
+): Promise<T> {
+  const res = await fetchWithAuthRetry(
+    `${API_BASE}${path}`,
+    { method: 'POST', body: formData },
+    options,
+  );
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as T;
+}
+
 export function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T> {
   return request<T>('GET', path, options);
 }

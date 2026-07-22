@@ -3195,6 +3195,20 @@ Colmata la lacuna emersa nel preflight HANDOFF: PROGRESS copriva solo fino a #15
 
 **Deploy prod (verificato 2026-07-15, docker/DB):** restaurant `web`/`api` a `167cb3d` (build 07-14, marker `stornoInviata`+`portata` nel bundle); DB prod = **32 migration**, ultima `add_portata`. Accountant ridistribuito **10/07** per #160 (~main@10/07, post-#160 pre-#161), non fermo al cutover. Catalogo permessi invariato = **60**. 10 tag `:rollback-*` vivi. Dettaglio in [HANDOFF](docs/handoff/HANDOFF.md).
 
+## [2026-07-22] `TD-blob-download-no-refresh` chiuso — blob/multipart accountant sotto single-flight refresh
+
+Completamento naturale di #160: i 5 `fetch` raw di accountant-web (3 download blob + 2 upload multipart) bypassavano l'interceptor → a token scaduto (15 min) fallivano con 401 silenzioso (i consumer fanno `.catch(() => undefined)`, failure invisibile). Branch `fix/blob-download-auth-refresh`, 4 commit, **non ancora mergiato**.
+
+- **Commit 1 — `feat(api-client)`:** nuovi verbi `apiGetBlob` (→ `Blob`) e `apiPostMultipart<T>` (→ JSON) sopra un core interno `fetchWithAuthRetry` che replica la SOLA decisione 401→refresh→retry di `request()` ritornando la `Response` grezza. **`request()` NON toccato** (diff = solo aggiunte, verificato). 6 test nuovi che esercitano il retry (non solo l'happy path); 15 test api-client + 18 auth-web esistenti verdi invariati.
+- **Commit 2 — `refactor(accountant-web)`:** migrati i 3 file (`comunicazioni-api` / `documenti-api` / `portale-documenti-api`) ai nuovi verbi. Rimossi 5 `fetch` raw + 3 `API_BASE` locali + header `Authorization` manuali (ora da `authOptions()`). Save-bundle browser resta nel call-site; firme pubbliche FE e consumer invariati. GATE: typecheck+lint+build accountant-web verdi, `grep fetch( accountant-web = 0`.
+- **Sub-1 (§7 rev.2) — `test(accountant-web)`:** e2e route-mocked `blob-auth-refresh.spec.ts` (+ `playwright.blob.config.ts`, webServer `next dev` :3013, **no BE/DB**). 3 scenari (download refresh→retry con evento `download` reale; upload multipart+boundary su entrambi i tentativi; refresh fallito → no loop, token ripuliti). **9/9 verde** `--repeat-each=3`, deterministico. Runbook: `pnpm --filter accountant-web test:e2e:blob`.
+
+**TD registrati:**
+- **`TD-blob-retry-duplication`** (nuovo) — la decisione 401→refresh→retry vive ora in 2 punti: `request()` (ramo JSON) e `fetchWithAuthRetry` (ramo `Response`). Scelta deliberata per non toccare il path critico condiviso di entrambi i verticali in questo fix. **Trigger:** prossima modifica sostanziale alla logica retry/refresh (semantica theft-detection, backoff, 2° retry) → unificare `request()` sopra `fetchWithAuthRetry` come single source, con GATE sui test interceptor. **Tier riattivazione:** ALTO.
+- **`Sub-2`** (dentro **`TD-dev-env-punta-prod`**) — la verifica **full-stack** dei 5 path blob/multipart contro BE reale è rinviata: sull'host non esiste un DB dev isolato (unico Postgres = prod-shared) e §7 vieta prod; l'upload è una mutazione. **Trigger:** esistenza di un dev env con DB isolato → eseguire login reale + download/upload + assert `/auth/refresh` singola lato BE (pattern del test-3 restaurant-web `auth-refresh-single-flight.spec.ts`). Nel frattempo Sub-1 (route-mocked) copre il runtime FE reale.
+
+**Nota CI:** `blob-auth-refresh.spec.ts` **non gira in CI** — il job `e2e-playwright` esegue solo `apps/restaurant-web`. Segnalato, non forzato (l'infra e2e accountant-web non è CI-gated per scelta pregressa). Girabile on-demand. Registrato come **`TD-ci-e2e-accountant-web-fe`** (tier riattivazione MEDIO; trigger = prossimo intervento sull'infra CI e2e → aggiungere `accountant-web` al job Playwright). Analogo FE di `TD-ci-e2e-testcontainers-be`.
+
 ---
 
 ## 📝 Prompt operativo prossimo task — da definire

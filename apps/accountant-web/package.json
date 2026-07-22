@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:e2e:smoke": "playwright test --config playwright.smoke.config.ts",
     "test:e2e:smoke:ui": "playwright test --config playwright.smoke.config.ts --ui",
-    "test:e2e:smoke:report": "playwright show-report"
+    "test:e2e:smoke:report": "playwright show-report",
+    "test:e2e:blob": "playwright test --config playwright.blob.config.ts"
   },
   "dependencies": {
     "@gestionale/api-client": "workspace:*",
