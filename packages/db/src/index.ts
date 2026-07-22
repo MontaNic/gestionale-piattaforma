@@ -22,6 +22,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 
+import { assertSafeDbTarget } from './assert-safe-db-target';
 import { rlsExtension } from './rls';
 import type { TenantContext } from './rls';
 import { softDeleteExtension } from './soft-delete';
@@ -45,8 +46,17 @@ export { uuidv7 };
  * se chiamata fuori da `runInTenantContext` / `withSystemContext` /
  * `withSuperAdminContext`. Fail-fast by design (ADR-0009 decisione 11).
  */
-export const createPrismaClient = () =>
-  new PrismaClient().$extends(softDeleteExtension).$extends(rlsExtension());
+export const createPrismaClient = () => {
+  // Guard anti-prod-da-host: aborta prima di istanziare il client se il target
+  // è il DB di produzione da un contesto non-production non whitelistato.
+  // Usa l'url che il client risolve da schema.prisma (`env("DATABASE_URL")`).
+  // Vedi assert-safe-db-target.ts + TD-dev-env-punta-prod / Sub-A.
+  assertSafeDbTarget(process.env.DATABASE_URL ?? '', {
+    nodeEnv: process.env.NODE_ENV,
+    allowProdDb: process.env.ALLOW_PROD_DB_ACCESS === '1',
+  });
+  return new PrismaClient().$extends(softDeleteExtension).$extends(rlsExtension());
+};
 
 export type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
 
