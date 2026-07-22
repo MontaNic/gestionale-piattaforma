@@ -70,6 +70,7 @@ Catalogo = **60** (invariato in tutta la finestra: nessuna delle 12 PR aggiunge 
 **Tesi: i presidi che dipendono dalla memoria dell'operatore falliscono. Vanno nel meccanismo.** Quattro volte oggi, lo stesso tema:
 
 1. **`TD-dev-env-punta-prod` — priorità ALZATA con evidenza odierna.** Non è un TD nuovo: è già tracciato. Oggi ha quasi prodotto un incidente — i **dev server stavano per puntare a produzione** (`.env` dev → DB prod). Non più teorico. Fix = isolamento dev/prod **nel meccanismo** (env separati / DB dev dedicato), non disciplina. **Primo presidio da chiudere.**
+   - **Sub-2 (bloccato da questo TD):** la verifica **full-stack** dei 5 path blob/multipart accountant contro BE reale (`TD-blob-download-no-refresh`, §7) è rinviata proprio perché manca un DB dev isolato e §7 vieta prod. **Trigger:** appena esiste il dev env isolato → login reale + download/upload + assert `/auth/refresh` singola lato BE (pattern test-3 `auth-refresh-single-flight.spec.ts`). Nel frattempo copre il runtime FE l'e2e route-mocked Sub-1.
 2. **`TD-ci-e2e-testcontainers-be` (ADR-0071).** La e2e BE di `restaurant-api` non gira in CI → il comportamento comande/conti (pricing/RBAC/state-machine/storno/feed/audit) è validato solo in locale; una regressione non verrebbe colta dalla CI. Fix nel meccanismo = Postgres nel runner (il job Playwright ne ha già uno).
 3. **Termometro deploy.** Oggi «cosa gira in prod» è stato ricostruito a mano (image ID + marker nel bundle + count migration). Serve un check che dica quale SHA gira **senza affidarsi alle note versioned** (che oggi mentivano). Nel meccanismo, non nella memoria.
 4. **Tag-rollback-obbligatorio.** Il pattern «tagga `:rollback-pre-<feature>` PRIMA del build» oggi ha tenuto (10 tag sani), ma dipende dalla disciplina dell'operatore. Renderlo **step dello script di deploy**, non promemoria.
@@ -78,7 +79,8 @@ Comun denominatore: ognuno ha una versione «meccanismo» che elimina la dipende
 
 ### TD / forward tracciati (oltre ai presidi sopra)
 
-- **`TD-blob-download-no-refresh`** — trigger immediato, **mai fatto**. `fetchWithRefresh` sui 3 file blob accountant (comunicazioni / documenti / portale-documenti) che fanno download fuori da `request()` → non coperti dal single-flight #160. **È il primo debito da chiudere quando si torna sull'accountant** (vedi Parte B).
+- ~~**`TD-blob-download-no-refresh`**~~ — **CHIUSO** su branch `fix/blob-download-auth-refresh` (non ancora mergiato). I 5 `fetch` raw accountant (3 download blob + 2 upload multipart, non solo i 3 previsti) ora passano da `apiGetBlob`/`apiPostMultipart` (core `fetchWithAuthRetry`) → coperti dal single-flight #160. `request()` invariato. Runtime verificato via e2e route-mocked Sub-1 (9/9). Vedi PROGRESS [2026-07-22].
+- **`TD-blob-retry-duplication`** (nuovo, da questo fix) — logica 401→refresh→retry duplicata tra `request()` (ramo JSON) e `fetchWithAuthRetry` (ramo `Response`). Trigger: prossima modifica sostanziale a retry/refresh → unificare `request()` sopra `fetchWithAuthRetry`, GATE sui test interceptor. Tier riattivazione ALTO (path critico condiviso).
 - `TD-articles-flat-endpoint` — picker articoli con fetch O(N); trigger = 2° consumer lista-articoli (KDS/Cassa).
 - `TD-rbac-tavolo-write-subset` (ADR-0058) — path RBAC negativo mai esercitato; trigger = 1° ruolo non-admin su tenant restaurant reale.
 - `TD-pricing-multilistino` (ADR-0068), `TD-storage-gc`, `TD-documenti-tipo-codice` / `TD-utente-enum-forward` (ADR-0065, deferred-con-trigger).
@@ -93,7 +95,7 @@ Main @ `167cb3d` (+1 commit `docs(handoff)` in arrivo via questa PR). Working tr
 
 ### Due punti di ripartenza, per contesto
 
-**Se si torna sull'accountant → prima cosa: `TD-blob-download-no-refresh`.** Trigger immediato, mai fatto: è il completamento naturale di #160 (i 3 blob-download restano fuori dal single-flight → primo 401 su download = logout indebito). Chiuderlo prima di qualunque nuova feature accountant.
+**Se si torna sull'accountant:** `TD-blob-download-no-refresh` è **chiuso** su branch `fix/blob-download-auth-refresh` (in attesa di merge) — completamento naturale di #160, i 5 blob/multipart ora sotto single-flight. Alla ripresa: mergiare la PR, poi (se/quando esiste un dev env isolato) chiudere **Sub-2** (verifica full-stack contro BE reale).
 
 **Se si prosegue il blocco restaurant → entry-point: PR-3a board KDS.** `kds/page.tsx` è oggi `PlaceholderPage`. È il consumer di `comande.stato.cambia` (già attivato #156) + del payload portata/storno già predisposto nel feed. Primo passo = **STOP 0 read-only** della pagina. CHECK-FE dovuti (dark mode, i18n parity IT↔EN, no hardcoded IT, `next build` isolato, responsive, a11y).
 
