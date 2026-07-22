@@ -8,16 +8,14 @@
 // con `tipoNome` già denormalizzato (il cliente non interroga il catalogo tipi).
 // =============================================================================
 
-import { apiGet } from '@gestionale/api-client';
-import { authOptions, getAccessToken } from '@gestionale/auth-web';
+import { apiGet, apiGetBlob } from '@gestionale/api-client';
+import { authOptions } from '@gestionale/auth-web';
 
 import type { VisibilitaDocumento } from './documenti-types';
 
 interface Wrapped<T> {
   data: T;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 /** Vista read-only allineata a ClienteDocumentoView (accountant-api). */
 export interface PortaleDocumento {
@@ -38,17 +36,7 @@ export async function getPortaleDocumenti(): Promise<PortaleDocumento[]> {
 
 /** Download documento (blob, Bearer richiesto) → trigger save lato browser. */
 export async function downloadPortaleDocumento(id: string, nomeOriginale: string): Promise<void> {
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}/portale/documenti/${id}/download`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) {
-    throw Object.assign(new Error('download failed'), {
-      errorCode: 'E_UNKNOWN',
-      status: res.status,
-    });
-  }
-  const blob = await res.blob();
+  const blob = await apiGetBlob(`/portale/documenti/${id}/download`, authOptions());
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

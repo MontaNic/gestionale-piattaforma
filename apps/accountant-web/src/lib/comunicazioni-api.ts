@@ -2,16 +2,25 @@
 // comunicazioni-api.ts — Data access client comunicazioni (verticale accountant, ADR-0043)
 // =============================================================================
 // Funzioni tipizzate sopra @gestionale/api-client (pattern scadenze-api). NO
-// react-query. Token via getAccessToken() (@gestionale/auth-web). Response
-// avvolte in { data }.
+// react-query. Auth via authOptions() (@gestionale/auth-web): access token
+// corrente + hook single-flight refresh. Response avvolte in { data }.
 //
-// Allegati: l'api-client fa solo JSON → upload (multipart FormData) e download
-// (blob, l'endpoint richiede Authorization: Bearer, non è un <a href> diretto)
-// usano `fetch` raw con lo stesso base URL e header del client condiviso.
+// Allegati: upload (multipart FormData) e download (blob, l'endpoint richiede
+// Authorization: Bearer, non è un <a href> diretto) passano dai verbi
+// `apiPostMultipart` / `apiGetBlob` del client condiviso, così anche questi
+// call-site sopravvivono alla scadenza dell'access token via single-flight
+// refresh (#160) invece di fallire con 401 silenzioso (TD-blob-download-no-refresh).
 // =============================================================================
 
-import { apiDelete, apiGet, apiPatch, apiPost } from '@gestionale/api-client';
-import { authOptions, getAccessToken } from '@gestionale/auth-web';
+import {
+  apiDelete,
+  apiGet,
+  apiGetBlob,
+  apiPatch,
+  apiPost,
+  apiPostMultipart,
+} from '@gestionale/api-client';
+import { authOptions } from '@gestionale/auth-web';
 
 import type {
   ComAllegato,
@@ -26,8 +35,6 @@ import type {
 interface Wrapped<T> {
   data: T;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 export interface GetComunicazioniParams {
   aziendaId?: string;
@@ -116,39 +123,21 @@ export async function addMessaggio(
   return res.data;
 }
 
-/** Upload allegato (multipart). L'api-client fa solo JSON → fetch raw. */
+/** Upload allegato (multipart) via api-client (single-flight refresh su 401). */
 export async function uploadAllegato(messaggioId: string, file: File): Promise<ComAllegato> {
   const form = new FormData();
   form.append('file', file);
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}/comunicazioni/messaggi/${messaggioId}/allegati`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { errorCode?: string; message?: string };
-    throw Object.assign(new Error(body.message ?? 'upload failed'), {
-      errorCode: body.errorCode ?? 'E_UNKNOWN',
-      status: res.status,
-    });
-  }
-  return ((await res.json()) as Wrapped<ComAllegato>).data;
+  const res = await apiPostMultipart<Wrapped<ComAllegato>>(
+    `/comunicazioni/messaggi/${messaggioId}/allegati`,
+    form,
+    authOptions(),
+  );
+  return res.data;
 }
 
 /** Download allegato (blob, Bearer richiesto) → trigger save lato browser. */
 export async function downloadAllegato(allegatoId: string, nomeOrig: string): Promise<void> {
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}/comunicazioni/allegati/${allegatoId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) {
-    throw Object.assign(new Error('download failed'), {
-      errorCode: 'E_UNKNOWN',
-      status: res.status,
-    });
-  }
-  const blob = await res.blob();
+  const blob = await apiGetBlob(`/comunicazioni/allegati/${allegatoId}`, authOptions());
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

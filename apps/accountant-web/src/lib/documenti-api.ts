@@ -2,12 +2,14 @@
 // documenti-api.ts — Data access client documenti (verticale accountant, ADR-0044)
 // =============================================================================
 // Funzioni tipizzate sopra @gestionale/api-client (pattern comunicazioni-api).
-// Token via getAccessToken(). Upload (multipart) e download (blob, Bearer) usano
-// `fetch` raw con lo stesso base URL del client condiviso (l'api-client fa JSON).
+// Upload (multipart) e download (blob, Bearer) passano dai verbi
+// `apiPostMultipart` / `apiGetBlob`, così sopravvivono alla scadenza dell'access
+// token via single-flight refresh (#160) invece di un 401 silenzioso
+// (TD-blob-download-no-refresh).
 // =============================================================================
 
-import { apiDelete, apiGet, apiPost } from '@gestionale/api-client';
-import { authOptions, getAccessToken } from '@gestionale/auth-web';
+import { apiDelete, apiGet, apiGetBlob, apiPost, apiPostMultipart } from '@gestionale/api-client';
+import { authOptions } from '@gestionale/auth-web';
 
 import type {
   CreateDocumentoTipoInput,
@@ -20,8 +22,6 @@ import type {
 interface Wrapped<T> {
   data: T;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 export interface GetDocumentiParams {
   aziendaId?: string;
@@ -56,7 +56,7 @@ export async function deleteDocumento(id: string): Promise<void> {
   await apiDelete<Wrapped<{ id: string; deleted: true }>>(`/documenti/${id}`, authOptions());
 }
 
-/** Upload documento (multipart): metadati + file. */
+/** Upload documento (multipart): metadati + file. Single-flight refresh su 401. */
 export async function uploadDocumento(file: File, input: UploadDocumentoInput): Promise<Documento> {
   const form = new FormData();
   form.append('file', file);
@@ -64,35 +64,13 @@ export async function uploadDocumento(file: File, input: UploadDocumentoInput): 
   form.append('aziendaId', input.aziendaId);
   form.append('visibilita', input.visibilita);
   if (input.note) form.append('note', input.note);
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}/documenti`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { errorCode?: string; message?: string };
-    throw Object.assign(new Error(body.message ?? 'upload failed'), {
-      errorCode: body.errorCode ?? 'E_UNKNOWN',
-      status: res.status,
-    });
-  }
-  return ((await res.json()) as Wrapped<Documento>).data;
+  const res = await apiPostMultipart<Wrapped<Documento>>('/documenti', form, authOptions());
+  return res.data;
 }
 
 /** Download documento (blob, Bearer richiesto) → trigger save lato browser. */
 export async function downloadDocumento(id: string, nomeOriginale: string): Promise<void> {
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}/documenti/${id}/download`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) {
-    throw Object.assign(new Error('download failed'), {
-      errorCode: 'E_UNKNOWN',
-      status: res.status,
-    });
-  }
-  const blob = await res.blob();
+  const blob = await apiGetBlob(`/documenti/${id}/download`, authOptions());
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
