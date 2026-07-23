@@ -35,7 +35,9 @@ import { flushTenantSlugCache, loginAs, seedMenuPermissions } from './helpers/me
 // rotazione password avviene solo in dev/prod (docker init / deploy pipeline),
 // quindi nei Testcontainers il role mantiene la placeholder.
 const APP_ROLE = 'gestionale_app';
-const APP_ROLE_PASSWORD = 'PLACEHOLDER_MUST_BE_ROTATED';
+// DP-3 hardening: pw da env, default = placeholder dei Testcontainers non-ruotati.
+// Se un domani il substrato ruota la pw dell'app-role, basta TEST_APP_ROLE_PASSWORD.
+const APP_ROLE_PASSWORD = process.env.TEST_APP_ROLE_PASSWORD ?? 'PLACEHOLDER_MUST_BE_ROTATED';
 
 /** Deriva l'URL di connessione come ruolo app non-superuser dall'URL superuser. */
 function toAppRoleUrl(superuserUrl: string): string {

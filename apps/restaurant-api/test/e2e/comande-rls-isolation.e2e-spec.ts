@@ -34,7 +34,9 @@ import {
 } from './helpers/test-containers';
 
 const APP_ROLE = 'gestionale_app';
-const APP_ROLE_PASSWORD = 'PLACEHOLDER_MUST_BE_ROTATED';
+// DP-3 hardening: pw da env, default = placeholder dei Testcontainers non-ruotati.
+// Se un domani il substrato ruota la pw dell'app-role, basta TEST_APP_ROLE_PASSWORD.
+const APP_ROLE_PASSWORD = process.env.TEST_APP_ROLE_PASSWORD ?? 'PLACEHOLDER_MUST_BE_ROTATED';
 
 function toAppRoleUrl(superuserUrl: string): string {
   const u = new URL(superuserUrl);
