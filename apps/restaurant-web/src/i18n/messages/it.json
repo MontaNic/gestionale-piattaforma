@@ -346,5 +346,26 @@
       "confirmBody": "{count, plural, =1 {# riga verrà inviata} other {# righe verranno inviate}} in cucina e non saranno più modificabili.",
       "confirmLabel": "Invia"
     }
+  },
+  "kds": {
+    "title": "Cucina",
+    "subtitle": "Comande inviate — per reparto e portata",
+    "loading": "Caricamento…",
+    "empty": "Nessuna comanda in coda",
+    "retry": "Riprova",
+    "noAccess": "Non hai accesso alla cucina",
+    "tavolo": "Tavolo",
+    "noTavolo": "Asporto",
+    "righe": "{count, plural, =1 {# riga} other {# righe}}",
+    "stato": {
+      "inviata": "Inviata",
+      "in_preparazione": "In preparazione",
+      "pronta": "Pronta"
+    },
+    "advance": {
+      "in_preparazione": "Avvia",
+      "pronta": "Pronta"
+    },
+    "advanceError": "Aggiornamento stato non riuscito"
   }
 }

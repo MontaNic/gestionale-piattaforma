@@ -346,5 +346,26 @@
       "confirmBody": "{count, plural, =1 {# line will be sent} other {# lines will be sent}} to the kitchen and can no longer be modified.",
       "confirmLabel": "Send"
     }
+  },
+  "kds": {
+    "title": "Kitchen",
+    "subtitle": "Sent orders — by station and course",
+    "loading": "Loading…",
+    "empty": "No orders in queue",
+    "retry": "Retry",
+    "noAccess": "You don't have kitchen access",
+    "tavolo": "Table",
+    "noTavolo": "Takeaway",
+    "righe": "{count, plural, =1 {# line} other {# lines}}",
+    "stato": {
+      "inviata": "Sent",
+      "in_preparazione": "In preparation",
+      "pronta": "Ready"
+    },
+    "advance": {
+      "in_preparazione": "Start",
+      "pronta": "Ready"
+    },
+    "advanceError": "State update failed"
   }
 }
