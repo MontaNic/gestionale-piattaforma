@@ -3378,6 +3378,28 @@ Prima feature del blocco Note Spese. **Tier ALTO** (DDL su schema Prisma unico c
 
 ---
 
+## [2026-07-23] Note Spese v1 PR-2 — CRUD + allegati/storage (accountant)
+
+Secondo blocco Note Spese, consumer delle fondamenta PR-1. **Tier MEDIO** (modulo accountant-only, **nessuno schema/migrazione**). Modulo NestJS CRUD + allegati/storage; **la state machine (invia/approva/respingi) è PR-3**. Branch `feat/note-spese-api`. [ADR-0075](docs/architecture/ADR-0075-note-spese-pr2-crud-storage.md) + [spec](docs/spec/note-spese-v1.md).
+
+**Blocco risolto a STOP 1**: §4-§10 della spec (regole business, storage, API, 14 test, split) — non recuperate a PR-1 — **ricostruite e persistite** (Commit 0). Assegnazione permessi a ruoli non-admin (aperta a PR-1) **decisa**.
+
+**Cosa fatto (6 commit):**
+- **Spec §4-§10** persistita in `docs/spec/note-spese-v1.md` — fonte autoritativa per PR-2/PR-3/FE.
+- **Ruoli (role template)**: `notespese.gestisci` → Collaboratore + Direzione; `notespese.leggi_tutte` + `notespese.approva` → Direzione; Cliente → nessuno. Solo template Direzione/Collaboratore editati (admin-tier eredita via `ALL_PERMISSION_CODES`). **GATE seed**: `smoke:rls-core` + `rbac-permissions` **invariati** (nessun test aggiustato); PIN **63/59** confermato.
+- **Modulo CRUD** (`NoteSpeseModule`): 5 endpoint (POST/GET lista/GET :id/PATCH/DELETE), gated `notespese.gestisci`. Scoping `leggi_tutte` **non bypassabile** (query `userId` ignorato senza il permesso, via `UsersService.hasPermission`). **D6** hard-fail su create+update (mandato/azienda mismatch, mandato tenant-scoped). Ownership + load-then-authorize (404 no-leak); update solo `{bozza,respinta}`, delete solo `bozza` (D5). `id: id()` app-side.
+- **Allegati/storage** (`StorageService` astratto, ADR-0043): 3 endpoint `/note-spese/:id/allegati`. Allow-list MIME (pdf/jpeg/png/webp) al fileFilter **E** nel service; `mimeType` persistito = verificato. Download load-then-authorize (accetta l'id, mai lo `storageKey`). `@@unique(tipo)` → 409 + orphan cleanup del file. Delete allegato = row + `storage.delete` **stessa tx**; delete nota = cascade + cleanup file storage.
+- **Test §7 (9, fase PR-2)** `note-spese-security.e2e-spec.ts`: 1,2,3(HTTP 404),9,10,11,12,13,14 — **service-level** dal DI container (vettore = filtro applicativo). **9/9 verdi**; gate RLS PR-1 ri-eseguito **invariato 5/5**.
+- **Docs**: ADR-0075 + PROGRESS + HANDOFF.
+
+**Impatto altro verticale: verificato** — nessuno schema/migrazione; unica modifica `packages/db` = re-export additivo dei 6 enum + 2 tipi Note Spese in `src/index.ts` (nessun cambiamento comportamento restaurant). Tutto il resto accountant-only. `StorageModule` già in uso.
+
+**Residuo (per PR-3):** state machine (invia/approva/respingi) + auto-approvazione + gating giustificativo/scontrino, con i 5 test residui §7 (4,5,6,7,8). FE = PR-4/5 (§8).
+
+- Commit: `docs`(spec §4-§10) · `feat(db)`(role template) · `feat(accountant-api)`(CRUD) · `feat(accountant-api)`(allegati+storage) · `test`(security) · `docs`(ADR).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

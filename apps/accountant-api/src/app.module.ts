@@ -30,6 +30,7 @@ import { TariffeModule } from './tariffe/tariffe.module';
 import { ScadenzeModule } from './scadenze/scadenze.module';
 import { ComunicazioniModule } from './comunicazioni/comunicazioni.module';
 import { DocumentiModule } from './documenti/documenti.module';
+import { NoteSpeseModule } from './note-spese/note-spese.module';
 import { CircolariModule } from './circolari/circolari.module';
 import { InvitiModule } from './inviti/inviti.module';
 import { PlatformModule } from './platform/platform.module';
@@ -82,6 +83,8 @@ import { MeModule } from './me/me.module';
     ComunicazioniModule,
     // Documenti: scambio documenti studio↔cliente + tipi platform/custom (ADR-0044).
     DocumentiModule,
+    // Note Spese: CRUD note spese operatore + allegati/storage + approvazione (ADR Note Spese).
+    NoteSpeseModule,
     // Circolari: broadcast unidirezionale studio→clienti + macchina di stato (ADR-0045).
     CircolariModule,
     // Dashboard KPI aggregati tenant-level (read-only, STOP-dash1).
