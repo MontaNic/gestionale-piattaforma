@@ -438,3 +438,45 @@ jobs:
       - name: Run blob e2e (route-mocked · next dev :3013 · no BE/DB)
         working-directory: apps/accountant-web
         run: pnpm test:e2e:blob
+
+  e2e-rls-domain-accountant:
+    name: E2E domain RLS accountant (testcontainers · gestionale_app)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Gemello di e2e-rls-domain (restaurant): porta in CI lo spec RLS DB-level del
+    # verticale ACCOUNTANT (rls-isolation.e2e-spec.ts, anagrafica ADR-0035) come
+    # `gestionale_app` (NOBYPASSRLS) → una regressione di policy RLS su tabelle
+    # accountant rompe la CI. Prerequisito per Note Spese (i cui modelli avranno
+    # tenant_id + RLS FORCE). Testcontainers dedicati (DP-1, no service-DB), su
+    # ubuntu-latest (Docker host) fuori dal container Playwright. NON copre le altre
+    # ~17 spec comportamentali accountant (resta TD-ci-e2e-accountant-api).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Build workspace packages (db + shared + platform + auth)
+        # test:e2e:rls avvia vitest diretto (no turbo ^build); rls-isolation boota
+        # AppModule → auth/platform/shared. Stesso set del gate restaurant.
+        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
+
+      - name: Run accountant domain RLS e2e (Testcontainers, gestionale_app NOBYPASSRLS)
+        # SOLO rls-isolation (selezione esplicita in test:e2e:rls). Testcontainers
+        # propri; migrate deploy crea gestionale_app (placeholder); setup superuser,
+        # assert app-role (toAppRoleUrl).
+        run: pnpm --filter @gestionale/accountant-api test:e2e:rls
