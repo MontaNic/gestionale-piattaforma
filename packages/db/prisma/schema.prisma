@@ -92,6 +92,7 @@ model Tenant {
   conti                Conto[]
   contiRighe           ContoRiga[]
   comandas             Comanda[]
+  notaSpesas           NotaSpesa[]
 
   @@map("tenants")
 }
@@ -200,6 +201,9 @@ model User {
   prestazioni            Prestazione[]
   // Tariffario orario per-utente (ADR-0055): override del costo orario di ruolo.
   tariffeOrarie          TariffaOraria[]
+  // Note Spese (accountant, PR-1, D7): autore + approvatore. Additive, no ALTER.
+  noteSpese              NotaSpesa[]        @relation("NotaSpesaAutore")
+  noteSpeseDecise        NotaSpesa[]        @relation("NotaSpesaApprovatore")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -954,6 +958,8 @@ model Azienda {
   utentiPortale        User[]                  @relation("AziendaUtentiPortale")
   // Inviti onboarding clienti (token email → registrazione utente-portale).
   clienteInviti        ClienteInvito[]
+  // Note Spese imputate a questa azienda (PR-1, D7). Additive, no ALTER.
+  noteSpese            NotaSpesa[]
 
   @@index([tenantId])
   @@index([tenantId, nome])
@@ -1527,6 +1533,8 @@ model Mandato {
   azienda     Azienda       @relation(fields: [aziendaId], references: [id], onDelete: Cascade)
   preventivo  Preventivo    @relation(fields: [preventivoId], references: [id], onDelete: Cascade)
   prestazioni Prestazione[]
+  // Note Spese collegate a questo mandato (PR-1, D7). Additive, no ALTER.
+  noteSpese   NotaSpesa[]
 
   // NB: unicità 1:1 su preventivo_id via PARTIAL unique index raw SQL
   // (WHERE deleted_at IS NULL, Pattern 42) nella migration — non @@unique qui.
@@ -1615,4 +1623,132 @@ model TariffaOraria {
   @@index([roleId])
   @@index([userId])
   @@map("tariffe_orarie")
+}
+
+// =============================================================================
+// Note Spese v1 (accountant, PR-1) — vedi docs/spec/note-spese-v1.md
+// Attori: solo User.tipo=operatore. RLS FORCE su entrambe le tabelle (policy nella
+// migration). id app-side (uuidv7, D1: nessun @default). Hard-delete (D5: nessun
+// deletedAt). @@map plurali (D2). Back-relations D7 su User/Azienda/Mandato sopra.
+// =============================================================================
+
+enum StatoNotaSpesa {
+  bozza
+  inviata
+  approvata
+  respinta
+
+  @@map("stato_nota_spesa")
+}
+
+enum MetodoPagamentoNotaSpesa {
+  contanti
+  carta_aziendale
+  carta_personale
+  bonifico
+
+  @@map("metodo_pagamento_nota_spesa")
+}
+
+enum TipoSpesa {
+  vitto
+  alloggio
+  trasporto
+  carburante
+  pedaggio
+  parcheggio
+  rappresentanza
+  formazione
+  cancelleria
+  altro
+
+  @@map("tipo_spesa")
+}
+
+enum AliquotaIvaNotaSpesa {
+  iva_22
+  iva_10
+  iva_4
+  esente
+  non_applicabile
+
+  @@map("aliquota_iva_nota_spesa")
+}
+
+enum DeducibilitaFiscale {
+  d_100
+  d_75
+  d_50
+  d_0
+
+  @@map("deducibilita_fiscale")
+}
+
+enum TipoAllegatoNotaSpesa {
+  giustificativo
+  scontrino_pos
+
+  @@map("tipo_allegato_nota_spesa")
+}
+
+model NotaSpesa {
+  id       String @id @map("id") // D1: nessun @default → id: id() app-side (uuidv7)
+  tenantId String @map("tenant_id")
+  userId   String @map("user_id") // FK → User (tipo=operatore), MAI Azienda
+
+  data      DateTime @db.Date
+  aziendaId String?  @map("azienda_id") // NULL = commessa interna
+  mandatoId String?  @map("mandato_id")
+
+  tipoSpesa           TipoSpesa                @map("tipo_spesa")
+  metodoPagamento     MetodoPagamentoNotaSpesa @map("metodo_pagamento")
+  totale              Decimal                  @db.Decimal(10, 2)
+  aliquotaIva         AliquotaIvaNotaSpesa     @map("aliquota_iva")
+  deducibilitaFiscale DeducibilitaFiscale      @map("deducibilita_fiscale")
+  fatturataASocieta   Boolean                  @default(false) @map("fatturata_a_societa")
+  distanzaKm          Decimal?                 @map("distanza_km") @db.Decimal(8, 2)
+  scopoMissione       String                   @map("scopo_missione")
+  note                String?
+
+  stato StatoNotaSpesa @default(bozza)
+
+  // audit workflow (minimo, no tabella storico)
+  inviataAt     DateTime? @map("inviata_at")
+  decisaAt      DateTime? @map("decisa_at")
+  decisaDaId    String?   @map("decisa_da_id") // FK → User (approvatore)
+  motivoRifiuto String?   @map("motivo_rifiuto")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User                @relation("NotaSpesaAutore", fields: [userId], references: [id], onDelete: Restrict)
+  decisaDa User?               @relation("NotaSpesaApprovatore", fields: [decisaDaId], references: [id], onDelete: SetNull)
+  azienda  Azienda?            @relation(fields: [aziendaId], references: [id], onDelete: SetNull)
+  mandato  Mandato?            @relation(fields: [mandatoId], references: [id], onDelete: SetNull)
+  allegati NotaSpesaAllegato[]
+
+  @@index([tenantId, userId, data])
+  @@index([tenantId, stato])
+  @@map("note_spese")
+}
+
+model NotaSpesaAllegato {
+  id          String @id @map("id") // D1: nessun @default
+  tenantId    String @map("tenant_id") // denormalizzato: RLS per-tabella, non segue la FK
+  notaSpesaId String @map("nota_spesa_id")
+
+  tipo          TipoAllegatoNotaSpesa
+  storageKey    String                @map("storage_key") // chiave opaca StorageService
+  nomeOriginale String                @map("nome_originale")
+  mimeType      String                @map("mime_type")
+  dimensione    Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  notaSpesa NotaSpesa @relation(fields: [notaSpesaId], references: [id], onDelete: Cascade)
+
+  @@unique([notaSpesaId, tipo]) // max 1 giustificativo + 1 scontrino POS per nota
+  @@index([tenantId])
+  @@map("note_spese_allegati")
 }
