@@ -351,3 +351,45 @@ jobs:
           name: dev-server-logs-${{ github.run_id }}
           path: /tmp/ci-logs/
           retention-days: 3
+
+  e2e-rls-domain:
+    name: E2E domain RLS (testcontainers · gestionale_app)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # TD-ci-e2e-testcontainers-be Fase 1: i 3 spec che asseriscono l'isolamento
+    # tenant DB-level come `gestionale_app` (NOBYPASSRLS) girano in CI → una
+    # regressione di policy RLS sul DOMINIO (comande/conti) rompe la CI invece di
+    # passare inosservata. Testcontainers avvia Postgres+Redis propri → NON usa i
+    # `services` del job Playwright (DP-2). Gira su ubuntu-latest (Docker host):
+    # niente Docker-in-Docker (che romperebbe dentro il container Playwright).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Build workspace packages (db + shared + platform + auth)
+        # test:e2e:rls avvia vitest diretto (non turbo) → `dependsOn: ["^build"]`
+        # non scatta; gli spec importano @gestionale/* da dist/ (soft-delete-rls
+        # boota AppModule → auth/platform/shared). Stesso set del job Playwright.
+        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
+
+      - name: Run domain RLS e2e (Testcontainers, gestionale_app NOBYPASSRLS)
+        # SOLO i 3 spec RLS dominio (selezione esplicita nello script test:e2e:rls).
+        # Ogni spec avvia i propri Postgres+Redis; migrate deploy crea gestionale_app
+        # (password placeholder); setup via superuser, assert via app-role (toAppRoleUrl).
+        run: pnpm --filter @gestionale/restaurant-api test:e2e:rls
