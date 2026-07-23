@@ -75,21 +75,105 @@ Categoria: `notespese`. Nessuno è `isPortale` → rientrano in `ALL_PERMISSION_
 
 ---
 
-## 4. Regole di business — recuperate solo parzialmente (per PR-2)
+## 4. Regole di business
 
-**D4 (rev.2, chiusa)** — `distanzaKm` fuori da trasporto/carburante: **soft-warning FE, nessuna validazione BE**.
+**§4.1-§4.4 — ricostruiti dai test §7 (non verbatim):**
 
-**D6 (rev.2, chiusa)** — Coerenza `aziendaId` ↔ `mandatoId`: **hard-fail BE** (integrità referenziale, non euristica):
+1. **Giustificativo obbligatorio** se `totale > 0`. Blocca la transizione `bozza → inviata` (test §7.5). Il documento deve riportare data, importo, ragione sociale/P.IVA esercente. Accettati: scontrino fiscale, ricevuta fiscale, fattura. Non accettati: conferma d'ordine, preventivo, screenshot app senza dettaglio esercente. _(Il vincolo tecnico è il blocco di transizione; la guida su cosa sia valido è testo FE.)_
+2. **Scontrino POS obbligatorio** solo se `metodoPagamento ∈ {carta_aziendale, carta_personale}`. Blocca `bozza → inviata` (test §7.6). Non richiesto per contanti/bonifico.
+3. **State machine**: `bozza → inviata → approvata | respinta`; `respinta → bozza`. Transizioni non consentite falliscono (`approvata → *`, `bozza → approvata`) (test §7.7).
+4. **Immutabilità**: nota `inviata`/`approvata` non modificabile — né campi né allegati (test §7.8). Modifica solo in `bozza`/`respinta`.
+5. **Auto-approvazione vietata**: `decisaDaId === userId` → errore (test §7.4).
 
-- Se `mandatoId` valorizzato → `aziendaId` **obbligatorio** e uguale a `mandato.aziendaId`.
+**§4.5 — verbatim:** il BE accetta qualunque valore valido dell'enum. **Nessuna regola fiscale nel service** (`deducibilitaFiscale` resta scelta dell'operatore; nessun default hardcodato BE).
+
+**§4.6 — verbatim + D4:** `distanzaKm` accettato solo con `tipoSpesa ∈ {trasporto, carburante}` → **soft**: se valorizzato altrove, warning FE, **nessun blocco BE**. Il BE resta validatore puro di tipo/enum.
+
+**§4.7 — D6 rev.2 (hard-fail BE):** coerenza `aziendaId` ↔ `mandatoId` (integrità referenziale):
+
+- `mandatoId` valorizzato → `aziendaId` **obbligatorio** e uguale a `mandato.aziendaId`.
 - Violazione → fail-fast `E_NOTASPESA_MANDATO_AZIENDA_MISMATCH`.
-- Se `mandatoId` NULL → `aziendaId` libero (valorizzato o NULL = commessa interna).
-- Non enforceabile via FK → validazione nel **service**, su `create` **e** `update`.
-
-Altre regole (giustificativo obbligatorio se totale>0; scontrino se metodo ∈ carta\_\*; §4.1-§4.6) **non recuperate** → PR-2.
+- `mandatoId` NULL → `aziendaId` libero (valorizzato o NULL = commessa interna).
+- Non FK-enforceable → validazione nel **service**, su `create` **e** `update`.
 
 ---
 
-## 5. Da recuperare prima di PR-2
+## 5. Storage (verbatim)
 
-Dalla stessa conversazione `MT_Accountant_S18`: §4 completo, §5/§6 (API/service/DTO), §7 (i 14 test), §8-§9 se presenti. **Non implementare PR-2 senza.**
+- `StorageService` (token DI astratto, ADR-0043). **Non** toccare `LocalFilesystemStorageService`.
+- Cap: riusare `STORAGE_MAX_UPLOAD_BYTES` (20MB). **Nessuna costante nuova.**
+- **Allow-list MIME locale al modulo** (R2): `application/pdf`, `image/jpeg`, `image/png`, `image/webp`. Validata nel controller (`FileInterceptor` fileFilter) **e** nel service. Nessun helper condiviso (Pattern 43).
+- `mimeType` persistito = quello **verificato**, non quello dichiarato dal client.
+- Delete allegato → `StorageService.delete(storageKey)` + row delete, **stessa transazione applicativa**. Su nota `bozza` eliminata: cascade DB + **cleanup storage esplicito nel service** (il cascade Prisma non pulisce il filesystem).
+- Compressione immagini **client-side** (FE, nessun impatto BE).
+
+---
+
+## 6. API surface (verbatim) — `accountant-api`, prefix `api/v1`
+
+```
+POST   /note-spese                      notespese.gestisci
+GET    /note-spese                      notespese.gestisci (proprie) | +leggi_tutte (tutte)
+GET    /note-spese/:id                  come sopra + ownership check
+PATCH  /note-spese/:id                  notespese.gestisci + autore + stato ∈ {bozza, respinta}
+DELETE /note-spese/:id                  notespese.gestisci + autore + stato = bozza
+POST   /note-spese/:id/invia            notespese.gestisci + autore
+POST   /note-spese/:id/approva          notespese.approva
+POST   /note-spese/:id/respingi         notespese.approva (motivo obbligatorio)
+
+POST   /note-spese/:id/allegati         notespese.gestisci + autore + stato ∈ {bozza, respinta}
+GET    /note-spese/:id/allegati/:aid    stream, ownership o leggi_tutte
+DELETE /note-spese/:id/allegati/:aid    notespese.gestisci + autore + stato ∈ {bozza, respinta}
+```
+
+Query param lista: `?mese=YYYY-MM`, `?stato=`, `?userId=` (solo con `leggi_tutte`), `?aziendaId=`.
+
+**Filtro `userId` app-layer non bypassabile**: senza `leggi_tutte`, il service **forza** `userId = currentUser.id` ignorando il query param. **Test dedicato — non basta GATE verde.**
+
+---
+
+## 7. Test richiesti (verbatim) — security-sensitive, test dedicati
+
+1. Utente A **non** legge/modifica/elimina la nota di utente B (senza `leggi_tutte`).
+2. Query param `?userId=<B>` **ignorato** se manca `leggi_tutte`.
+3. Cross-tenant: nota di tenant X invisibile a tenant Y (RLS).
+4. Auto-approvazione respinta (`decisaDaId === userId` → errore).
+5. `bozza → inviata` fallisce senza giustificativo con `totale > 0`.
+6. `bozza → inviata` fallisce senza scontrino POS se `metodoPagamento` = carta.
+7. Transizioni non consentite falliscono (`approvata → *`, `bozza → approvata`).
+8. Nota `inviata`/`approvata` non modificabile (campi + allegati).
+9. Upload MIME non in allow-list → rifiutato.
+10. Upload > 20MB → rifiutato.
+11. `@@unique([notaSpesaId, tipo])` → secondo giustificativo rifiutato.
+12. Delete allegato rimuove **anche** l'oggetto dallo storage.
+13. `mandatoId` di un'azienda ≠ `aziendaId` dichiarato → rifiutato.
+14. `mandatoId` valorizzato con `aziendaId = NULL` → rifiutato.
+
+**Totale 14.** Test §7.3 cross-tenant DB-level già coperto dallo spec RLS raw-query di PR-1; a livello HTTP si aggiunge la variante 404 cross-tenant (load-then-authorize).
+
+**Fasatura backend**: PR-2 = test 1,2,3(HTTP),9,10,11,12,13,14 (CRUD + storage). PR-3 = test 4,5,6,7,8 (state machine).
+
+---
+
+## 8. Frontend (verbatim) — `accountant-web` (PR-4/5)
+
+- Toggle **calendario mensile** ↔ **elenco raggruppato per data**. Layout responsive due colonne ~860px.
+- Form nota: upload separati giustificativo/scontrino POS, **hint di validità inline**. Badge **non bloccante** su nota con `totale > 0` e giustificativo mancante.
+- Pannello approvazione: vista separata, gated su `notespese.approva`. Compressione immagini client-side.
+
+---
+
+## 9. Split commit / PR (verbatim)
+
+1. `feat(db): schema + enum + RLS` — **FATTO PR-1 (#176)**.
+2. `feat(db): permessi + role template` — array PR-1; **role template PR-2**.
+3. `feat(accountant-api): modulo note-spese` — **PR-2** (CRUD+allegati) / **PR-3** (state machine).
+4. `test(accountant-api): security + state machine` — split PR-2/PR-3.
+5. `feat(accountant-web): UI + pannello approvazione` — PR-4/5.
+
+---
+
+## 10. Decisioni (chiuse da rev.2)
+
+- **D3**: suffissi enum mantenuti. **D4**: `distanzaKm` soft-warning FE.
+- **Assegnazione ruoli** (decisa PR-2): `notespese.gestisci` → Collaboratore + Direzione; `notespese.leggi_tutte` → Direzione; `notespese.approva` → Direzione; Cliente → nessuno (Client Portal deferito).
