@@ -3,7 +3,7 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (60 permessi atomici namespaced)
+//   1. permissions          (63 permessi atomici namespaced)
 //   2. system_role_templates (11 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //   3. scadenze_categorie    (7 categorie piattaforma, tenant_id NULL)
@@ -241,6 +241,24 @@ const PERMISSIONS: PermissionSeed[] = [
     code: 'circolari.read_report',
     description: 'Visualizza report destinatari delle circolari',
     category: 'circolari',
+  },
+
+  // notespese.* (3) — Note Spese v1 (accountant, PR-1). Nessuno è isPortale →
+  // rientra in ALL_PERMISSION_CODES → Super Admin li riceve automaticamente.
+  {
+    code: 'notespese.gestisci',
+    description: 'Gestione delle proprie note spese (crea/modifica/elimina/invia)',
+    category: 'notespese',
+  },
+  {
+    code: 'notespese.leggi_tutte',
+    description: 'Visualizzazione note spese di tutti gli utenti del tenant',
+    category: 'notespese',
+  },
+  {
+    code: 'notespese.approva',
+    description: 'Approvazione/rifiuto note spese altrui',
+    category: 'notespese',
   },
 
   // comande.* (5)
