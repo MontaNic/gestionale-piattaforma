@@ -130,6 +130,12 @@ export {
   VisibilitaDocumento,
   CircolareStato,
   DestinatarioTipo,
+  StatoNotaSpesa,
+  MetodoPagamentoNotaSpesa,
+  TipoSpesa,
+  AliquotaIvaNotaSpesa,
+  DeducibilitaFiscale,
+  TipoAllegatoNotaSpesa,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
@@ -180,6 +186,8 @@ export type {
   Documento,
   Circolare,
   CircolareDestinatario,
+  NotaSpesa,
+  NotaSpesaAllegato,
 } from '@prisma/client';
 
 // -----------------------------------------------------------------------------
