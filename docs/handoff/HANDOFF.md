@@ -115,4 +115,4 @@ Main @ `167cb3d` (+1 commit `docs(handoff)` in arrivo via questa PR). Working tr
 
 ### Coda feature sotto la linea (non roadmap attiva)
 
-Note Spese (spec locked STOP 1 rev.2, non implementata), varianti, accorpamento, sconti, allergeni, cassa, kiosk (PR-3b).
+Note Spese (**PR-1 schema+fondamenta ✅ 2026-07-23**, branch `feat/note-spese-schema`, [ADR-0074](../architecture/ADR-0074-note-spese-pr1-schema.md); spec persistita in `docs/spec/note-spese-v1.md`. **PR-2 bloccata**: §4-§7 — regole business, API/service, 14 test — da recuperare da `MT_Accountant_S18`. Aperto anche: assegnazione permessi `notespese.*` a ruoli non-admin, non decisa), varianti, accorpamento, sconti, allergeni, cassa, kiosk (PR-3b).

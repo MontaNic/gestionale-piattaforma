@@ -3358,6 +3358,26 @@ Prerequisito di **Note Spese** (STOP 0 di ri-validazione: la spec regge, unico a
 
 ---
 
+## [2026-07-23] Note Spese v1 PR-1 — schema + fondamenta (accountant)
+
+Prima feature del blocco Note Spese. **Tier ALTO** (DDL su schema Prisma unico condiviso, prod live di entrambi i verticali). Solo fondamenta: schema + migrazione + permessi + gate RLS; **nessun service/endpoint/FE** (PR successive). Branch `feat/note-spese-schema`. [ADR-0074](docs/architecture/ADR-0074-note-spese-pr1-schema.md) + [spec persistita](docs/spec/note-spese-v1.md).
+
+**Blocco risolto a STOP 1**: la spec viveva solo in chat; ricostruita e **persistita** in `docs/spec/note-spese-v1.md` (Commit 0) — fonte autoritativa. §4-§7 (regole business complete, API/service, 14 test) **non recuperate** → PR-2 bloccata finché non lo sono.
+
+**Cosa fatto (6 commit):**
+- **Schema** (D1-D7): 2 modelli (`NotaSpesa`/`note_spese`, `NotaSpesaAllegato`/`note_spese_allegati` child) + 6 enum suffissati + back-relations additive su User (autore+approvatore)/Azienda/Mandato. D1 (no `@default`), D2 (`@@map` plurale), D5 (hard-delete, no `deletedAt`). Diff 100% additivo (136 ins, 0 del).
+- **Migrazione** `add_note_spese`: additiva pura — **DDL ispezionato, zero ALTER su tabelle esistenti**. RLS template corrente (TEXT, USING-only, FORCE su entrambe, no `::uuid`, no GRANT espliciti). Applicata su dev Sub-B (55432): `pg_policies` + `relforcerowsecurity=t` verificati. **Mai su prod.**
+- **Permessi 60→63**: 3 `notespese.*` nell'array. PIN verificato empiricamente: **63 = PERMISSIONS.length**, **59 = Super Admin (63−4 portale)**. Commenti "60" aggiornati. **STOP**: assegnazione a ruoli NON-admin non nella spec → non decisa (solo array editato).
+- **Gate RLS**: `note-spese-rls-isolation.e2e-spec.ts` nel selettore accountant (N=1→**N=2**). **Solo raw-query DB-level** (PR-1 senza service; e il gate deve esercitare la policy, non il filtro app — discovery PR-0). Copertura lettura+scrittura, entrambe le tabelle. **Prova di efficacia** (vettore policy): rotta policy `note_spese` → S1(READ)+S3(WRITE) rossi → ripristino 15/15 verdi.
+
+**Impatto altro verticale: verificato** — additivo puro; back-relations su `User` (shared) sono relazioni inverse, nessuna colonna/ALTER; nessuna interferenza con tabelle/policy restaurant.
+
+**Residuo (per PR-2):** recuperare §4-§7 da `MT_Accountant_S18`; sciogliere l'assegnazione permessi a ruoli non-admin; implementare D6 (mismatch mandato/azienda, analogo `documenti.assertAzienda`).
+
+- Commit: `docs`(spec) · `feat(db)`(schema) · `feat(db)`(migration RLS) · `feat(db)`(permessi) · `test`(gate) · `docs`(ADR).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
