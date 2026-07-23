@@ -103,11 +103,11 @@ Main @ `167cb3d` (+1 commit `docs(handoff)` in arrivo via questa PR). Working tr
 
 **Se si torna sull'accountant:** `TD-blob-download-no-refresh` è **chiuso** su branch `fix/blob-download-auth-refresh` (in attesa di merge) — completamento naturale di #160, i 5 blob/multipart ora sotto single-flight. Alla ripresa: mergiare la PR, poi (se/quando esiste un dev env isolato) chiudere **Sub-2** (verifica full-stack contro BE reale).
 
-**Se si prosegue il blocco restaurant → entry-point: PR-3a board KDS.** `kds/page.tsx` è oggi `PlaceholderPage`. È il consumer di `comande.stato.cambia` (già attivato #156) + del payload portata/storno già predisposto nel feed. Primo passo = **STOP 0 read-only** della pagina. CHECK-FE dovuti (dark mode, i18n parity IT↔EN, no hardcoded IT, `next build` isolato, responsive, a11y).
+**KDS board Fase 1 — ✅ FATTA (2026-07-23, branch `feat/kds-board`, [ADR-0073](../architecture/ADR-0073-kds-board-fase-1.md)).** `kds/page.tsx` non è più placeholder: `comande-api.ts` (wrapper feed, zero fetch raw) + board (colonne per reparto, righe per portata in ordine di servizio, note evidenziate, polling 8s) + avanzamento forward-only (ottimistico + rollback + anti-race polling). `comande.stato.cambia` ora **consumato** (non più orfano lato FE). Verificato runtime su dev env Sub-B (invia→board→avanza). **Fase 2 residua** (ADR-0073, trigger espliciti): kiosk layout route group `(kiosk)/`, segnale storno passivo sulla board, e2e Playwright KDS, SSE (trigger invariato).
 
 ### Rotta blocco restaurant (invariata)
 
-**Comande ✅ → KDS (PR-3a board, PR-3b kiosk) → Cassa pre-fiscale → RT differito.**
+**Comande ✅ → KDS board Fase 1 ✅ (Fase 2: kiosk + storno board + e2e) → Cassa pre-fiscale → RT differito.**
 
 - **Cassa pre-fiscale** sbloccata da `vatPercent` (#161): conto/totali/pagamento/chiusura/audit, documento interno, zero omologazione. **RT = blocco separato e DIFFERITO** (solo cliente reale che emette scontrini fiscali).
 - **Coperto**: spec non scritta, avvicinata da coperti-warning (#162) + `vatPercent`.

@@ -3319,6 +3319,25 @@ Ultimo fronte di `TD-dev-env-punta-prod`: verifica **full-stack contro BE reale*
 
 ---
 
+## [2026-07-23] KDS board Fase 1 — nucleo funzionale (ciclo cameriere→cucina chiuso)
+
+Il blocco KDS/FE comande: lo STOP 0 aveva disambiguato lo stato — flusso **cameriere costruito e in CI**, board KDS **placeholder da 5 righe**, feed BE (`GET /comande` + `PATCH /comande/:id/stato`) **orfano**. Fase 1 consuma i 2 endpoint e rende la cucina operativa. Tier MEDIO (solo restaurant-web + wrapper API). Branch `feat/kds-board`. [ADR-0073](docs/architecture/ADR-0073-kds-board-fase-1.md).
+
+**§0 prerequisito (read-only):** permessi `comande.visualizza`/`comande.stato.cambia` esistono (catalogo **60**), ruolo template **`Cucina/Bar`** li ha già; Super Admin entrambi. **Nessun tocco al seed** → nessuna superficie condivisa.
+
+**Cosa fatto (4 commit):**
+- **`comande-api.ts`**: `listComande` + `cambiaStatoComanda` sopra `@gestionale/api-client` + `authOptions()`. **Zero fetch raw** (invariante restaurant-web preservata, grep=0). Tipi `Comanda`/`ComandaFeedRiga` derivati dalla risposta **reale** del BE; `PORTATA_ORDER`/`REPARTO_ORDER` (ordine di servizio).
+- **Board `kds/page.tsx`** (sostituisce il placeholder): colonne per **reparto**, righe per **portata** in ordine di servizio, card con tavolo + badge stato + note cameriere evidenziate; loading/errore/coda-vuota; tipografia grande/contrasto alto (display a muro). Refresh **polling** (`usePollingRefresh`, 8s, DP-1; SSE deferito trigger invariato). i18n namespace `kds` (it+en, parità).
+- **Avanzamento forward-only**: pulsante → `cambiaStatoComanda(id, next)` (`STATO_NEXT`, subset in-avanti). **UI ottimistica + rollback** via layer `pending`; **anti-race** polling↔ottimistica: le override `pending` vincono nel render sopra il feed pollato → un refresh in volo non regredisce uno stato appena avanzato; override pulita a conferma (refetch) o errore (rollback). Gating su `comande.stato.cambia`.
+
+**Verifica runtime (dev env Sub-B, DB dev 55432, mai prod):** flusso cameriere reale (conto tavolo 1 → 3 righe cucina+pizzeria → invia) → board mostra **2 comande split per reparto** (cucina: antipasto+primo; pizzeria: secondo), note evidenziate; ciclo avanzamento `Avvia`→`In preparazione`→`Pronta` → la comanda pronta **esce dal feed** (BE la esclude), l'altra resta. Zero errori pagina. Verificato via Playwright headless one-off (effimero, non committato).
+
+**Fase 2 residua (trigger, ADR-0073):** kiosk layout route group `(kiosk)/` (DP-2), segnale storno passivo sulla board (righe `stornata` già nel wire), e2e Playwright KDS in CI, SSE (trigger invariato).
+
+- Commit: `feat` (api wrapper) · `feat` (board) · `feat` (avanzamento) · `docs`.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
