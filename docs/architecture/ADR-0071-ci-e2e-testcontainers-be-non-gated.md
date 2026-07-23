@@ -54,9 +54,15 @@ Il TD ha due componenti (STOP 0): **(a) copertura comportamentale** (16 file, ~1
 
 La **copertura comportamentale completa** (i restanti 13 spec restaurant-api: comande CRUD 64, menu/articles/tables/rbac/auth…) resta fuori dalla CI. **Prerequisito/trigger**: un **`globalSetup` Vitest con container Postgres+Redis condiviso** tra spec. Oggi il pattern è **per-file** (16 coppie di container): portare l'intera suite senza container condiviso raddoppierebbe il tempo CI di ogni PR. Trigger = implementare `globalSetup` condiviso, poi agganciare `test:e2e` completo.
 
-### Boundary — `TD-ci-e2e-accountant-api` (nuovo, tier MEDIO)
+### Boundary — `TD-ci-e2e-accountant-api` (tier MEDIO) — porzione RLS ora GATATA (2026-07-23)
 
-Anche la **e2e di `accountant-api`** (20 spec, inclusi i path documenti/comunicazioni/portale verificati in Sub-2) è **fuori dalla CI**, stessa classe. Registrato come **`TD-ci-e2e-accountant-api`** (tier MEDIO, **stesso trigger `globalSetup`** della Fase 2). Non orfano.
+Anche la **e2e di `accountant-api`** (20 spec, inclusi i path documenti/comunicazioni/portale verificati in Sub-2) è **fuori dalla CI**, stessa classe. Registrato come **`TD-ci-e2e-accountant-api`** (tier MEDIO, **stesso trigger `globalSetup`** della Fase 2).
+
+**Update 2026-07-23 (PR-0 di Note Spese):** la porzione **RLS DB-level** è ora **gatata**. Nuovo job **`e2e-rls-domain-accountant`** (gemello di `e2e-rls-domain`): esegue `rls-isolation.e2e-spec.ts` (10 test, anagrafica ADR-0035) come `gestionale_app` via Testcontainers dedicati. Selettore `test:e2e:rls` accountant (esattamente 1 file). `APP_ROLE_PASSWORD` allineato al pattern env+default (DP-3). **Prova di efficacia:** rotta la policy `preventivi_voci` → S-prev-4 rosso (leak cross-tenant 4 vs 2) → ripristino verde. **Motivo di Note Spese:** i suoi modelli avranno `tenant_id` + RLS FORCE e il loro spec di isolamento nascerà **dentro** questo gate (aggiunto al selettore), non accanto.
+
+**Nuance sul vettore di efficacia (accountant vs restaurant):** su restaurant il break efficace era l'extension (`rls.ts`, `is_super_admin=true`); su accountant è la **policy** (migration), perché i test HTTP di `rls-isolation` sono **anche** app-filter-protected (`where:{tenantId}`, defense-in-depth) e restano verdi sotto RLS bypassata — solo il raw-query DB-level **S-prev-4** esercita puramente la policy. Il gate è comunque efficace: una regressione di policy accountant rompe la CI.
+
+**Residuo:** le ~17 spec **comportamentali** accountant (CRUD, report, portale, IDOR `documenti-download-isolation`) restano fuori CI sotto lo stesso TD, trigger `globalSetup` invariato. **Bit-rot trovata (fuori scope PR-0, comportamentale):** `report-margine.e2e-spec.ts` — 2 test falliscono (200 vs 201, guard <2 mandati); non RLS, non fixato qui, tracciato sotto `TD-ci-e2e-accountant-api`.
 
 ### Adiacente FE — chiuso
 
