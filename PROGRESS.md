@@ -3291,6 +3291,8 @@ Ultimo fronte di `TD-dev-env-punta-prod`: verifica **full-stack contro BE reale*
 - **Single-flight sotto latenza vera** (valore aggiunto vs Sub-1, non gate): 2 download concorrenti a token scaduto → **1** sola `/auth/refresh` (il coalescing `refreshInFlight` regge col BE reale, la rotazione e la latenza). Coerente con unit + e2e #160.
 - **Prod mai toccato**: API su 55432, harness interroga `gestionale_postgres_dev`; `gestionale_postgres` (prod) intatto.
 
+**Caveat (portata esatta, non gonfiata):** (1) l'harness gira via `tsx` con shim `window`/`localStorage`, **non in un browser**: è il codice FE reale (`apiGetBlob`/`apiPostMultipart`, `authOptions`, `refreshAccessToken`) → fedeltà **alta sull'asse auth**, ma non è un browser (quell'asse resta coperto da Sub-1 route-mocked + il save DOM `createObjectURL`/click, estraneo all'auth/BE, non esercitato qui). (2) La scadenza è **invalidazione client-side** dell'access token, **non attesa del TTL reale** (costante hardcoded, non env): sanzionata dalla spec ed equivalente sul path 401→refresh→retry, ma **non esercita l'espirazione lato server** (il BE rigetta un token malformato, non un token scaduto-ma-valido-in-firma). Differenza minore, dichiarata.
+
 **Chiusura boundary → `TD-dev-env-punta-prod` completamente ESTINTO.** I tre fronti chiusi: Sub-A (guard meccanizzato, #168) + Sub-B (dev env isolato dev-by-default, #171) + **Sub-2 (questa verifica full-stack)**, che era l'ultimo trigger residuo. Con Sub-2, anche `TD-blob-download-no-refresh` è verificato end-to-end contro BE reale (oltre a Sub-1 route-mocked + unit). Nessun residuo.
 
 - Commit: `docs` (PROGRESS + HANDOFF), zero codice.
