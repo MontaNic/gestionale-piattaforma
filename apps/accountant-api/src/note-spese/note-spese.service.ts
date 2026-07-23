@@ -47,6 +47,27 @@ export interface NoteSpeseListFilter {
   aziendaId?: string;
 }
 
+// Read paths con allegati (badge/presenza FE). `storageKey` MAI esposto (chiave
+// opaca dello StorageService): il download passa solo dall'id via endpoint dedicato.
+// Ordinamento deterministico (tipo, poi createdAt) così la UI non rimescola tra fetch.
+export type NotaSpesaListItem = Prisma.NotaSpesaGetPayload<{
+  include: { allegati: { select: { id: true; tipo: true } } };
+}>;
+export type NotaSpesaDetail = Prisma.NotaSpesaGetPayload<{
+  include: {
+    allegati: {
+      select: {
+        id: true;
+        tipo: true;
+        nomeOriginale: true;
+        mimeType: true;
+        dimensione: true;
+        createdAt: true;
+      };
+    };
+  };
+}>;
+
 // Stati in cui la nota è modificabile (campi + allegati). §4.4.
 const EDITABLE_STATI: readonly StatoNotaSpesa[] = [StatoNotaSpesa.bozza, StatoNotaSpesa.respinta];
 
@@ -100,7 +121,7 @@ export class NoteSpeseService {
     tenantId: string,
     userId: string,
     filter: NoteSpeseListFilter = {},
-  ): Promise<NotaSpesa[]> {
+  ): Promise<NotaSpesaListItem[]> {
     const canReadAll = await this.users.hasPermission(userId, 'notespese.leggi_tutte');
     // Senza leggi_tutte: forza userId proprio (ignora il query param, NON bypassabile).
     const effectiveUserId = canReadAll ? filter.userId : userId;
@@ -112,15 +133,34 @@ export class NoteSpeseService {
       ...(filter.aziendaId ? { aziendaId: filter.aziendaId } : {}),
       ...this.meseWhere(filter.mese),
     };
-    return this.db.prisma.notaSpesa.findMany({ where, orderBy: { data: 'desc' } });
+    return this.db.prisma.notaSpesa.findMany({
+      where,
+      orderBy: { data: 'desc' },
+      // Solo {id, tipo}: badge + indicatore presenza in riga, payload leggero (no storageKey).
+      include: { allegati: { select: { id: true, tipo: true }, orderBy: { tipo: 'asc' } } },
+    });
   }
 
-  async getById(tenantId: string, userId: string, notaId: string): Promise<NotaSpesa> {
+  async getById(tenantId: string, userId: string, notaId: string): Promise<NotaSpesaDetail> {
     const canReadAll = await this.users.hasPermission(userId, 'notespese.leggi_tutte');
     // load-then-authorize: RLS (tenant) + ownership app-layer. Cross-tenant/cross-user
     // (senza leggi_tutte) → indistinguibile da inesistente (404, no leak).
     const nota = await this.db.prisma.notaSpesa.findFirst({
       where: { id: notaId, tenantId, ...(canReadAll ? {} : { userId }) },
+      // Allegati per la vista/form; MAI storageKey (download solo via id endpoint).
+      include: {
+        allegati: {
+          select: {
+            id: true,
+            tipo: true,
+            nomeOriginale: true,
+            mimeType: true,
+            dimensione: true,
+            createdAt: true,
+          },
+          orderBy: [{ tipo: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
     });
     if (!nota) throw this.notFound();
     return nota;
