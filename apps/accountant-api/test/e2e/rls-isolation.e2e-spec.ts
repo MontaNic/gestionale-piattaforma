@@ -47,7 +47,10 @@ import { PREVENTIVI_ADMIN_CODES } from './helpers/preventivi-test-fixtures';
 // 20260513002159_create_app_role_and_grants). Nei Testcontainers mantiene la
 // password placeholder (rotazione solo dev/prod).
 const APP_ROLE = 'gestionale_app';
-const APP_ROLE_PASSWORD = 'PLACEHOLDER_MUST_BE_ROTATED';
+// DP-3 hardening (allineato al gate restaurant): pw da env, default = placeholder
+// dei Testcontainers non-ruotati. Se un domani il substrato ruota la pw dell'app-role,
+// basta TEST_APP_ROLE_PASSWORD.
+const APP_ROLE_PASSWORD = process.env.TEST_APP_ROLE_PASSWORD ?? 'PLACEHOLDER_MUST_BE_ROTATED';
 
 /** Deriva l'URL di connessione come ruolo app non-superuser dall'URL superuser. */
 function toAppRoleUrl(superuserUrl: string): string {
