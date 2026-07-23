@@ -128,3 +128,51 @@ export interface ListContiParams {
   stato?: StatoConto;
   tavoloId?: string;
 }
+
+// ── Feed KDS (GET /comande, ADR-0069) ────────────────────────────────────────
+// Forma derivata dalla risposta reale del BE (`ComandaFeedItem`/`ComandaFeedRiga`
+// in comande.service.ts). NESSUN prezzo sul ticket cucina. I `DateTime` Prisma
+// viaggiano come stringa ISO sul wire.
+
+/** Riga come mostrata sul ticket cucina: snapshot utile, mai il prezzo. */
+export interface ComandaFeedRiga {
+  id: string;
+  nomeArticolo: string;
+  quantita: number;
+  note: string | null;
+  reparto: PrintDepartment;
+  portata: Portata;
+  /** ADR-storno: la riga revocata resta nel feed marcata (render in Fase 2). */
+  stornata: boolean;
+}
+
+/** Comanda nel feed KDS (una per reparto all'invio). */
+export interface Comanda {
+  id: string;
+  contoId: string;
+  reparto: PrintDepartment;
+  stato: StatoComanda;
+  inviataIl: string;
+  inPreparazioneIl: string | null;
+  prontaIl: string | null;
+  tavoloId: string | null;
+  tavoloNumero: string | null;
+  righe: ComandaFeedRiga[];
+}
+
+/**
+ * Ordine di SERVIZIO delle portate (non alfabetico): coincide con l'ordine del
+ * type `Portata`. Usato per raggruppare le righe sulla board KDS.
+ */
+export const PORTATA_ORDER: readonly Portata[] = [
+  'antipasto',
+  'primo',
+  'secondo',
+  'contorno',
+  'dolce',
+  'bevanda',
+  'nessuna',
+];
+
+/** Ordine delle colonne reparto sulla board KDS. */
+export const REPARTO_ORDER: readonly PrintDepartment[] = ['cucina', 'pizzeria', 'bar'];
