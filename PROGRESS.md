@@ -3299,6 +3299,26 @@ Ultimo fronte di `TD-dev-env-punta-prod`: verifica **full-stack contro BE reale*
 
 ---
 
+## [2026-07-23] CI gate RLS dominio (Fase 1) + blob FE + discovery bit-rot
+
+`TD-ci-e2e-testcontainers-be` **Fase 1**: chiuso il fronte **fedeltà RLS DB-level sul dominio**. Tier MEDIO (solo CI + config test; nessun codice applicativo, migrazione, prod). Branch `ci/e2e-rls-domain`.
+
+**Cosa fatto:**
+- **Nuovo job CI `e2e-rls-domain`** (ubuntu-latest, Docker host — non nel container Playwright): esegue **solo** i 3 spec che asseriscono l'isolamento tenant **DB-level come `gestionale_app`** (NOBYPASSRLS) — `conti-rls-isolation`, `comande-rls-isolation`, `soft-delete-rls` — via Testcontainers dedicati (**DP-2**, no riuso service-DB Playwright). Script `test:e2e:rls` con selezione **esplicita** (verificato: esattamente 3 file, 23 test). Una regressione di policy RLS su comande/conti ora **rompe la CI**.
+- **DP-3 hardening**: `APP_ROLE_PASSWORD` da env `TEST_APP_ROLE_PASSWORD` (default = placeholder). Comportamento invariato; il pattern non si rompe se il substrato ruota la pw.
+- **Nessun refactoring fixture**: le fixture **restano** superuser (TRUNCATE non concesso all'app-role; INSERT cross-tenant respinti da WITH CHECK); il pattern "setup superuser + assert app-role" esisteva già.
+- **Job FE additivo `e2e-accountant-web-blob`**: `blob-auth-refresh.spec.ts` (route-mocked, `next dev` :3013, no BE/DB). Chiude `TD-ci-e2e-accountant-web-fe`. Escluso `page-tour.spec.ts` (infra full-stack). Verificato locale: 3 test PASS ~13s.
+
+**Discovery — bit-rot `conti-rls-isolation` (la tesi del TD materializzata):** `seedContoFor` non passava `vatPercent`, reso `Int` required senza default dal #161 (ADR-0070) → `PrismaClientValidationError` in `beforeEach` → 8/8 rossi. **Mai intercettato perché la e2e BE non gira in CI.** Fixato (1 riga, `vatPercent: article.vatPercent`; unico campo mancante). È l'argomento più forte a favore del gate: uno spec RLS era rotto e invisibile.
+
+**Prova di efficacia (il gate non è teatro):** forzato bypass RLS in `rls.ts` (`is_super_admin=true`) + rebuild → `comande`+`conti-rls-isolation` **ROSSI** (9 test: acme legge/muta/crea righe di demo); `soft-delete-rls` verde (assert intra-tenant, non sensibile a questo vettore). Ripristinato + rebuild → **23/23 verdi**; `git status` pulito.
+
+**Residuo registrato (ADR-0071 Update):** **Fase 2** = copertura comportamentale completa restaurant-api (13 spec, ~136 test) in CI — trigger = `globalSetup` Vitest con container **condiviso** (oggi per-file, 16 coppie = costo strutturale). Boundary: **`TD-ci-e2e-accountant-api`** (20 spec fuori CI, tier MEDIO, stesso trigger `globalSetup`). Non orfano.
+
+- Commit: `test` (hardening+bit-rot) · `ci` (job RLS) · `ci` (job blob FE) · `docs`.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
