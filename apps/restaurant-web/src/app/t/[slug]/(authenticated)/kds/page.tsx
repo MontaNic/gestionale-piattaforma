@@ -6,26 +6,36 @@ import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, Button, Card, CardContent, CardHeader, cn } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 
-import { listComande } from '@/lib/comande-api';
+import { cambiaStatoComanda, listComande } from '@/lib/comande-api';
 import { PORTATA_ORDER, REPARTO_ORDER } from '@/lib/conti-types';
 import type { Comanda, ComandaFeedRiga, Portata, StatoComanda } from '@/lib/conti-types';
 import { messageForError } from '@/lib/error-codes';
 import { usePollingRefresh } from '@/lib/usePollingRefresh';
 
 // =============================================================================
-// kds/page.tsx — Board KDS (Fase 1, ADR-0069): feed comande per reparto/portata
+// kds/page.tsx — Board KDS (Fase 1, ADR-0069): feed + avanzamento forward-only
 // =============================================================================
-// Sostituisce il placeholder. Display da muro: colonne per reparto, card per
-// comanda (FIFO dal BE), righe raggruppate per portata in ordine di SERVIZIO.
-// Refresh a polling (usePollingRefresh, visibility-aware — DP-1, SSE deferito).
-// Tipografia grande / contrasto alto: leggibile a 2-3 metri. Le note del
-// cameriere sono evidenziate (info critica per la cucina).
-// L'avanzamento stato (forward-only) arriva nel commit successivo.
+// Display da muro: colonne per reparto, card per comanda (FIFO dal BE), righe per
+// portata in ordine di SERVIZIO. Refresh a polling (usePollingRefresh — DP-1).
+// Avanzamento stato FORWARD-ONLY (inviata→in_preparazione→pronta) con UI
+// ottimistica + rollback su errore.
+//
+// Anti-race polling↔ottimistica: le override ottimistiche vivono in un layer
+// `pending` (Record<id,StatoComanda>) applicato SOPRA il feed pollato. Il polling
+// rimpiazza la base ma la override vince nel render → un refresh in volo non può
+// mai regredire visivamente uno stato appena avanzato. La override si pulisce
+// alla conferma (dopo refetch) o al rollback (errore).
 // =============================================================================
 
-const KDS_POLL_INTERVAL_MS = 8_000; // cucina: refresh frequente ma non aggressivo
+const KDS_POLL_INTERVAL_MS = 8_000;
 
-/** Raggruppa le righe di una comanda per portata, in ordine di servizio. */
+/** Transizione forward-only immediata (subset di quella BE, che ammette lo skip). */
+const STATO_NEXT: Record<StatoComanda, StatoComanda | null> = {
+  inviata: 'in_preparazione',
+  in_preparazione: 'pronta',
+  pronta: null,
+};
+
 function groupRigheByPortata(
   righe: ComandaFeedRiga[],
 ): Array<{ portata: Portata; righe: ComandaFeedRiga[] }> {
@@ -46,10 +56,21 @@ function statoBadgeClass(stato: StatoComanda): string {
   }
 }
 
-function ComandaCard({ comanda }: { comanda: Comanda }): JSX.Element {
+function ComandaCard({
+  comanda,
+  canAdvance,
+  isAdvancing,
+  onAdvance,
+}: {
+  comanda: Comanda;
+  canAdvance: boolean;
+  isAdvancing: boolean;
+  onAdvance: (comanda: Comanda) => void;
+}): JSX.Element {
   const t = useTranslations('kds');
   const tc = useTranslations('comande');
   const gruppi = groupRigheByPortata(comanda.righe);
+  const next = STATO_NEXT[comanda.stato];
 
   return (
     <Card className="border-2">
@@ -89,6 +110,15 @@ function ComandaCard({ comanda }: { comanda: Comanda }): JSX.Element {
             </ul>
           </div>
         ))}
+        {canAdvance && next && (
+          <Button
+            className="mt-2 h-12 w-full text-lg font-semibold"
+            disabled={isAdvancing}
+            onClick={() => onAdvance(comanda)}
+          >
+            {t(`advance.${next}`)}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -99,15 +129,18 @@ export default function KdsPage(): JSX.Element {
   const tc = useTranslations('comande');
   const { permissions } = useAuth();
   const canView = permissions.includes('comande.visualizza');
+  const canAdvance = permissions.includes('comande.stato.cambia');
 
   const [comande, setComande] = useState<Comanda[]>([]);
+  const [pending, setPending] = useState<Record<string, StatoComanda>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setLoadError(null);
     try {
-      setComande(await listComande()); // default: inviata + in_preparazione, FIFO
+      setComande(await listComande()); // base pollata; le override `pending` vincono nel render
     } catch (err) {
       setLoadError(messageForError(err));
     } finally {
@@ -122,6 +155,29 @@ export default function KdsPage(): JSX.Element {
 
   usePollingRefresh(load, { intervalMs: KDS_POLL_INTERVAL_MS, enabled: canView });
 
+  const handleAdvance = useCallback(
+    async (comanda: Comanda): Promise<void> => {
+      const next = STATO_NEXT[comanda.stato];
+      if (!next) return;
+      setAdvanceError(null);
+      setPending((p) => ({ ...p, [comanda.id]: next })); // ottimistico
+      try {
+        await cambiaStatoComanda(comanda.id, next);
+        await load(); // riconcilia con la fonte autoritativa
+      } catch (err) {
+        setAdvanceError(messageForError(err));
+      } finally {
+        // Pulisce l'override: alla conferma il feed riflette già `next`
+        // (o la comanda è uscita se `pronta`); all'errore = rollback allo stato reale.
+        setPending((p) => {
+          const { [comanda.id]: _drop, ...rest } = p;
+          return rest;
+        });
+      }
+    },
+    [load],
+  );
+
   if (!canView) {
     return (
       <Alert variant="destructive">
@@ -130,7 +186,12 @@ export default function KdsPage(): JSX.Element {
     );
   }
 
-  const repartiPresenti = REPARTO_ORDER.filter((rep) => comande.some((c) => c.reparto === rep));
+  // Applica le override ottimistiche sopra il feed pollato.
+  const view = comande.map((c) => {
+    const override = pending[c.id];
+    return override ? { ...c, stato: override } : c;
+  });
+  const repartiPresenti = REPARTO_ORDER.filter((rep) => view.some((c) => c.reparto === rep));
 
   return (
     <div className="space-y-4">
@@ -150,16 +211,27 @@ export default function KdsPage(): JSX.Element {
         </Alert>
       )}
 
+      {advanceError && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{t('advanceError')}</span>
+            <Button variant="outline" size="sm" onClick={() => setAdvanceError(null)}>
+              {t('retry')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {isLoading ? (
         <p className="text-lg text-muted-foreground">{t('loading')}</p>
-      ) : comande.length === 0 && !loadError ? (
+      ) : view.length === 0 && !loadError ? (
         <div className="flex min-h-[40vh] items-center justify-center">
           <p className="text-3xl font-medium text-muted-foreground">{t('empty')}</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {repartiPresenti.map((reparto) => {
-            const cards = comande.filter((c) => c.reparto === reparto);
+            const cards = view.filter((c) => c.reparto === reparto);
             return (
               <section key={reparto} className="space-y-3">
                 <h2 className="flex items-baseline gap-2 text-2xl font-semibold">
@@ -169,7 +241,13 @@ export default function KdsPage(): JSX.Element {
                   </span>
                 </h2>
                 {cards.map((comanda) => (
-                  <ComandaCard key={comanda.id} comanda={comanda} />
+                  <ComandaCard
+                    key={comanda.id}
+                    comanda={comanda}
+                    canAdvance={canAdvance}
+                    isAdvancing={pending[comanda.id] !== undefined}
+                    onAdvance={handleAdvance}
+                  />
                 ))}
               </section>
             );
