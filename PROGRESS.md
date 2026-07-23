@@ -3269,6 +3269,36 @@ A chiudere il cerchio: **è stata la verifica runtime — quella che avevo io st
 
 ---
 
+## [2026-07-23] Sub-2 verificato full-stack → `TD-dev-env-punta-prod` ESTINTO
+
+Ultimo fronte di `TD-dev-env-punta-prod`: verifica **full-stack contro BE reale** dei 5 path blob/multipart di accountant-web dopo scadenza dell'access token (il boundary lasciato aperto dal blob-fix, che Sub-1 route-mocked non poteva coprire). Reso possibile da Sub-B (dev env isolato). **Verifica, non implementazione** → artefatto = solo questo verbale (harness effimero, non committato).
+
+**Metodo (fedele):** eseguito il **codice REALE FE** — `apiGetBlob`/`apiPostMultipart` di `@gestionale/api-client` + il single-flight **reale** `authOptions`/`refreshAccessToken` di `auth-web` (import da sorgente via `tsx`, shim `window`/`localStorage`) — contro il **BE reale** (`accountant-api` dev → DB dev 55432, storage filesystem, RLS fedele `gestionale_app` NOBYPASSRLS). Scadenza simulata via **invalidazione client-side** dell'access token (bogus) mantenendo il refresh valido (sanzionato dalla spec; TTL è costante hardcoded, non env). Tenant `studio-demo`, utenti seed noti.
+
+**Esito — 5/5 path + single-flight, tutti PASS:**
+
+| # | Funzione FE | Endpoint BE | Esito | `/auth/refresh` | Evidenza |
+|---|---|---|---|---|---|
+| #5 | `uploadDocumento` | POST `/documenti` | completato | **1** | persistito in dev DB |
+| #2 | `downloadDocumento` | GET `/documenti/:id/download` | completato | **1** | 47 byte, match esatto |
+| #4 | `uploadAllegato` | POST `/comunicazioni/messaggi/:id/allegati` | completato | **1** | persistito in dev DB |
+| #1 | `downloadAllegato` | GET `/comunicazioni/allegati/:id` | completato | **1** | 46 byte, match esatto |
+| #3 | `downloadPortaleDocumento` | GET `/portale/documenti/:id/download` | completato | **1** | 47 byte, match esatto (ruolo **cliente**) |
+| — | single-flight (2 concorrenti) | GET download ×2 | completato | **1** | coalescing, entrambi match |
+
+- **Refresh trasparente confermato sul BE reale**: per ogni path, access scaduto → 401 → **una sola** `/auth/refresh` (rotazione + theft-detection reali) → retry con il **nuovo** token → 200/201. Nessun path in cui il BE reale **rifiuti** il token refreshato (era l'unico esito che avrebbe aperto un fronte-bug: non si è verificato).
+- **Persistenza reale sotto RLS fedele**: upload #4/#5 scritti e riletti nel DB dev come `gestionale_app` (non superuser). Download byte-identici al contenuto caricato (round-trip storage→BE→FE verificato).
+- **Single-flight sotto latenza vera** (valore aggiunto vs Sub-1, non gate): 2 download concorrenti a token scaduto → **1** sola `/auth/refresh` (il coalescing `refreshInFlight` regge col BE reale, la rotazione e la latenza). Coerente con unit + e2e #160.
+- **Prod mai toccato**: API su 55432, harness interroga `gestionale_postgres_dev`; `gestionale_postgres` (prod) intatto.
+
+**Caveat (portata esatta, non gonfiata):** (1) l'harness gira via `tsx` con shim `window`/`localStorage`, **non in un browser**: è il codice FE reale (`apiGetBlob`/`apiPostMultipart`, `authOptions`, `refreshAccessToken`) → fedeltà **alta sull'asse auth**, ma non è un browser (quell'asse resta coperto da Sub-1 route-mocked + il save DOM `createObjectURL`/click, estraneo all'auth/BE, non esercitato qui). (2) La scadenza è **invalidazione client-side** dell'access token, **non attesa del TTL reale** (costante hardcoded, non env): sanzionata dalla spec ed equivalente sul path 401→refresh→retry, ma **non esercita l'espirazione lato server** (il BE rigetta un token malformato, non un token scaduto-ma-valido-in-firma). Differenza minore, dichiarata.
+
+**Chiusura boundary → `TD-dev-env-punta-prod` completamente ESTINTO.** I tre fronti chiusi: Sub-A (guard meccanizzato, #168) + Sub-B (dev env isolato dev-by-default, #171) + **Sub-2 (questa verifica full-stack)**, che era l'ultimo trigger residuo. Con Sub-2, anche `TD-blob-download-no-refresh` è verificato end-to-end contro BE reale (oltre a Sub-1 route-mocked + unit). Nessun residuo.
+
+- Commit: `docs` (PROGRESS + HANDOFF), zero codice.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
