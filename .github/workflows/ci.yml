@@ -423,10 +423,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        # accountant-web compila via transpilePackages i @gestionale/* da sorgente;
-        # il client Prisma (@prisma/client, stub su npm) va comunque generato per i
-        # type import transitivi. Cheap insurance, coerente col job `checks`.
+        # accountant-web compila via transpilePackages i @gestionale/* SOURCE-export
+        # (api-client, auth-web); il client Prisma (@prisma/client stub) va generato
+        # per i type import transitivi. Cheap insurance, coerente col job `checks`.
         run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Build accountant-web workspace deps
+        # I @gestionale/* DIST-export (shared, ui, i18n, …) NON sono transpilePackages:
+        # `next dev` li risolve da dist/. Senza build → "Module not found:
+        # @gestionale/shared" → next dev non compila → webServer timeout. `^...`
+        # builda le dipendenze di accountant-web (salta i source-export senza build).
+        run: pnpm --filter "@gestionale/accountant-web^..." build
 
       - name: Run blob e2e (route-mocked · next dev :3013 · no BE/DB)
         working-directory: apps/accountant-web
