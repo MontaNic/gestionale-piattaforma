@@ -265,7 +265,7 @@ export class NoteSpeseService {
   /**
    * `inviata → respinta` (`notespese.approva`), `motivo` obbligatorio. Auto-rifiuto
    * vietato con la stessa guardia dell'auto-approvazione (estensione oltre il testo
-   * §4, coerente — vedi ADR-0075/PR-3).
+   * §4, coerente — vedi ADR-0076 PR-3).
    */
   async respingi(
     tenantId: string,

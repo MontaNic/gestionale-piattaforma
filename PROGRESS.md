@@ -3400,6 +3400,27 @@ Secondo blocco Note Spese, consumer delle fondamenta PR-1. **Tier MEDIO** (modul
 
 ---
 
+## [2026-07-23] Note Spese v1 PR-3 — state machine + gating (accountant)
+
+Terzo e ultimo blocco backend Note Spese: macchina a stati (invia/approva/respingi) + gating §4.1/§4.2, sopra il CRUD di PR-2. **Tier MEDIO** (accountant-api only, **nessuno schema/migrazione/seed**). Branch `feat/note-spese-state-machine`. [ADR-0076](docs/architecture/ADR-0076-note-spese-pr3-state-machine.md) + [spec](docs/spec/note-spese-v1.md).
+
+**STOP 0 (read-only) — 3 verifiche prima di scrivere:** (1) §7.8 già enforced da PR-2 (`assertOwnEditable`/delete gated) → **nessun buco**, il test verifica; (2) le macchine a stati esistenti (comande/circolari) usano read-then-write → **non** il modello di concorrenza (DP-3 lo vieta); (3) **divergenza segnalata**: spec persistita §4.3 dice `respinta → bozza`, DP-1 lockato dice `respinta → inviata` → procedo con DP-1, reversibilità in ADR.
+
+**Cosa fatto (3 commit):**
+- **State machine** (3 endpoint HTTP 200): `bozza|respinta → inviata → approvata|respinta`, `approvata` terminale. `invia` = gestisci + **autore** (ownership nel service, non-leak 404); `approva`/`respingi` = `notespese.approva`. **Auto-decisione vietata** su approva **e** respingi (auto-rifiuto = estensione oltre il testo, dichiarata). `respingi`: motivo obbligatorio (DTO + guard service-level). **DP-2**: re-invio da respinta azzera `decisaAt`/`decisaDaId`/`motivoRifiuto`.
+- **Gating §4.1/§4.2** letti nella **stessa tx** della transizione: giustificativo se `totale>0`, scontrino POS se pagamento carta.
+- **Concorrenza (DP-3)**: `updateMany` con stato atteso nel `WHERE` + check `count` dentro `withTenantContextAtomicTx` — race chiusa dalla condizione di update, non dalla lettura (fast-fail precondizione per l'errore corretto). Opzione primaria DP-3; comande/circolari (read-then-write) segnalati come debito non in scope.
+- **Errori distinti** (FE): `INVALID_TRANSITION` (409) / `GIUSTIFICATIVO_MANCANTE` / `SCONTRINO_MANCANTE` / `AUTO_DECISIONE` (422) / `MOTIVO_RICHIESTO` (400).
+- **6 test** `note-spese-state-machine.e2e-spec.ts` (§7: 4,5,6,7,8 + T15 su DP-1/DP-2): **6/6 verdi**. Suite PR-2 (security 9/9 + gate RLS 5/5) **invariata**. Totale Note Spese: **15**.
+
+**Impatto altro verticale: N.A. verificato** — nessun tocco a `packages/db`/platform/seed/schema/migrazioni; tutto in `apps/accountant-api`.
+
+**Residuo:** FE = PR-4/5 (§8: calendario/elenco, form con hint validità, pannello approvazione gated `notespese.approva`). **La migrazione Note Spese (PR-1) è su `main` ma non ancora in produzione** — si applica al prossimo deploy (tracciato in HANDOFF, anti deployment-drift).
+
+- Commit: `feat(accountant-api)`(state machine) · `test`(6 test) · `docs`(ADR-0076 + PROGRESS/HANDOFF).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
