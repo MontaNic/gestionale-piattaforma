@@ -3338,6 +3338,26 @@ Il blocco KDS/FE comande: lo STOP 0 aveva disambiguato lo stato — flusso **cam
 
 ---
 
+## [2026-07-23] PR-0 Note Spese — gate E2E domain RLS esteso ad accountant
+
+Prerequisito di **Note Spese** (STOP 0 di ri-validazione: la spec regge, unico aggiustamento sostanziale = il gate RLS oggi è restaurant-only). PR-0 = **infra CI, non feature**. Tier MEDIO (solo CI + script test). Branch `ci/e2e-rls-accountant`. [ADR-0071 Update](docs/architecture/ADR-0071-ci-e2e-testcontainers-be-non-gated.md).
+
+**§0 censimento:** accountant-api ha **1** spec RLS DB-level app-role — `rls-isolation.e2e-spec.ts` (10 test, anagrafica ADR-0035); `documenti-download-isolation` è IDOR/HTTP superuser (comportamentale, escluso). Selettore N=1.
+
+**Cosa fatto:**
+- **Job CI `e2e-rls-domain-accountant`** (gemello di `e2e-rls-domain`, ubuntu-latest, Testcontainers dedicati): esegue lo spec RLS accountant come `gestionale_app` (NOBYPASSRLS). Una regressione di policy RLS su tabelle accountant ora **rompe la CI**. Script `test:e2e:rls` accountant (selezione esplicita, verificato: esattamente 1 file, 10 test). **DP-3 hardening** `APP_ROLE_PASSWORD` da env+default (allineato al gate restaurant, no costante hardcoded duplicata). Job restaurant **invariato**.
+- **Nessuna bit-rot** nello spec RLS accountant (a differenza di `conti` su restaurant): 10/10 verdi baseline.
+
+**Prova di efficacia (obbligatoria, DP-3):** rotta la policy `preventivi_voci` (`USING true`) nella migration → il testcontainer la applica fresh → **S-prev-4 ROSSO** (raw-query DB-level come `gestionale_app`: tenant B legge 4 voci invece di 2, leak cross-tenant). Ripristinato → **10/10 verdi**, `git status` pulito. **Nuance vettore:** su accountant il break efficace è la **policy** (non l'extension `rls.ts` come su restaurant), perché i test HTTP di `rls-isolation` sono anche app-filter-protected (`where:{tenantId}`, defense-in-depth) → solo il raw-query S-prev-4 esercita puramente la policy. Il gate è comunque efficace.
+
+**Bit-rot trovata (fuori scope, comportamentale):** `report-margine.e2e-spec.ts` 2 test rossi (200 vs 201, guard <2 mandati) — non RLS, non fixata, tracciata sotto `TD-ci-e2e-accountant-api`.
+
+**Residuo:** le ~17 spec comportamentali accountant restano fuori CI (`TD-ci-e2e-accountant-api`, trigger `globalSetup` invariato). La porzione **RLS** è ora gatata su entrambi i verticali. Note Spese potrà nascere il suo spec di isolamento **dentro** questo gate.
+
+- Commit: `test` (selettore+hardening) · `ci` (job) · `docs`.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
