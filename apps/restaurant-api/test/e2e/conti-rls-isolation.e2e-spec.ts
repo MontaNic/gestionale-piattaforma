@@ -41,7 +41,9 @@ import {
 // password placeholder nei Testcontainers (rotazione solo dev/prod). Identico a
 // soft-delete-rls.e2e-spec.ts.
 const APP_ROLE = 'gestionale_app';
-const APP_ROLE_PASSWORD = 'PLACEHOLDER_MUST_BE_ROTATED';
+// DP-3 hardening: pw da env, default = placeholder dei Testcontainers non-ruotati.
+// Se un domani il substrato ruota la pw dell'app-role, basta TEST_APP_ROLE_PASSWORD.
+const APP_ROLE_PASSWORD = process.env.TEST_APP_ROLE_PASSWORD ?? 'PLACEHOLDER_MUST_BE_ROTATED';
 
 function toAppRoleUrl(superuserUrl: string): string {
   const u = new URL(superuserUrl);
@@ -98,6 +100,7 @@ async function seedContoFor(
         articleId: article.id,
         nomeArticolo: article.name,
         prezzoUnitario: 8.5,
+        vatPercent: article.vatPercent, // #161 ADR-0070: snapshot required, no default (bit-rot fix)
         quantita: 2,
         reparto: article.printDepartment,
       },

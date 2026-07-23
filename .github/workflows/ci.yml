@@ -351,3 +351,90 @@ jobs:
           name: dev-server-logs-${{ github.run_id }}
           path: /tmp/ci-logs/
           retention-days: 3
+
+  e2e-rls-domain:
+    name: E2E domain RLS (testcontainers · gestionale_app)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # TD-ci-e2e-testcontainers-be Fase 1: i 3 spec che asseriscono l'isolamento
+    # tenant DB-level come `gestionale_app` (NOBYPASSRLS) girano in CI → una
+    # regressione di policy RLS sul DOMINIO (comande/conti) rompe la CI invece di
+    # passare inosservata. Testcontainers avvia Postgres+Redis propri → NON usa i
+    # `services` del job Playwright (DP-2). Gira su ubuntu-latest (Docker host):
+    # niente Docker-in-Docker (che romperebbe dentro il container Playwright).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Build workspace packages (db + shared + platform + auth)
+        # test:e2e:rls avvia vitest diretto (non turbo) → `dependsOn: ["^build"]`
+        # non scatta; gli spec importano @gestionale/* da dist/ (soft-delete-rls
+        # boota AppModule → auth/platform/shared). Stesso set del job Playwright.
+        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
+
+      - name: Run domain RLS e2e (Testcontainers, gestionale_app NOBYPASSRLS)
+        # SOLO i 3 spec RLS dominio (selezione esplicita nello script test:e2e:rls).
+        # Ogni spec avvia i propri Postgres+Redis; migrate deploy crea gestionale_app
+        # (password placeholder); setup via superuser, assert via app-role (toAppRoleUrl).
+        run: pnpm --filter @gestionale/restaurant-api test:e2e:rls
+
+  e2e-accountant-web-blob:
+    name: E2E accountant-web blob (route-mocked)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # TD-ci-e2e-accountant-web-fe: la spec blob-auth-refresh.spec.ts esisteva ma
+    # non era CI-gata (il job Playwright esegue solo restaurant-web). E' route-mocked
+    # (page.route() simula 401 + /auth/refresh) → NESSUN backend, NESSUN DB, solo
+    # `next dev` isolato su :3013. Job additivo, NON tocca il job restaurant-web.
+    # Container Playwright pinned = stessa versione del client (@playwright/test 1.60.0).
+    container:
+      image: mcr.microsoft.com/playwright:v1.60.0-jammy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        # accountant-web compila via transpilePackages i @gestionale/* SOURCE-export
+        # (api-client, auth-web); il client Prisma (@prisma/client stub) va generato
+        # per i type import transitivi. Cheap insurance, coerente col job `checks`.
+        run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Build accountant-web workspace deps
+        # I @gestionale/* DIST-export (shared, ui, i18n, …) NON sono transpilePackages:
+        # `next dev` li risolve da dist/. Senza build → "Module not found:
+        # @gestionale/shared" → next dev non compila → webServer timeout. `^...`
+        # builda le dipendenze di accountant-web (salta i source-export senza build).
+        run: pnpm --filter "@gestionale/accountant-web^..." build
+
+      - name: Run blob e2e (route-mocked · next dev :3013 · no BE/DB)
+        working-directory: apps/accountant-web
+        run: pnpm test:e2e:blob

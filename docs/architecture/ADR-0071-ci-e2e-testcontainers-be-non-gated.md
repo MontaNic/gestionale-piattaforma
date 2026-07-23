@@ -38,3 +38,26 @@ Registrare il debito. **Non** fixare ora (fix ≠ una riga: richiede infrastrutt
 - ✅ Il debito è tracciato e la sua severità (ALTA) esplicitata: "CI verde su restaurant-api" ≠ "comportamento testato".
 - ⚠️ Finché non fixato, la rete di sicurezza sul comportamento comande/conti è la disciplina di chi implementa (validazione locale), non la CI.
 - ⚠️ Ogni nuova feature su restaurant-api eredita lo stesso onere di validazione-locale dichiarata.
+
+## Update 2026-07-23 — Fase 1 fatta (fedeltà RLS dominio in CI)
+
+Il TD ha due componenti (STOP 0): **(a) copertura comportamentale** (16 file, ~159 test solo in locale) e **(b) fedeltà RLS DB-level** (l'isolamento tenant sul dominio non provato in CI). La **Fase 1** chiude **(b)**.
+
+- **Nuovo job CI `e2e-rls-domain`** (ubuntu-latest, Docker host — NON dentro il container Playwright, per evitare Docker-in-Docker): esegue **solo** i 3 spec che asseriscono l'isolamento tenant **DB-level come `gestionale_app`** (NOBYPASSRLS) — `conti-rls-isolation`, `comande-rls-isolation`, `soft-delete-rls` — via Testcontainers dedicati (Postgres+Redis propri, **DP-2**: no riuso del service-DB Playwright). Selezione esplicita nello script `test:e2e:rls` (verificato: esattamente 3 file, 23 test).
+- **Decisione strutturale (tracciata, non effetto collaterale):** i due nuovi job (`e2e-rls-domain`, `e2e-accountant-web-blob`) sono **paralleli** con `needs: [checks]`, come `e2e-playwright`. Non sono step in serie: il wall-clock del workflow è dominato dal ramo più lento (`e2e-playwright` ~4m) → l'incremento è **marginale** (i job RLS ~1m40s e blob ~1m50s girano in parallelo, non in coda). Trade-off consapevole: più runner concorrenti vs tempo-di-attesa PR invariato.
+- **Nessun refactoring fixture** (§3 STOP 0): il pattern "setup via superuser + assert come `gestionale_app`" esisteva già; le fixture **restano** superuser (TRUNCATE non concesso all'app-role; INSERT cross-tenant respinti da WITH CHECK).
+- **DP-3 hardening**: `APP_ROLE_PASSWORD` da env `TEST_APP_ROLE_PASSWORD` (default = placeholder), così il pattern non si rompe se il substrato ruota la pw.
+- **Discovery**: `conti-rls-isolation` era **bit-rotted** (`seedContoFor` senza `vatPercent`, reso required dal #161) → 8/8 rossi, **mai intercettato perché la e2e BE non gira in CI** — la tesi del TD materializzata. Fixato (1 riga). È l'argomento più forte a favore del gate.
+- **Prova di efficacia** (non teatro): forzato bypass RLS (`is_super_admin=true`) → `comande`+`conti-rls-isolation` **rossi** (cross-tenant leak); ripristinato → 23/23 verdi.
+
+### Fase 2 — RESIDUA (non in questo PR), trigger = `globalSetup`
+
+La **copertura comportamentale completa** (i restanti 13 spec restaurant-api: comande CRUD 64, menu/articles/tables/rbac/auth…) resta fuori dalla CI. **Prerequisito/trigger**: un **`globalSetup` Vitest con container Postgres+Redis condiviso** tra spec. Oggi il pattern è **per-file** (16 coppie di container): portare l'intera suite senza container condiviso raddoppierebbe il tempo CI di ogni PR. Trigger = implementare `globalSetup` condiviso, poi agganciare `test:e2e` completo.
+
+### Boundary — `TD-ci-e2e-accountant-api` (nuovo, tier MEDIO)
+
+Anche la **e2e di `accountant-api`** (20 spec, inclusi i path documenti/comunicazioni/portale verificati in Sub-2) è **fuori dalla CI**, stessa classe. Registrato come **`TD-ci-e2e-accountant-api`** (tier MEDIO, **stesso trigger `globalSetup`** della Fase 2). Non orfano.
+
+### Adiacente FE — chiuso
+
+**`TD-ci-e2e-accountant-web-fe`** chiuso: nuovo job additivo `e2e-accountant-web-blob` esegue `blob-auth-refresh.spec.ts` (route-mocked, `next dev` :3013, no BE/DB). Escluso `page-tour.spec.ts` (richiede infra full-stack accountant).
