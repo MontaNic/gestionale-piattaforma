@@ -81,7 +81,7 @@ Categoria: `notespese`. Nessuno è `isPortale` → rientrano in `ALL_PERMISSION_
 
 1. **Giustificativo obbligatorio** se `totale > 0`. Blocca la transizione `bozza → inviata` (test §7.5). Il documento deve riportare data, importo, ragione sociale/P.IVA esercente. Accettati: scontrino fiscale, ricevuta fiscale, fattura. Non accettati: conferma d'ordine, preventivo, screenshot app senza dettaglio esercente. _(Il vincolo tecnico è il blocco di transizione; la guida su cosa sia valido è testo FE.)_
 2. **Scontrino POS obbligatorio** solo se `metodoPagamento ∈ {carta_aziendale, carta_personale}`. Blocca `bozza → inviata` (test §7.6). Non richiesto per contanti/bonifico.
-3. **State machine**: `bozza → inviata → approvata | respinta`; `respinta → bozza`. Transizioni non consentite falliscono (`approvata → *`, `bozza → approvata`) (test §7.7).
+3. **State machine**: `bozza → inviata → approvata | respinta`; `respinta → inviata`. Transizioni non consentite falliscono (`approvata → *`, `bozza → approvata`, `respinta → approvata`) (test §7.7). _(§4.3 ricostruito, non verbatim; la transizione di correzione è lockata come **DP-1** = `respinta → inviata` diretta — vedi [ADR-0076](../architecture/ADR-0076-note-spese-pr3-state-machine.md). La riga precedente diceva `respinta → bozza`, ricostruzione superata dalla decisione.)_
 4. **Immutabilità**: nota `inviata`/`approvata` non modificabile — né campi né allegati (test §7.8). Modifica solo in `bozza`/`respinta`.
 5. **Auto-approvazione vietata**: `decisaDaId === userId` → errore (test §7.4).
 

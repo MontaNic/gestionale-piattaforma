@@ -22,11 +22,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import {
   type NotaSpesa,
   type Prisma,
+  MetodoPagamentoNotaSpesa,
   StatoNotaSpesa,
+  TipoAllegatoNotaSpesa,
   id,
   withTenantContextAtomicTx,
 } from '@gestionale/db';
@@ -46,6 +49,15 @@ export interface NoteSpeseListFilter {
 
 // Stati in cui la nota è modificabile (campi + allegati). §4.4.
 const EDITABLE_STATI: readonly StatoNotaSpesa[] = [StatoNotaSpesa.bozza, StatoNotaSpesa.respinta];
+
+// Stati da cui `invia` è ammesso (§1: bozza + respinta[DP-1]).
+const INVIABILE_STATI: readonly StatoNotaSpesa[] = [StatoNotaSpesa.bozza, StatoNotaSpesa.respinta];
+
+// Metodi "carta" che richiedono lo scontrino POS (§4.2).
+const CARTA_METODI: readonly MetodoPagamentoNotaSpesa[] = [
+  MetodoPagamentoNotaSpesa.carta_aziendale,
+  MetodoPagamentoNotaSpesa.carta_personale,
+];
 
 @Injectable()
 export class NoteSpeseService {
@@ -179,7 +191,140 @@ export class NoteSpeseService {
     return { id: notaId, deleted: true };
   }
 
+  // ── State machine (PR-3) ─────────────────────────────────────────────────────
+  // Concorrenza (DP-3): la transizione è applicata con `updateMany` che porta lo
+  // stato atteso nel WHERE + check `count` — la race è chiusa dalla condizione di
+  // update, NON dalla lettura (no read-then-write come guardia). La lettura serve
+  // solo per 404/ownership/auto-decisione + gating, e il fast-fail sulla
+  // precondizione dà l'errore corretto (transizione vs gating). Tutto nella STESSA
+  // `withTenantContextAtomicTx`: i gating §4.1/§4.2 leggono gli allegati nella
+  // stessa tx della transizione (spec §3).
+
+  /**
+   * `{bozza, respinta} → inviata` (autore). Gating §4.1 (giustificativo se
+   * totale>0) e §4.2 (scontrino POS se pagamento carta). DP-2: azzera i campi
+   * decisionali (una nota re-inviata non deve esibire il rifiuto superato).
+   */
+  async invia(tenantId: string, userId: string, notaId: string): Promise<NotaSpesa> {
+    return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      const nota = await tx.notaSpesa.findFirst({ where: { id: notaId, tenantId } });
+      // Ownership: solo l'autore invia (non basta il permesso). Non-leak → 404.
+      if (!nota || nota.userId !== userId) throw this.notFound();
+      // Fast-fail precondizione (errore corretto: transizione, non gating).
+      if (!INVIABILE_STATI.includes(nota.stato)) {
+        throw this.invalidTransition(nota.stato, StatoNotaSpesa.inviata);
+      }
+
+      // Gating letto nella STESSA tx (spec §3).
+      const allegati = await tx.notaSpesaAllegato.findMany({
+        where: { notaSpesaId: notaId },
+        select: { tipo: true },
+      });
+      if (
+        Number(nota.totale) > 0 &&
+        !allegati.some((a) => a.tipo === TipoAllegatoNotaSpesa.giustificativo)
+      ) {
+        throw new UnprocessableEntityException({
+          errorCode: 'E_NOTASPESA_GIUSTIFICATIVO_MANCANTE',
+          message: 'Giustificativo obbligatorio con totale > 0',
+        });
+      }
+      if (
+        CARTA_METODI.includes(nota.metodoPagamento) &&
+        !allegati.some((a) => a.tipo === TipoAllegatoNotaSpesa.scontrino_pos)
+      ) {
+        throw new UnprocessableEntityException({
+          errorCode: 'E_NOTASPESA_SCONTRINO_MANCANTE',
+          message: 'Scontrino POS obbligatorio con pagamento carta',
+        });
+      }
+
+      // Transizione con guardia ottimistica di stato (chiude la race).
+      const res = await tx.notaSpesa.updateMany({
+        where: { id: notaId, tenantId, stato: { in: [...INVIABILE_STATI] } },
+        data: {
+          stato: StatoNotaSpesa.inviata,
+          inviataAt: new Date(),
+          decisaAt: null, // DP-2
+          decisaDaId: null, // DP-2
+          motivoRifiuto: null, // DP-2
+        },
+      });
+      if (res.count === 0) throw this.invalidTransition(nota.stato, StatoNotaSpesa.inviata);
+
+      this.logger.log(`NotaSpesa inviata: ${notaId} user=${userId} tenant=${tenantId}`);
+      return tx.notaSpesa.findFirstOrThrow({ where: { id: notaId, tenantId } });
+    });
+  }
+
+  /** `inviata → approvata` (`notespese.approva`). Auto-approvazione vietata (§4.5/§7.4). */
+  async approva(tenantId: string, userId: string, notaId: string): Promise<NotaSpesa> {
+    return this.decidi(tenantId, userId, notaId, StatoNotaSpesa.approvata, null);
+  }
+
+  /**
+   * `inviata → respinta` (`notespese.approva`), `motivo` obbligatorio. Auto-rifiuto
+   * vietato con la stessa guardia dell'auto-approvazione (estensione oltre il testo
+   * §4, coerente — vedi ADR-0076 PR-3).
+   */
+  async respingi(
+    tenantId: string,
+    userId: string,
+    notaId: string,
+    motivo: string,
+  ): Promise<NotaSpesa> {
+    const motivoClean = (motivo ?? '').trim();
+    // Guard service-level oltre al DTO (la ValidationPipe non gira negli e2e).
+    if (!motivoClean) {
+      throw new BadRequestException({
+        errorCode: 'E_NOTASPESA_MOTIVO_RICHIESTO',
+        message: 'motivo obbligatorio per il rifiuto',
+      });
+    }
+    return this.decidi(tenantId, userId, notaId, StatoNotaSpesa.respinta, motivoClean);
+  }
+
+  /** Nucleo comune approva/respingi: `inviata → {approvata|respinta}`. */
+  private async decidi(
+    tenantId: string,
+    userId: string,
+    notaId: string,
+    target: StatoNotaSpesa,
+    motivoRifiuto: string | null,
+  ): Promise<NotaSpesa> {
+    return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      const nota = await tx.notaSpesa.findFirst({ where: { id: notaId, tenantId } });
+      if (!nota) throw this.notFound();
+      // Auto-decisione vietata: l'autore non può approvare né respingere la propria.
+      if (nota.userId === userId) {
+        throw new UnprocessableEntityException({
+          errorCode: 'E_NOTASPESA_AUTO_DECISIONE',
+          message: 'Non puoi decidere una nota di cui sei autore',
+        });
+      }
+      if (nota.stato !== StatoNotaSpesa.inviata) {
+        throw this.invalidTransition(nota.stato, target);
+      }
+
+      const res = await tx.notaSpesa.updateMany({
+        where: { id: notaId, tenantId, stato: StatoNotaSpesa.inviata },
+        data: { stato: target, decisaAt: new Date(), decisaDaId: userId, motivoRifiuto },
+      });
+      if (res.count === 0) throw this.invalidTransition(nota.stato, target);
+
+      this.logger.log(`NotaSpesa ${target}: ${notaId} decisaDa=${userId} tenant=${tenantId}`);
+      return tx.notaSpesa.findFirstOrThrow({ where: { id: notaId, tenantId } });
+    });
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  private invalidTransition(from: StatoNotaSpesa, to: StatoNotaSpesa): ConflictException {
+    return new ConflictException({
+      errorCode: 'E_NOTASPESA_INVALID_TRANSITION',
+      message: `Transizione non consentita: ${from} → ${to}`,
+    });
+  }
 
   /**
    * Carica la nota se è dell'autore ed è in stato editabile (bozza/respinta);
