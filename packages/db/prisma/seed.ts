@@ -418,6 +418,10 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'magazzino.articolo.gestisci',
       'magazzino.movimento.crea',
       'ai.assistant.usa',
+      // Note Spese (PR-2): Direzione gestisce le proprie + legge tutte + approva.
+      'notespese.gestisci',
+      'notespese.leggi_tutte',
+      'notespese.approva',
     ],
   },
   {
@@ -489,6 +493,8 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       // Circolari: il collaboratore crea/modifica bozze; publish/archive/report
       // restano a Socio/Direzione (ADR-0045 §3).
       'circolari.create',
+      // Note Spese (PR-2): il collaboratore gestisce solo le proprie note.
+      'notespese.gestisci',
     ],
   },
   {
