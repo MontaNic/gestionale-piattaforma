@@ -23,9 +23,16 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { type NotaSpesa, type Prisma, StatoNotaSpesa, id } from '@gestionale/db';
+import {
+  type NotaSpesa,
+  type Prisma,
+  StatoNotaSpesa,
+  id,
+  withTenantContextAtomicTx,
+} from '@gestionale/db';
 import { DbService } from '@gestionale/db/nest';
 import { UsersService } from '@gestionale/auth';
+import { StorageService } from '@gestionale/platform';
 
 import type { CreateNotaSpesaDto } from './dto/create-nota-spesa.dto';
 import type { UpdateNotaSpesaDto } from './dto/update-nota-spesa.dto';
@@ -47,6 +54,7 @@ export class NoteSpeseService {
   constructor(
     @Inject(DbService) private readonly db: DbService,
     @Inject(UsersService) private readonly users: UsersService,
+    @Inject(StorageService) private readonly storage: StorageService,
   ) {}
 
   async create(tenantId: string, userId: string, dto: CreateNotaSpesaDto): Promise<NotaSpesa> {
@@ -112,7 +120,7 @@ export class NoteSpeseService {
     notaId: string,
     dto: UpdateNotaSpesaDto,
   ): Promise<NotaSpesa> {
-    const nota = await this.loadOwnEditable(tenantId, userId, notaId);
+    const nota = await this.assertOwnEditable(tenantId, userId, notaId);
 
     // D6 su update: valori effettivi post-patch (undefined = invariato).
     const aziendaId = dto.aziendaId !== undefined ? dto.aziendaId : nota.aziendaId;
@@ -153,22 +161,32 @@ export class NoteSpeseService {
         message: `NotaSpesa in stato '${nota.stato}' non eliminabile (solo bozza)`,
       });
     }
-    // Hard-delete (D5): allegati via cascade DB. Il cleanup dello storage degli
-    // allegati è gestito in note-spese-allegati (PR-2 Commit 3, quando lo storage
-    // è disponibile) — in questo commit non esistono ancora allegati.
-    await this.db.prisma.notaSpesa.delete({ where: { id: notaId } });
-    this.logger.log(`NotaSpesa deleted (bozza): ${notaId} user=${userId} tenant=${tenantId}`);
+    // Hard-delete (D5) + cleanup storage atomico: il cascade DB rimuove le righe
+    // allegato ma NON i file su storage. Raccogli le storageKey, poi cancella nota
+    // (cascade) + file nella stessa tx applicativa (storage.delete che throwa →
+    // rollback della delete DB).
+    const allegati = await this.db.prisma.notaSpesaAllegato.findMany({
+      where: { notaSpesaId: notaId },
+      select: { storageKey: true },
+    });
+    await withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      await tx.notaSpesa.delete({ where: { id: notaId } });
+      for (const a of allegati) await this.storage.delete(a.storageKey);
+    });
+    this.logger.log(
+      `NotaSpesa deleted (bozza): ${notaId} +${allegati.length} allegati user=${userId} tenant=${tenantId}`,
+    );
     return { id: notaId, deleted: true };
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /** Carica la nota se è dell'autore ed è in stato editabile; altrimenti 404/409. */
-  private async loadOwnEditable(
-    tenantId: string,
-    userId: string,
-    notaId: string,
-  ): Promise<NotaSpesa> {
+  /**
+   * Carica la nota se è dell'autore ed è in stato editabile (bozza/respinta);
+   * altrimenti 404 (non autore/inesistente) o 409 (stato non editabile). Usato
+   * anche dal servizio allegati (upload/delete richiedono nota editabile).
+   */
+  async assertOwnEditable(tenantId: string, userId: string, notaId: string): Promise<NotaSpesa> {
     const nota = await this.db.prisma.notaSpesa.findFirst({ where: { id: notaId, tenantId } });
     if (!nota || nota.userId !== userId) throw this.notFound();
     if (!EDITABLE_STATI.includes(nota.stato)) {
