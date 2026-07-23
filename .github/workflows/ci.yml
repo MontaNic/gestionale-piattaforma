@@ -393,3 +393,41 @@ jobs:
         # Ogni spec avvia i propri Postgres+Redis; migrate deploy crea gestionale_app
         # (password placeholder); setup via superuser, assert via app-role (toAppRoleUrl).
         run: pnpm --filter @gestionale/restaurant-api test:e2e:rls
+
+  e2e-accountant-web-blob:
+    name: E2E accountant-web blob (route-mocked)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # TD-ci-e2e-accountant-web-fe: la spec blob-auth-refresh.spec.ts esisteva ma
+    # non era CI-gata (il job Playwright esegue solo restaurant-web). E' route-mocked
+    # (page.route() simula 401 + /auth/refresh) → NESSUN backend, NESSUN DB, solo
+    # `next dev` isolato su :3013. Job additivo, NON tocca il job restaurant-web.
+    # Container Playwright pinned = stessa versione del client (@playwright/test 1.60.0).
+    container:
+      image: mcr.microsoft.com/playwright:v1.60.0-jammy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        # accountant-web compila via transpilePackages i @gestionale/* da sorgente;
+        # il client Prisma (@prisma/client, stub su npm) va comunque generato per i
+        # type import transitivi. Cheap insurance, coerente col job `checks`.
+        run: pnpm --filter @gestionale/db exec prisma generate
+
+      - name: Run blob e2e (route-mocked · next dev :3013 · no BE/DB)
+        working-directory: apps/accountant-web
+        run: pnpm test:e2e:blob
