@@ -29,6 +29,7 @@ import { AuthErrorCode } from '@gestionale/shared';
 import { NoteSpeseService, type NoteSpeseListFilter } from './note-spese.service';
 import { CreateNotaSpesaDto } from './dto/create-nota-spesa.dto';
 import { UpdateNotaSpesaDto } from './dto/update-nota-spesa.dto';
+import { RespingiNotaSpesaDto } from './dto/respingi-nota-spesa.dto';
 
 @Controller('note-spese')
 export class NoteSpeseController {
@@ -91,6 +92,41 @@ export class NoteSpeseController {
   async remove(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
     const data = await this.noteSpese.remove(user.tenantId, user.id, id);
+    return { data };
+  }
+
+  // ── Transizioni (PR-3) ───────────────────────────────────────────────────────
+  // `invia` = gestisci + autore (l'ownership è nel service). approva/respingi =
+  // `notespese.approva`. HTTP 200 (ritornano la risorsa aggiornata, non creano).
+
+  @Post(':id/invia')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('notespese.gestisci')
+  async invia(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.noteSpese.invia(user.tenantId, user.id, id);
+    return { data };
+  }
+
+  @Post(':id/approva')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('notespese.approva')
+  async approva(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.noteSpese.approva(user.tenantId, user.id, id);
+    return { data };
+  }
+
+  @Post(':id/respingi')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('notespese.approva')
+  async respingi(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: RespingiNotaSpesaDto,
+  ) {
+    if (!user) throw new UnauthorizedException(AuthErrorCode.SESSION_INVALID);
+    const data = await this.noteSpese.respingi(user.tenantId, user.id, id, dto.motivo);
     return { data };
   }
 }
