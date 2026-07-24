@@ -882,6 +882,49 @@
     "tipoAllegato": {
       "giustificativo": "Receipt",
       "scontrino_pos": "POS slip"
+    },
+    "newNota": "New entry",
+    "modificaNota": "Edit expense entry",
+    "nuovaNotaTitolo": "New expense entry",
+    "motivoRifiuto": "Rejection reason:",
+    "solaLettura": "Entry is «{stato}»: read-only.",
+    "allegatoRichiesto": "required to submit",
+    "allegatiDopoSalvataggio": "Save the entry to attach the receipt and POS slip.",
+    "nessunAllegato": "No attachment.",
+    "rimuoviAllegato": "Remove attachment",
+    "caricamento": "Uploading…",
+    "inviaBloccatoHint": "Required attachments are missing: submission will be rejected.",
+    "warnKm": "Distance usually applies to transport or fuel.",
+    "hintAllegato": {
+      "giustificativo": "Receipt, tax receipt or invoice showing date, amount and the vendor's VAT number.",
+      "scontrino_pos": "POS slip for the card payment (legible copy)."
+    },
+    "form": {
+      "data": "Date",
+      "tipoSpesa": "Expense type",
+      "totale": "Amount (€)",
+      "metodoPagamento": "Payment method",
+      "aliquotaIva": "VAT rate",
+      "deducibilita": "Deductibility",
+      "azienda": "Client",
+      "aziendaNessuna": "None (internal)",
+      "mandato": "Engagement",
+      "mandatoNessuno": "None",
+      "distanzaKm": "Distance (km)",
+      "fatturataASocieta": "Billed to the company",
+      "scopoMissione": "Purpose of the trip",
+      "note": "Notes",
+      "salva": "Save",
+      "salvaModifiche": "Save changes",
+      "invia": "Submit",
+      "elimina": "Delete",
+      "chiudi": "Close"
+    },
+    "confirm": {
+      "title": "Delete this expense entry?",
+      "body": "This is permanent and also removes its attachments.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
     }
   }
 }

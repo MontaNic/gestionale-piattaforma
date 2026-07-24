@@ -882,6 +882,49 @@
     "tipoAllegato": {
       "giustificativo": "Giustificativo",
       "scontrino_pos": "Scontrino POS"
+    },
+    "newNota": "Nuova nota",
+    "modificaNota": "Modifica nota spese",
+    "nuovaNotaTitolo": "Nuova nota spese",
+    "motivoRifiuto": "Motivo del rifiuto:",
+    "solaLettura": "Nota in stato «{stato}»: sola lettura.",
+    "allegatoRichiesto": "richiesto per l'invio",
+    "allegatiDopoSalvataggio": "Salva la nota per poter allegare giustificativo e scontrino.",
+    "nessunAllegato": "Nessun allegato.",
+    "rimuoviAllegato": "Rimuovi allegato",
+    "caricamento": "Caricamento…",
+    "inviaBloccatoHint": "Mancano allegati richiesti: l'invio verrà rifiutato.",
+    "warnKm": "I chilometri si applicano di norma a trasporto o carburante.",
+    "hintAllegato": {
+      "giustificativo": "Scontrino, ricevuta fiscale o fattura con data, importo e P.IVA dell'esercente.",
+      "scontrino_pos": "Scontrino POS del pagamento con carta (copia leggibile)."
+    },
+    "form": {
+      "data": "Data",
+      "tipoSpesa": "Tipo di spesa",
+      "totale": "Importo (€)",
+      "metodoPagamento": "Metodo di pagamento",
+      "aliquotaIva": "Aliquota IVA",
+      "deducibilita": "Deducibilità",
+      "azienda": "Cliente",
+      "aziendaNessuna": "Nessuno (interna)",
+      "mandato": "Mandato",
+      "mandatoNessuno": "Nessuno",
+      "distanzaKm": "Distanza (km)",
+      "fatturataASocieta": "Fatturata alla società",
+      "scopoMissione": "Scopo della trasferta",
+      "note": "Note",
+      "salva": "Salva",
+      "salvaModifiche": "Salva modifiche",
+      "invia": "Invia",
+      "elimina": "Elimina",
+      "chiudi": "Chiudi"
+    },
+    "confirm": {
+      "title": "Eliminare la nota spese?",
+      "body": "L'operazione è definitiva e rimuove anche gli allegati.",
+      "confirmLabel": "Elimina",
+      "cancelLabel": "Annulla"
     }
   }
 }

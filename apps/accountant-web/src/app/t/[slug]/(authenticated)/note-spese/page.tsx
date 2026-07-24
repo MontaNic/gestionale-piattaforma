@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, List, Plus } from 'lucide-react';
 
 import { Alert, AlertDescription, Button, Card, CardContent } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
@@ -10,12 +10,29 @@ import { useAuth } from '@gestionale/auth-web';
 import { CalendarioMese } from '@/components/note-spese/CalendarioMese';
 import { ElencoNote } from '@/components/note-spese/ElencoNote';
 import { NotaSpesaRow } from '@/components/note-spese/NotaSpesaRow';
+import { NotaSpesaForm } from '@/components/note-spese/NotaSpesaForm';
+import { ConfirmDialog } from '@/components/aziende/ConfirmDialog';
 import { messageForError } from '@/lib/error-codes';
 import { listAziende } from '@/lib/aziende-api';
 import type { Azienda } from '@/lib/aziende-types';
 import { getMandati, type Mandato } from '@/lib/mandati-api';
-import { getNoteSpese } from '@/lib/note-spese-api';
-import type { NotaSpesa } from '@/lib/note-spese-types';
+import {
+  createNotaSpesa,
+  deleteAllegato,
+  deleteNotaSpesa,
+  downloadAllegato,
+  getNotaSpesa,
+  getNoteSpese,
+  inviaNotaSpesa,
+  updateNotaSpesa,
+  uploadAllegato,
+} from '@/lib/note-spese-api';
+import type {
+  CreateNotaSpesaInput,
+  NotaSpesa,
+  NotaSpesaDetail,
+  TipoAllegatoNotaSpesa,
+} from '@/lib/note-spese-types';
 import { giornoToDate, meseCorrente, oggiLocale, shiftMese } from '@/lib/note-spese-date';
 
 // =============================================================================
@@ -50,6 +67,12 @@ export default function NoteSpesePage(): JSX.Element {
   const [mandati, setMandati] = useState<Mandato[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Form: `aperto` distingue "nessun form" da "nuova nota" (corrente = null).
+  const [formAperto, setFormAperto] = useState(false);
+  const [corrente, setCorrente] = useState<NotaSpesaDetail | null>(null);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -118,6 +141,74 @@ export default function NoteSpesePage(): JSX.Element {
     setGiorno(oggiLocale());
   }
 
+  async function apriNota(id: string): Promise<void> {
+    try {
+      setCorrente(await getNotaSpesa(id));
+      setFormAperto(true);
+    } catch (err) {
+      setLoadError(messageForError(err));
+    }
+  }
+
+  function apriNuova(): void {
+    setCorrente(null);
+    setFormAperto(true);
+  }
+
+  function chiudiForm(): void {
+    setFormAperto(false);
+    setCorrente(null);
+  }
+
+  // Ricarica la nota aperta (dopo upload/delete allegato) + la lista del mese.
+  async function refresh(notaId?: string): Promise<void> {
+    if (notaId) setCorrente(await getNotaSpesa(notaId));
+    await load();
+  }
+
+  async function handleSave(input: CreateNotaSpesaInput): Promise<void> {
+    // In creazione: dopo il salvataggio la nota esiste → si possono allegare file.
+    const salvata = corrente
+      ? await updateNotaSpesa(corrente.id, input)
+      : await createNotaSpesa(input);
+    setCorrente(salvata);
+    await load();
+  }
+
+  async function handleUpload(tipo: TipoAllegatoNotaSpesa, file: File): Promise<void> {
+    if (!corrente) return;
+    await uploadAllegato(corrente.id, tipo, file);
+    await refresh(corrente.id);
+  }
+
+  async function handleDeleteAllegato(allegatoId: string): Promise<void> {
+    if (!corrente) return;
+    await deleteAllegato(corrente.id, allegatoId);
+    await refresh(corrente.id);
+  }
+
+  async function handleInvia(): Promise<void> {
+    if (!corrente) return;
+    // Il BE è l'autorità sul gating: un rifiuto arriva qui come errore mappato.
+    setCorrente(await inviaNotaSpesa(corrente.id));
+    await load();
+  }
+
+  async function handleConfirmDelete(): Promise<void> {
+    if (!corrente) return;
+    setIsDeleting(true);
+    try {
+      await deleteNotaSpesa(corrente.id);
+      chiudiForm();
+    } catch (err) {
+      setLoadError(messageForError(err));
+    } finally {
+      setPendingDelete(false);
+      setIsDeleting(false);
+      await load();
+    }
+  }
+
   function cambiaMese(delta: number): void {
     setMese((m) => shiftMese(m, delta));
     setGiorno(null); // il giorno selezionato non appartiene al nuovo mese
@@ -130,6 +221,12 @@ export default function NoteSpesePage(): JSX.Element {
           <h1 className="text-2xl font-semibold">{t('listTitle')}</h1>
           <p className="text-sm text-muted-foreground">{t('listSubtitle')}</p>
         </div>
+        {canManage && !formAperto && (
+          <Button onClick={apriNuova}>
+            <Plus className="h-4 w-4" />
+            {t('newNota')}
+          </Button>
+        )}
       </header>
 
       {/* Barra mese + toggle vista (DP-4) */}
@@ -197,6 +294,33 @@ export default function NoteSpesePage(): JSX.Element {
         </Alert>
       )}
 
+      {formAperto && (
+        <Card>
+          <CardContent className="space-y-3 pt-6">
+            <h2 className="text-sm font-semibold">
+              {corrente ? t('modificaNota') : t('nuovaNotaTitolo')}
+            </h2>
+            <NotaSpesaForm
+              nota={corrente}
+              // DP-2: la nuova nota eredita il giorno selezionato, altrimenti oggi.
+              dataIniziale={giorno ?? oggiLocale()}
+              aziende={aziende}
+              mandati={mandati}
+              onSave={handleSave}
+              onUploadAllegato={handleUpload}
+              onDeleteAllegato={handleDeleteAllegato}
+              onDownloadAllegato={(allegatoId, nome) => {
+                if (corrente)
+                  void downloadAllegato(corrente.id, allegatoId, nome).catch(() => undefined);
+              }}
+              onInvia={handleInvia}
+              onDelete={() => setPendingDelete(true)}
+              onCancel={chiudiForm}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : (
@@ -228,7 +352,7 @@ export default function NoteSpesePage(): JSX.Element {
                 dateFmt={dateFmt}
                 aziendaNomeById={aziendaNomeById}
                 mandatoCodiceById={mandatoCodiceById}
-                onSelectNota={(n) => setGiorno(n.data)}
+                onSelectNota={(n) => void apriNota(n.id)}
               />
             )}
           </div>
@@ -265,6 +389,7 @@ export default function NoteSpesePage(): JSX.Element {
                             mandatoCodice={
                               n.mandatoId ? mandatoCodiceById.get(n.mandatoId) : undefined
                             }
+                            onClick={canManage ? () => void apriNota(n.id) : undefined}
                           />
                         ))}
                       </ul>
@@ -278,6 +403,19 @@ export default function NoteSpesePage(): JSX.Element {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(false);
+        }}
+        title={t('confirm.title')}
+        description={t('confirm.body')}
+        confirmLabel={t('confirm.confirmLabel')}
+        cancelLabel={t('confirm.cancelLabel')}
+        onConfirm={() => void handleConfirmDelete()}
+        isPending={isDeleting}
+      />
 
       {!canManage && <p className="text-xs text-muted-foreground">{t('readOnlyHint')}</p>}
     </div>
