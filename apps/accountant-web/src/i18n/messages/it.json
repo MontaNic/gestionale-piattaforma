@@ -945,6 +945,28 @@
     "serveLeggiTutte": {
       "titolo": "Serve anche il permesso di lettura estesa.",
       "corpo": "Puoi approvare le note spese, ma senza «notespese.leggi_tutte» vedi soltanto le tue — e le proprie note non si possono decidere. Chiedi a un amministratore di aggiungere il permesso di lettura estesa al tuo ruolo."
-    }
+    },
+    "azioni": {
+      "approva": "Approva",
+      "respingi": "Respingi"
+    },
+    "approva": {
+      "titolo": "Approvare questa nota spese?",
+      "descrizione": "L'approvazione è definitiva: una nota approvata non può più essere modificata né respinta."
+    },
+    "respingi": {
+      "titolo": "Respingi la nota spese",
+      "descrizione": "{autore} leggerà il motivo per correggere e reinviare la nota.",
+      "motivoLabel": "Motivo del rifiuto",
+      "motivoPlaceholder": "Es. manca la P.IVA dell'esercente sul giustificativo",
+      "motivoRichiesto": "Il motivo è obbligatorio.",
+      "conferma": "Respingi",
+      "annulla": "Annulla"
+    },
+    "esito": {
+      "ok": "Decisione registrata.",
+      "giaDecisa": "Questa nota è già stata decisa da un altro utente. La lista è stata aggiornata."
+    },
+    "nonPuoiDecidereTua": "Non puoi decidere una nota di cui sei autore."
   }
 }

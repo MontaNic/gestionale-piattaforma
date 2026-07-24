@@ -945,6 +945,28 @@
     "serveLeggiTutte": {
       "titolo": "You also need the extended read permission.",
       "corpo": "You can approve expense entries, but without «notespese.leggi_tutte» you only see your own — and you cannot decide your own entries. Ask an administrator to add the extended read permission to your role."
-    }
+    },
+    "azioni": {
+      "approva": "Approve",
+      "respingi": "Reject"
+    },
+    "approva": {
+      "titolo": "Approve this expense entry?",
+      "descrizione": "Approval is final: an approved entry can no longer be edited or rejected."
+    },
+    "respingi": {
+      "titolo": "Reject the expense entry",
+      "descrizione": "{autore} will read the reason in order to fix and resubmit the entry.",
+      "motivoLabel": "Rejection reason",
+      "motivoPlaceholder": "E.g. the receipt is missing the vendor's VAT number",
+      "motivoRichiesto": "A reason is required.",
+      "conferma": "Reject",
+      "annulla": "Cancel"
+    },
+    "esito": {
+      "ok": "Decision recorded.",
+      "giaDecisa": "This entry has already been decided by another user. The list has been refreshed."
+    },
+    "nonPuoiDecidereTua": "You cannot decide an entry you authored."
   }
 }

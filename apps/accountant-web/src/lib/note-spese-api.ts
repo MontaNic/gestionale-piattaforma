@@ -113,6 +113,24 @@ export async function inviaNotaSpesa(id: string): Promise<NotaSpesaDetail> {
   return normalize(res.data);
 }
 
+// ── Decisione (pannello approvazione, PR-5) ──────────────────────────────────
+
+/** `inviata → approvata`. Il BE rifiuta auto-approvazione e stati non `inviata`. */
+export async function approvaNotaSpesa(id: string): Promise<NotaSpesaDetail> {
+  const res = await apiPost<Wrapped<RawNotaSpesa>>(`/note-spese/${id}/approva`, {}, authOptions());
+  return normalize(res.data);
+}
+
+/** `inviata → respinta`, `motivo` obbligatorio (l'autore lo legge per correggere). */
+export async function respingiNotaSpesa(id: string, motivo: string): Promise<NotaSpesaDetail> {
+  const res = await apiPost<Wrapped<RawNotaSpesa>>(
+    `/note-spese/${id}/respingi`,
+    { motivo },
+    authOptions(),
+  );
+  return normalize(res.data);
+}
+
 // ── Allegati ─────────────────────────────────────────────────────────────────
 
 /** Upload allegato (multipart): file + tipo. Single-flight refresh su 401. */

@@ -5,16 +5,25 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Paperclip, TriangleAlert } from 'lucide-react';
 
 import { Alert, AlertDescription, Button, Card, CardContent } from '@gestionale/ui';
+import { ApiError } from '@gestionale/api-client';
 import { useAuth } from '@gestionale/auth-web';
 
 import { messageForError } from '@/lib/error-codes';
 import { listAziende } from '@/lib/aziende-api';
 import type { Azienda } from '@/lib/aziende-types';
 import { getMandati, type Mandato } from '@/lib/mandati-api';
-import { downloadAllegato, getNotaSpesa, getNoteSpese } from '@/lib/note-spese-api';
+import {
+  approvaNotaSpesa,
+  downloadAllegato,
+  getNotaSpesa,
+  getNoteSpese,
+  respingiNotaSpesa,
+} from '@/lib/note-spese-api';
 import type { NotaSpesa, NotaSpesaDetail, StatoNotaSpesa, UtenteRef } from '@/lib/note-spese-types';
 import { STATI_NOTA_SPESA, allegatiMancanti, nomeUtente } from '@/lib/note-spese-types';
 import { giornoToDate, meseCorrente, shiftMese } from '@/lib/note-spese-date';
+import { ConfirmDialog } from '@/components/aziende/ConfirmDialog';
+import { RespingiDialog } from '@/components/note-spese/RespingiDialog';
 
 // =============================================================================
 // approvazione-spese/page.tsx — pannello approvazione (ADR-0078, PR-5)
@@ -61,6 +70,14 @@ export default function ApprovazioneSpesePage(): JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [dettaglio, setDettaglio] = useState<NotaSpesaDetail | null>(null);
+  const [confermaApprova, setConfermaApprova] = useState(false);
+  const [apriRespingi, setApriRespingi] = useState(false);
+  const [azioneInCorso, setAzioneInCorso] = useState(false);
+  const [esito, setEsito] = useState<string | null>(null);
+  // Stato errore SEPARATO da `loadError`: il refetch in coda alla decisione
+  // chiama load(), che azzera `loadError` — l'errore dell'azione sparirebbe
+  // un istante dopo essere stato scritto (l'utente non vedrebbe nulla).
+  const [azioneError, setAzioneError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -96,7 +113,10 @@ export default function ApprovazioneSpesePage(): JSX.Element {
       const [azs, mds] = await Promise.all([listAziende(), getMandati()]);
       setAziende(azs);
       setMandati(mds);
-    })().catch(() => undefined);
+    })().catch(() => {
+      /* best-effort: i nomi azienda/mandato non si risolvono, la coda resta
+         decidibile. NON è un'azione utente — quelle mostrano sempre l'errore. */
+    });
   }, []);
 
   const aziendaNomeById = useMemo(() => {
@@ -129,6 +149,33 @@ export default function ApprovazioneSpesePage(): JSX.Element {
       setDettaglio(await getNotaSpesa(id));
     } catch (err) {
       setLoadError(messageForError(err));
+    }
+  }
+
+  /**
+   * Errore di un'azione di decisione → messaggio SEMPRE visibile (mai silenzioso).
+   * La transizione non consentita è il caso reale della Direzione con più
+   * persone: qualcun altro ha già deciso mentre guardavamo la coda. Non lo
+   * nascondiamo, lo spieghiamo e riallineiamo la lista.
+   */
+  async function eseguiDecisione(azione: () => Promise<unknown>): Promise<void> {
+    setAzioneInCorso(true);
+    setAzioneError(null);
+    setEsito(null);
+    try {
+      await azione();
+      setDettaglio(null);
+      setEsito(t('esito.ok'));
+    } catch (err) {
+      const gia = err instanceof ApiError && err.errorCode === 'E_NOTASPESA_INVALID_TRANSITION';
+      setAzioneError(gia ? t('esito.giaDecisa') : messageForError(err));
+    } finally {
+      setAzioneInCorso(false);
+      setConfermaApprova(false);
+      setApriRespingi(false);
+      // Refetch (non rimozione ottimistica): dopo una decisione la coda va
+      // riallineata comunque, e in caso di race mostra lo stato vero.
+      await load();
     }
   }
 
@@ -216,6 +263,18 @@ export default function ApprovazioneSpesePage(): JSX.Element {
         </span>
       </div>
 
+      {esito && (
+        <Alert>
+          <AlertDescription>{esito}</AlertDescription>
+        </Alert>
+      )}
+
+      {azioneError && (
+        <Alert variant="destructive">
+          <AlertDescription>{azioneError}</AlertDescription>
+        </Alert>
+      )}
+
       {loadError && (
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between gap-3">
@@ -281,10 +340,12 @@ export default function ApprovazioneSpesePage(): JSX.Element {
                         {mancanti.map((m) => tn(`tipoAllegato.${m}`)).join(', ')}
                       </span>
                     )}
+                    {/* Scopo: contesto essenziale per decidere, non solo nel dettaglio. */}
+                    <span className="ml-auto max-w-[18rem] truncate text-xs text-muted-foreground">
+                      {n.scopoMissione}
+                    </span>
                     {isPropria && (
-                      <span className="ml-auto text-xs italic text-muted-foreground">
-                        {t('tuaNota')}
-                      </span>
+                      <span className="text-xs italic text-muted-foreground">{t('tuaNota')}</span>
                     )}
                   </button>
                 </li>
@@ -367,6 +428,28 @@ export default function ApprovazioneSpesePage(): JSX.Element {
               )}
             </div>
 
+            {/* Azioni: solo su nota `inviata` e MAI sulle proprie (auto-decisione
+                vietata dal BE) — non basta gestire l'errore, l'azione non si mostra. */}
+            {dettaglio.stato === 'inviata' &&
+              (dettaglio.user.id === user?.id ? (
+                <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                  {t('nonPuoiDecidereTua')}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={azioneInCorso} onClick={() => setConfermaApprova(true)}>
+                    {t('azioni.approva')}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={azioneInCorso}
+                    onClick={() => setApriRespingi(true)}
+                  >
+                    {t('azioni.respingi')}
+                  </Button>
+                </div>
+              ))}
+
             {dettaglio.motivoRifiuto && (
               <Alert variant="destructive">
                 <AlertDescription>
@@ -377,6 +460,28 @@ export default function ApprovazioneSpesePage(): JSX.Element {
           </CardContent>
         </Card>
       )}
+      <ConfirmDialog
+        open={confermaApprova}
+        onOpenChange={setConfermaApprova}
+        title={t('approva.titolo')}
+        description={t('approva.descrizione')}
+        confirmLabel={t('azioni.approva')}
+        cancelLabel={t('respingi.annulla')}
+        onConfirm={() => {
+          if (dettaglio) void eseguiDecisione(() => approvaNotaSpesa(dettaglio.id));
+        }}
+        isPending={azioneInCorso}
+      />
+
+      <RespingiDialog
+        open={apriRespingi}
+        onOpenChange={setApriRespingi}
+        autore={dettaglio ? nomeUtente(dettaglio.user) : ''}
+        isPending={azioneInCorso}
+        onConfirm={async (motivo) => {
+          if (dettaglio) await eseguiDecisione(() => respingiNotaSpesa(dettaglio.id, motivo));
+        }}
+      />
     </div>
   );
 }
