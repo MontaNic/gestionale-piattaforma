@@ -3445,6 +3445,28 @@ Primo **frontend** del blocco Note Spese (`accountant-web`), preceduto da una mi
 
 ---
 
+## [2026-07-24] Note Spese v1 PR-5a + PR-5 — autore nei read path + pannello approvazione · **BLOCCO COMPLETO**
+
+Ultimo blocco: la vista di chi **decide**, separata da quella operatore. Preceduta da una micro-PR BE emersa nello STOP 0. **Tier MEDIO**. Branch `fix/note-spese-read-autore` (#181) e `feat/note-spese-approvazione`. [ADR-0078](docs/architecture/ADR-0078-note-spese-pr5-pannello-approvazione.md).
+
+**STOP 0 → secondo blocco riportato, non aggirato:** il payload esponeva solo `userId` (UUID) e l'unica lista utenti del tenant è `GET /tariffe/users`, gated su **`tariffario.gestisci`** — i costi orari del personale, che la Direzione non ha. Il pannello avrebbe mostrato UUID e preso 403; agganciarlo a quel permesso sarebbe stato sbagliato nel merito. Scelta A → **PR-5a**: `list`/`getById` includono `user` e `decisaDa` con **select esplicito** `{id,firstName,lastName}` (mai `email`, assert sull'assenza); 3 test + 23 esistenti invariati.
+
+**PR-5 (3 commit):** rotta separata gated `notespese.approva`; coda default `stato=inviata`; filtri stato/utente/periodo sui query param §6, con **opzioni utente derivate dagli autori in coda** (nessuna nuova superficie BE); dettaglio con allegati scaricabili; **esclusione auto-decisione** (azioni non mostrate, non solo errore gestito); `approva` con conferma (terminale), `respingi` con motivo obbligatorio validato prima dell'invio; refetch dopo la decisione; **stato esplicito se manca `leggi_tutte`** invece di lista vuota muta.
+
+**GATE runtime dev Sub-B, ruolo Direzione NON-superuser** (seed solo dev, mai prod): coda con autore, esclusione auto-decisione, respingi+motivo, **l'autore vede il motivo nella UI operatore** (catena end-to-end fra le due viste), e **race provocata davvero** (nota decisa via API alle spalle → 409 → messaggio esplicito). Zero pageerror.
+
+**Difetto trovato dal GATE, della famiglia che la spec vietava di ampliare:** l'errore dell'azione veniva scritto in `loadError` e **cancellato un istante dopo** dal refetch (`load()` azzera `loadError`) → il rifiuto BE spariva prima di essere letto. Il `try/catch` c'era: **nessun grep l'avrebbe trovato**. Stato `azioneError` separato. → `TD-fe-errori-silenziati` va inteso più largo: include gli errori *sovrascritti da un reload*, non solo i catch vuoti.
+
+**Debito di metodo:** il primo GATE stava per dare un falso segnale — processi `accountant-api` **orfani** servivano codice antecedente a PR-5a mentre il server nuovo non riusciva a bindare. Contromisura: verificare un **marcatore della modifica più recente** nel server in esecuzione prima di fidarsi di un GATE runtime. Stessa famiglia di `TD-db-dist-stale-runtime`.
+
+**Impatto altro verticale: N.A. verificato.**
+
+**Note Spese v1 è completa**: schema (#176) + CRUD/storage (#177) + state machine (#178) + allegati read (#179) + UI operatore (#180) + autore read (#181) + approvazione. Residui del blocco: **deployment-drift** (migrazione + re-seed + tag rollback al prossimo deploy), `TD-fe-errori-silenziati`, `TD-state-machine-read-then-write`, deferral Client Portal/OCR con trigger invariati.
+
+- Commit: `feat(accountant-api)`(PR-5a) · `feat(accountant-web)`×2 (pannello, azioni) · `docs`(ADR-0078).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

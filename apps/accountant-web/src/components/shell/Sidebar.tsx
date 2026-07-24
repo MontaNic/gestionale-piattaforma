@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
+  BadgeCheck,
   BookOpen,
   Building2,
   CalendarDays,
@@ -48,6 +49,7 @@ interface NavItem {
     | 'comunicazioni'
     | 'documenti'
     | 'note-spese'
+    | 'approvazione-spese'
     | 'circolari'
     | 'fatture'
     | 'margine'
@@ -73,6 +75,8 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'documenti', icon: FileText },
   // Spese personali dell'operatore: visibile solo a chi le può gestire.
   { key: 'note-spese', icon: Wallet, requiredPermission: 'notespese.gestisci' },
+  // Coda di approvazione: vista separata, solo per chi decide.
+  { key: 'approvazione-spese', icon: BadgeCheck, requiredPermission: 'notespese.approva' },
   { key: 'circolari', icon: Megaphone },
   { key: 'fatture', icon: Receipt },
 ] as const;
