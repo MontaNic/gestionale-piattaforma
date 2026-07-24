@@ -50,8 +50,20 @@ export interface NoteSpeseListFilter {
 // Read paths con allegati (badge/presenza FE). `storageKey` MAI esposto (chiave
 // opaca dello StorageService): il download passa solo dall'id via endpoint dedicato.
 // Ordinamento deterministico (tipo, poi createdAt) così la UI non rimescola tra fetch.
+//
+// Autore (`user`) e decisore (`decisaDa`) con **select esplicito** dei soli tre
+// campi identificativi: il pannello approvazione deve sapere di chi è la spesa e
+// chi l'ha decisa. Stessa disciplina di `storageKey`: mai `include` nudo — su
+// `User` vivono email, hash password/PIN, TOTP e badge NFC, che non devono
+// finire in un payload di dominio.
+const AUTORE_SELECT = { id: true, firstName: true, lastName: true } as const;
+
 export type NotaSpesaListItem = Prisma.NotaSpesaGetPayload<{
-  include: { allegati: { select: { id: true; tipo: true } } };
+  include: {
+    allegati: { select: { id: true; tipo: true } };
+    user: { select: { id: true; firstName: true; lastName: true } };
+    decisaDa: { select: { id: true; firstName: true; lastName: true } };
+  };
 }>;
 export type NotaSpesaDetail = Prisma.NotaSpesaGetPayload<{
   include: {
@@ -65,6 +77,8 @@ export type NotaSpesaDetail = Prisma.NotaSpesaGetPayload<{
         createdAt: true;
       };
     };
+    user: { select: { id: true; firstName: true; lastName: true } };
+    decisaDa: { select: { id: true; firstName: true; lastName: true } };
   };
 }>;
 
@@ -136,8 +150,12 @@ export class NoteSpeseService {
     return this.db.prisma.notaSpesa.findMany({
       where,
       orderBy: { data: 'desc' },
-      // Solo {id, tipo}: badge + indicatore presenza in riga, payload leggero (no storageKey).
-      include: { allegati: { select: { id: true, tipo: true }, orderBy: { tipo: 'asc' } } },
+      include: {
+        // Solo {id, tipo}: badge + indicatore presenza in riga, payload leggero (no storageKey).
+        allegati: { select: { id: true, tipo: true }, orderBy: { tipo: 'asc' } },
+        user: { select: AUTORE_SELECT },
+        decisaDa: { select: AUTORE_SELECT },
+      },
     });
   }
 
@@ -160,6 +178,8 @@ export class NoteSpeseService {
           },
           orderBy: [{ tipo: 'asc' }, { createdAt: 'asc' }],
         },
+        user: { select: AUTORE_SELECT },
+        decisaDa: { select: AUTORE_SELECT },
       },
     });
     if (!nota) throw this.notFound();
