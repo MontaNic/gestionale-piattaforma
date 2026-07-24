@@ -16,6 +16,7 @@ import {
   Receipt,
   TrendingUp,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -46,6 +47,7 @@ interface NavItem {
     | 'mandati'
     | 'comunicazioni'
     | 'documenti'
+    | 'note-spese'
     | 'circolari'
     | 'fatture'
     | 'margine'
@@ -69,6 +71,8 @@ const NAV_ITEMS: ReadonlyArray<Omit<NavItem, 'href'>> = [
   { key: 'mandati', icon: FileSignature },
   { key: 'comunicazioni', icon: MessageSquare },
   { key: 'documenti', icon: FileText },
+  // Spese personali dell'operatore: visibile solo a chi le può gestire.
+  { key: 'note-spese', icon: Wallet, requiredPermission: 'notespese.gestisci' },
   { key: 'circolari', icon: Megaphone },
   { key: 'fatture', icon: Receipt },
 ] as const;

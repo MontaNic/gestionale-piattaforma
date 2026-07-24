@@ -12,7 +12,8 @@
       "fatture": "Invoices",
       "circolari": "Circulars",
       "margine": "Margin",
-      "platform": "Platform"
+      "platform": "Platform",
+      "note-spese": "Expense reports"
     },
     "navGroups": {
       "report": "Reports"
@@ -815,6 +816,115 @@
       "ore": "Hours",
       "fatturabile": "Bill.",
       "importo": "Amount"
+    }
+  },
+  "noteSpese": {
+    "listTitle": "Expense reports",
+    "listSubtitle": "Your travel expenses, month by month",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "empty": "No expense reports this month.",
+    "emptyDay": "No expense reports on this day.",
+    "selezionaGiorno": "Select a day to see its expense reports.",
+    "indietro": "Back",
+    "totaleMese": "Month total",
+    "totaleGiorno": "Total",
+    "allegatiPresenti": "{count, plural, one {# attachment} other {# attachments}}",
+    "noteCount": "{count, plural, one {# entry} other {# entries}}",
+    "giornoAria": "Day {giorno}, {count, plural, =0 {no entries} one {# entry} other {# entries}}",
+    "readOnlyHint": "You have read-only access to expense reports.",
+    "vista": {
+      "calendario": "Calendar",
+      "elenco": "List"
+    },
+    "mese": {
+      "prev": "Previous month",
+      "next": "Next month",
+      "oggi": "Today"
+    },
+    "stato": {
+      "bozza": "Draft",
+      "inviata": "Submitted",
+      "approvata": "Approved",
+      "respinta": "Rejected"
+    },
+    "tipoSpesa": {
+      "vitto": "Meals",
+      "alloggio": "Lodging",
+      "trasporto": "Transport",
+      "carburante": "Fuel",
+      "pedaggio": "Tolls",
+      "parcheggio": "Parking",
+      "rappresentanza": "Entertainment",
+      "formazione": "Training",
+      "cancelleria": "Stationery",
+      "altro": "Other"
+    },
+    "metodoPagamento": {
+      "contanti": "Cash",
+      "carta_aziendale": "Company card",
+      "carta_personale": "Personal card",
+      "bonifico": "Bank transfer"
+    },
+    "aliquotaIva": {
+      "iva_22": "VAT 22%",
+      "iva_10": "VAT 10%",
+      "iva_4": "VAT 4%",
+      "esente": "Exempt",
+      "non_applicabile": "Not applicable"
+    },
+    "deducibilita": {
+      "d_100": "100% deductible",
+      "d_75": "75% deductible",
+      "d_50": "50% deductible",
+      "d_0": "Not deductible"
+    },
+    "tipoAllegato": {
+      "giustificativo": "Receipt",
+      "scontrino_pos": "POS slip"
+    },
+    "newNota": "New entry",
+    "modificaNota": "Edit expense entry",
+    "nuovaNotaTitolo": "New expense entry",
+    "motivoRifiuto": "Rejection reason:",
+    "solaLettura": "Entry is «{stato}»: read-only.",
+    "allegatoRichiesto": "required to submit",
+    "allegatiDopoSalvataggio": "Save the entry to attach the receipt and POS slip.",
+    "nessunAllegato": "No attachment.",
+    "rimuoviAllegato": "Remove attachment",
+    "caricamento": "Uploading…",
+    "inviaBloccatoHint": "Required attachments are missing: submission will be rejected.",
+    "warnKm": "Distance usually applies to transport or fuel.",
+    "hintAllegato": {
+      "giustificativo": "Receipt, tax receipt or invoice showing date, amount and the vendor's VAT number.",
+      "scontrino_pos": "POS slip for the card payment (legible copy)."
+    },
+    "form": {
+      "data": "Date",
+      "tipoSpesa": "Expense type",
+      "totale": "Amount (€)",
+      "metodoPagamento": "Payment method",
+      "aliquotaIva": "VAT rate",
+      "deducibilita": "Deductibility",
+      "azienda": "Client",
+      "aziendaNessuna": "None (internal)",
+      "mandato": "Engagement",
+      "mandatoNessuno": "None",
+      "distanzaKm": "Distance (km)",
+      "fatturataASocieta": "Billed to the company",
+      "scopoMissione": "Purpose of the trip",
+      "note": "Notes",
+      "salva": "Save",
+      "salvaModifiche": "Save changes",
+      "invia": "Submit",
+      "elimina": "Delete",
+      "chiudi": "Close"
+    },
+    "confirm": {
+      "title": "Delete this expense entry?",
+      "body": "This is permanent and also removes its attachments.",
+      "confirmLabel": "Delete",
+      "cancelLabel": "Cancel"
     }
   }
 }
