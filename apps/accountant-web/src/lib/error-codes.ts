@@ -96,6 +96,32 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_DOCUMENTO_TIPO_NOME_EXISTS: 'Esiste già un tipo documento con questo nome.',
   E_DOCUMENTO_FILE_REQUIRED: 'Nessun file selezionato.',
 
+  // Dominio note spese (ADR-0074/75/76). Codici runtime dell'operatore: not-found,
+  // stato non editabile/eliminabile, coerenza mandato/azienda (D6 — hard-fail BE:
+  // serve un messaggio comprensibile, non il fallback generico), gating invio e
+  // allegati. I decisionali (auto-decisione, motivo) arrivano col pannello PR-5.
+  E_NOTASPESA_NOT_FOUND: 'Nota spese non trovata.',
+  E_NOTASPESA_NOT_EDITABLE:
+    'Nota spese non modificabile: solo le note in bozza o respinte si possono modificare.',
+  E_NOTASPESA_NOT_DELETABLE: 'Solo le note spese in bozza possono essere eliminate.',
+  E_NOTASPESA_AZIENDA_NOT_FOUND: 'Cliente non trovato o non accessibile.',
+  E_NOTASPESA_MANDATO_NOT_FOUND: 'Mandato non trovato o non accessibile.',
+  E_NOTASPESA_MANDATO_AZIENDA_MISMATCH:
+    'Il mandato selezionato appartiene a un altro cliente: scegli il cliente coerente col mandato.',
+  E_NOTASPESA_INVALID_TRANSITION:
+    'Operazione non consentita nello stato attuale della nota spese. Ricarica e riprova.',
+  E_NOTASPESA_GIUSTIFICATIVO_MANCANTE:
+    'Per inviare la nota serve il giustificativo (importo maggiore di zero).',
+  E_NOTASPESA_SCONTRINO_MANCANTE:
+    'Per inviare la nota serve lo scontrino POS (pagamento con carta).',
+  E_NOTASPESA_ALLEGATO_NOT_FOUND: 'Allegato non trovato.',
+  E_NOTASPESA_ALLEGATO_FILE_REQUIRED: 'Nessun file selezionato.',
+  E_NOTASPESA_ALLEGATO_TIPO_INVALID: 'Tipo allegato non valido.',
+  E_NOTASPESA_ALLEGATO_TIPO_EXISTS:
+    'Esiste già un allegato di questo tipo: eliminalo prima di caricarne un altro.',
+  E_NOTASPESA_ALLEGATO_MIME_INVALID:
+    'Formato non ammesso: carica un PDF o un’immagine (JPEG/PNG/WebP).',
+
   // Dominio circolari (ADR-0045 studio + ADR-0048 portale cliente). Codici
   // runtime rilevanti al cliente: not-found, conferma non richiesta, guard
   // fail-closed se un principal non-cliente raggiunge /portale/circolari.
