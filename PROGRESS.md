@@ -3467,6 +3467,31 @@ Ultimo blocco: la vista di chi **decide**, separata da quella operatore. Precedu
 
 ---
 
+## [2026-07-24] PR-A preflight deploy S19 — storage persistente + provenienza immagini ([ADR-0079](docs/architecture/ADR-0079-storage-persistente-provenienza-immagini.md))
+
+Primo dei prerequisiti alla finestra di deploy S19. **Nessuna migrazione, nessun seed, nessun build verso produzione**: chiude due difetti infrastrutturali emersi dal preflight, entrambi indipendenti dal codice applicativo.
+
+**Difetto 1 — gli allegati non sopravvivevano al recreate.** `STORAGE_LOCAL_ROOT` non era valorizzata da nessuna parte e nessun servizio dichiarava `volumes:` → root effettiva `/app/apps/accountant-api/var/storage`, cioè il layer scrivibile del container. **Perdita già avvenuta**: 1 riga `documenti` + 3 `comunicazioni` su prod puntano a blob inesistenti dal recreate del 10/07. Note Spese portava il difetto da latente a strutturale (il giustificativo è dato fiscale non ricostruibile). Chiuso con `mkdir` nel Dockerfile + `STORAGE_LOCAL_ROOT` letterale nel compose di prod + named volume `gestionale_storage_data`. Solo `accountant-api`: `restaurant-api` non usa `StorageModule` (verificato).
+
+**Difetto 2 — nessuna immagine dichiarava il commit di origine.** `docker inspect` mostrava solo le label `com.docker.compose.*`; l'unica provenienza era una convenzione di tagging manuale mai applicata alle immagini accountant. Chiuso con `ARG GIT_SHA` + label OCI sui quattro Dockerfile e `${GIT_SHA:?…}` nel compose di prod: **un build di produzione senza SHA aborta prima del primo layer**.
+
+**Decisione emendata in corsa (D3).** Il piano prevedeva `chown -R <user>:<group>` prima della direttiva `USER`. La verifica ha smentito la premessa: **nessuno dei quattro runner stage ha `USER`**, tutti girano come root (`uid=0`), benché `node:22-alpine` fornisca `node` uid 1000. Il `chown` sarebbe stato un no-op che comunica un de-privilegio inesistente → rimosso, debito registrato.
+
+**GATE — il verde statico qui non prova nulla** (compose e Dockerfile non sono coperti da test). Tutto contro il **DB dev isolato** `:55432`, stack effimero con project name dedicato, mai il compose di prod né il tag `latest`:
+- **G1**: upload → `--force-recreate` (container ID cambiato) → download **HTTP 200, byte-identico** (`cmp` pulito).
+- **Controllo negativo** — perché G1 da solo direbbe solo "funziona", non "è il fix a farlo funzionare": stessa immagine configurata come la prod attuale → download **200 prima** del recreate, **500 dopo**, con la **riga DB ancora presente**. Riproduzione esatta della condizione delle 4 righe orfane in produzione.
+- **G2**: volume montato, blob presente, probe di scrittura reale con l'uid effettivo. **G3**: label = SHA di HEAD. **G4**: build senza `GIT_SHA` aborta con il messaggio previsto. **G5**: 16/16 typecheck, lint pulito, 15/15 test (196 unit).
+
+**Impatto altro verticale: verificato.** Il PR tocca i Dockerfile di **entrambi** i verticali, quindi la dichiarazione non poteva essere `N.A.`: i tre non-accountant sono stati costruiti con le modifiche applicate. `restaurant-api` resta senza volume perché non usa lo storage. Nessuna modifica a schema, migrazioni, seed o permessi.
+
+**Fuori dal PR, emerso durante la ricognizione:** due processi dev **orfani** sull'host di produzione, spenti in questa sessione dopo forensics read-only — `turbo run dev` da 21 giorni (4× `tsup --watch`; ipotizzato come reperto del quasi-incidente S18, **smentito**: nessuna `DATABASE_URL` in ambiente, nessun listener, nessuna connessione al DB) e `restaurant-api` dev da 26 ore in ascolto su `*:3000` (puntava correttamente al DB dev `:55432`). Registrato come `TD-dev-processes-orphaned-on-prod-host`, **quinta failure-mode strutturale** della famiglia S18. Verifica firewall sulla 3000 in carico a Nicolò (richiede `sudo`).
+
+**Debiti**: `TD-container-runs-as-root` (nuovo) · `TD-storage-backup-blob` (nuovo — il `pg_dump` non copre i blob, e oggi **non esiste alcun backup**, nemmeno del DB) · `TD-storage-gc` (esteso col caso inverso: righe che puntano a blob assenti, lasciate in essere di proposito) · `TD-dev-processes-orphaned-on-prod-host` (nuovo).
+
+- Commit: `fix(infra)`(storage) · `chore(infra)`(label OCI) · `docs(adr)`(ADR-0079).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

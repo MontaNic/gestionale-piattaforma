@@ -38,6 +38,19 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Provenienza dell'immagine (OCI image-spec). Prima di questa label il SHA non era
+# tracciato da nessuna parte: `docker inspect` mostrava solo le label
+# com.docker.compose.*, e l'unico modo di risalire al commit era una convenzione di
+# tagging manuale (es. portata-167cb3d) mai applicata alle immagini accountant.
+# GIT_SHA arriva dal build arg: ${GIT_SHA:-unknown} in dev, ${GIT_SHA:?...} in prod
+# (fail-closed: il build di produzione si rifiuta di partire senza SHA). Il default
+# `unknown` copre i build diretti fuori dal compose di prod: docker-compose.dev.yml
+# non builda le app (contiene solo postgres/redis/caddy/mailpit), quindi non c'e' un
+# compose dev in cui mettere la variante permissiva. Vedi ADR-0079.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
+LABEL org.opencontainers.image.source=https://github.com/MontaNic/gestionale-piattaforma
+
 # Preserva il layout pnpm del builder invece di re-installare (pnpm deploy 9.15
 # ri-risolve il workspace e perderebbe il client Prisma generato). Si copiano:
 # - node_modules root: lo store virtuale .pnpm (incl. @prisma/client + engine musl
@@ -52,6 +65,17 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/accountant-api/node_modules ./apps/accountant-api/node_modules
 COPY --from=builder /app/apps/accountant-api/dist ./apps/accountant-api/dist
 COPY --from=builder /app/apps/accountant-api/package.json ./apps/accountant-api/
+
+# Root dello storage locale (STORAGE_LOCAL_ROOT, valorizzata nel compose di prod).
+# Deliberatamente FUORI da /app: il mount point non deve dipendere dal layout del
+# monorepo dentro l'immagine. Serve che la dir esista gia' qui perche' il named
+# volume ne eredita ownership e contenuto alla prima creazione.
+#
+# Nessun `chown`: i runner stage girano come root (nessuna direttiva USER in
+# nessuna delle quattro app), quindi non c'e' un utente da accontentare e un
+# `chown root:root` sarebbe un no-op che suggerisce al lettore un de-privilegio
+# inesistente. Vedi TD-container-runs-as-root in ADR-0079.
+RUN mkdir -p /var/lib/gestionale/storage
 
 WORKDIR /app/apps/accountant-api
 EXPOSE 3002

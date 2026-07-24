@@ -45,6 +45,19 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Provenienza dell'immagine (OCI image-spec). Prima di questa label il SHA non era
+# tracciato da nessuna parte: `docker inspect` mostrava solo le label
+# com.docker.compose.*, e l'unico modo di risalire al commit era una convenzione di
+# tagging manuale (es. portata-167cb3d) mai applicata alle immagini accountant.
+# GIT_SHA arriva dal build arg: ${GIT_SHA:-unknown} in dev, ${GIT_SHA:?...} in prod
+# (fail-closed: il build di produzione si rifiuta di partire senza SHA). Il default
+# `unknown` copre i build diretti fuori dal compose di prod: docker-compose.dev.yml
+# non builda le app (contiene solo postgres/redis/caddy/mailpit), quindi non c'e' un
+# compose dev in cui mettere la variante permissiva. Vedi ADR-0079.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
+LABEL org.opencontainers.image.source=https://github.com/MontaNic/gestionale-piattaforma
+
 COPY --from=builder /app/apps/accountant-web/.next/standalone ./
 COPY --from=builder /app/apps/accountant-web/.next/static     ./apps/accountant-web/.next/static
 COPY --from=builder /app/apps/accountant-web/public           ./apps/accountant-web/public
