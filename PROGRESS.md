@@ -3421,6 +3421,30 @@ Terzo e ultimo blocco backend Note Spese: macchina a stati (invia/approva/respin
 
 ---
 
+## [2026-07-24] Note Spese v1 PR-3a + PR-4 — allegati nei read path + UI operatore
+
+Primo **frontend** del blocco Note Spese (`accountant-web`), preceduto da una micro-PR BE emersa nello STOP 0. **Tier MEDIO**. Branch `fix/note-spese-read-allegati` (#179) e `feat/note-spese-web`. [ADR-0077](docs/architecture/ADR-0077-note-spese-pr4-ui-operatore.md).
+
+**STOP 0 → blocco reale riportato, non aggirato:** i read path BE non esponevano gli allegati e non esiste un `GET` lista allegati → badge "giustificativo/scontrino mancante" (§8), indicatore presenza in riga (§2) e vista/download allegati di una nota già salvata erano **infattibili**. Riportato con opzioni; scelta A → **PR-3a** (#179, mergiata): `getById` include allegati completi, `list` li include leggeri `{id,tipo}`, ordine deterministico, **mai `storageKey`**; 3 test (incl. assert sull'**assenza** della chiave e cross-tenant sull'include) + 20 esistenti invariati.
+
+**PR-4 (4 commit):**
+- **Client API** sopra `@gestionale/api-client`, allegati via `apiPostMultipart`/`apiGetBlob`: **invariante "nessuna chiamata HTTP raw" preservata** (grep = 0). Wire→domain nel client, verificato sul BE reale (`totale` arriva stringa, `data` ISO, il POST non include allegati).
+- **Viste**: toggle calendario ↔ elenco, navigazione mese (DP-4), totali mese/giorno, stati vuoti. **Calendario costruito da zero** (non esisteva, nessuna dipendenza date aggiunta): lunedì-first, UTC, giorno senza note distinto da giorno a zero. Layout due colonne da 860px, **nessun container fisso 480px**; sotto 860px stack (DP-3).
+- **Form + allegati**: upload separati con hint **inline**, sola lettura su inviata/approvata, `motivoRifiuto` in evidenza, **D6 prevenuto a monte** (mandato determina l'azienda), warning non bloccanti. **Compressione client-side da zero**: 1280px + JPEG q0.7, solo immagini, fallback sull'originale.
+- **i18n** it/en completo (incl. label enum) + voce sidebar gated. **DP-1..DP-4** registrate come decisioni di interazione **reversibili**.
+
+**GATE runtime su dev Sub-B (mai prod), ruolo NON-superuser, browser reale desktop+mobile:** ciclo completo crea → invia (422 giustificativo) → allega → invia (422 scontrino) → allega → inviata + sola lettura; delete con conferma. Compressione sul dato reale: **PNG 5.26MB → image/jpeg 75.8KB**, PDF invariato.
+
+**Tre difetti trovati dai gate, invisibili al typecheck:** (1) il rifiuto BE su `invia` finiva in unhandled rejection → l'utente **non vedeva nulla**, ora è messaggio a schermo; (2) toggle vista icon-only senza `aria-label` sotto `sm`; (3) `ConfirmDialog` mai montato (import/handler orfani, colto da eslint). Tutti corretti e ri-verificati.
+
+**Impatto altro verticale: N.A. verificato** — PR-3a solo `apps/accountant-api`, PR-4 solo `apps/accountant-web`.
+
+**Residuo:** **PR-5** = pannello approvazione (`notespese.approva`): vista separata, `approva`/`respingi` con motivo.
+
+- Commit: `feat(accountant-api)`(PR-3a) · `feat(accountant-web)`×3 (client, viste, form) · `docs`(ADR-0077).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
