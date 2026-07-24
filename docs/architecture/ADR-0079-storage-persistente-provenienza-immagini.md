@@ -92,16 +92,18 @@ In `docker-compose.prod.yml`, su tutti e quattro i servizi:
 ```yaml
 build:
   args:
-    GIT_SHA: '${GIT_SHA:?build di produzione senza GIT_SHA — esporta GIT_SHA con git rev-parse HEAD prima del build}'
+    GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
 ```
 
-Un build di produzione senza SHA **aborta prima di costruire il primo layer**, stessa forma di `${DATABASE_URL_DOCKER:?…}` già in uso.
+Un build di produzione senza SHA **aborta prima di costruire il primo layer**, stessa forma di `${DATABASE_URL_DOCKER:?…}` già in uso. Il messaggio non parla solo di build perché il raggio del presidio è più ampio: vedi la sezione _Operatività_ sotto.
 
 **Due scostamenti dal piano, entrambi imposti dai fatti:**
 
 1. Il piano prevedeva anche `${GIT_SHA:-unknown}` in `docker-compose.dev.yml`. Quel file **non builda le app**: contiene solo `postgres`, `redis`, `caddy`, `mailpit`. I quattro servizi applicativi esistono unicamente in `docker-compose.prod.yml`. La variante permissiva non ha quindi un compose in cui vivere, e viene realizzata come **default dell'`ARG`** (`ARG GIT_SHA=unknown`), che copre i build diretti lanciati fuori dal compose di produzione. Il fail-closed di prod resta intatto: l'interpolazione compose fallisce prima che il default entri in gioco.
 
-2. Il messaggio d'errore usa un trattino al posto dei due punti e non contiene `$(git rev-parse HEAD)`. Un `: ` dentro uno scalare YAML non quotato lo fa interpretare come mapping (`mapping values are not allowed in this context`), e la sostituzione di comando non è gestita dall'interpolazione compose.
+2. Il messaggio d'errore **non contiene `$(git rev-parse HEAD)`**: la sostituzione di comando non è gestita dall'interpolazione compose, quindi il comando è citato in chiaro (`git rev-parse HEAD`) come testo che l'operatore ricopia.
+
+   I due punti, invece, sono ammessi — ma solo perché **l'intero valore è single-quoted**. La prima stesura lasciava il valore non quotato e il parsing YAML si rompeva a `L63.C48` con `mapping values are not allowed in this context`, perché un `: ` dentro uno scalare nudo lo fa interpretare come mapping. Quotando, i `:` tornano disponibili e il messaggio può usare la punteggiatura naturale invece dei trattini — verificato empiricamente, non assunto.
 
 ### D7 — Nessun `request_body` in Caddy
 
@@ -151,6 +153,49 @@ Aborta prima di qualunque layer: il presidio è meccanico, non documentale.
 **G5 — anti-regressione.** Baseline pre-fix registrata a working tree pulito e riconfermata: typecheck 16/16 task, lint pulito, test 15/15 task (196 unit).
 
 **G6 — impatto sull'altro verticale: verificato.** I Dockerfile toccati sono quattro, quindi la dichiarazione non può essere `N.A.` I tre non-accountant sono stati costruiti con le modifiche applicate; nessun cambiamento di comportamento oltre l'aggiunta delle label. `restaurant-api` non ha volume né `STORAGE_LOCAL_ROOT` perché non usa lo storage (verifica sopra). Nessuna modifica a schema, migrazioni, seed o permessi.
+
+## Operatività
+
+### Il raggio del fail-closed è ogni comando compose, non solo `build`
+
+Compose interpola **l'intero modello al caricamento del file**, non solo quando esegue un build. Un `${GIT_SHA:?}` sotto `build.args` blocca quindi _qualunque_ comando compose contro la produzione — `config`, `ps`, `logs`, `up`, `restart` — incluso il percorso di rollback.
+
+Non è un'inferenza, è misurato. Senza `GIT_SHA` in ambiente:
+
+```
+config exit=1
+ps     exit=1
+logs   exit=1
+```
+
+Tutti e tre con lo stesso errore esplicito, che nomina la variabile e il rimedio. È il motivo per cui il messaggio è stato riscritto: comparendo anche su `ps` e `logs`, una formulazione centrata sul solo build manderebbe l'operatore a cercare un build che non ha lanciato.
+
+**Conseguenze pratiche:**
+
+| Situazione                           | Gesto                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| Build e deploy                       | `export GIT_SHA=$(git rev-parse HEAD)` — passo obbligatorio del runbook |
+| Lettura in emergenza                 | prefisso `GIT_SHA=unknown docker compose …`                             |
+| Lettura in emergenza, senza prefissi | **CLI Docker puro**: `docker ps`, `docker logs <container>`             |
+
+L'ultima riga è la più importante alle 23:00: il CLI Docker **non legge il compose file** e funziona identico a prima. Verificato, `exit 0` su entrambi i comandi. La diagnostica d'emergenza non è quindi degradata da questa decisione; l'attrito colpisce i comandi di ciclo di vita, dove un `export` è un gesto naturale perché si è comunque dentro un checkout git.
+
+### Rischio residuo accettato
+
+`GIT_SHA=unknown` è una scorciatoia diagnostica che può diventare memoria muscolare e finire davanti a un `up -d --build`, producendo un'immagine con `revision=unknown` **senza che nulla protesti**.
+
+Deliberatamente **non** mitigato nel Dockerfile: un check che rifiuta `unknown` romperebbe i build diretti fuori compose, che sono esattamente quelli usati nel GATE di questa PR.
+
+_Rimedio corretto_: il runbook di deploy esporta `GIT_SHA` come **passo proprio**, così la scorciatoia non ha occasione di sostituirlo.
+_Trigger di riattivazione_: prima immagine di produzione trovata con `revision=unknown`.
+
+### Perché non (B) né (C)
+
+Le due alternative sono state scartate per ragioni di **merito**, non di costo.
+
+**(B) — `${GIT_SHA:-unknown}` nel compose, fail-closed spostato nel Dockerfile.** Con un default sempre presente il Dockerfile riceve comunque un valore e **non può distinguere** un build dev legittimo da un build di produzione in cui l'export è stato dimenticato. Un check `test "$GIT_SHA" != unknown` fallirebbe sempre o mai. Il fail-closed non si sposta: si perde.
+
+**(C) — `build.args` in un overlay dedicato, usato solo in fase di build.** Un `docker compose -f dev -f prod up -d --build` senza overlay costruisce ugualmente, con l'`ARG` al default, producendo proprio l'immagine non tracciabile che il presidio doveva impedire. La garanzia tornerebbe a dipendere dal ricordarsi il quarto file — cioè dalla memoria dell'operatore, che è ciò da cui si voleva uscire.
 
 ## Debiti registrati
 

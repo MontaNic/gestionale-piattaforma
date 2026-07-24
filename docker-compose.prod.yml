@@ -56,11 +56,15 @@ services:
     build:
       context: .
       dockerfile: apps/accountant-api/Dockerfile
-      # Provenienza fail-closed: senza GIT_SHA in ambiente il build ABORTA prima
-      # di partire, stessa forma di ${DATABASE_URL_DOCKER:?...} sopra. Impedisce
-      # che un'immagine di produzione nasca senza il commit che la origina.
+      # Provenienza fail-closed: impedisce che un'immagine di produzione nasca
+      # senza il commit che la origina. Stessa forma di ${DATABASE_URL_DOCKER:?...}.
+      #
+      # RAGGIO: Compose interpola l'INTERO modello al caricamento del file, quindi
+      # questo :? blocca OGNI comando compose (config/ps/logs/up/restart), non solo
+      # build. Voluto ma non gratuito -> il messaggio deve dare entrambi i gesti:
+      # l'export per build/deploy e la scorciatoia per la sola lettura. Vedi ADR-0079.
       args:
-        GIT_SHA: '${GIT_SHA:?build di produzione senza GIT_SHA — esporta GIT_SHA con git rev-parse HEAD prima del build}'
+        GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
     image: gestionale/accountant-api
     restart: unless-stopped
     # JWT/Throttle/Lockout/SMTP dal .env; override sotto per le var host-specific
@@ -106,11 +110,15 @@ services:
     build:
       context: .
       dockerfile: apps/accountant-web/Dockerfile
-      # Provenienza fail-closed: senza GIT_SHA in ambiente il build ABORTA prima
-      # di partire, stessa forma di ${DATABASE_URL_DOCKER:?...} sopra. Impedisce
-      # che un'immagine di produzione nasca senza il commit che la origina.
+      # Provenienza fail-closed: impedisce che un'immagine di produzione nasca
+      # senza il commit che la origina. Stessa forma di ${DATABASE_URL_DOCKER:?...}.
+      #
+      # RAGGIO: Compose interpola l'INTERO modello al caricamento del file, quindi
+      # questo :? blocca OGNI comando compose (config/ps/logs/up/restart), non solo
+      # build. Voluto ma non gratuito -> il messaggio deve dare entrambi i gesti:
+      # l'export per build/deploy e la scorciatoia per la sola lettura. Vedi ADR-0079.
       args:
-        GIT_SHA: '${GIT_SHA:?build di produzione senza GIT_SHA — esporta GIT_SHA con git rev-parse HEAD prima del build}'
+        GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
     image: gestionale/accountant-web
     restart: unless-stopped
     # Next standalone (server.js) legge PORT/HOSTNAME a runtime. HOSTNAME 0.0.0.0
@@ -131,11 +139,15 @@ services:
     build:
       context: .
       dockerfile: apps/restaurant-api/Dockerfile
-      # Provenienza fail-closed: senza GIT_SHA in ambiente il build ABORTA prima
-      # di partire, stessa forma di ${DATABASE_URL_DOCKER:?...} sopra. Impedisce
-      # che un'immagine di produzione nasca senza il commit che la origina.
+      # Provenienza fail-closed: impedisce che un'immagine di produzione nasca
+      # senza il commit che la origina. Stessa forma di ${DATABASE_URL_DOCKER:?...}.
+      #
+      # RAGGIO: Compose interpola l'INTERO modello al caricamento del file, quindi
+      # questo :? blocca OGNI comando compose (config/ps/logs/up/restart), non solo
+      # build. Voluto ma non gratuito -> il messaggio deve dare entrambi i gesti:
+      # l'export per build/deploy e la scorciatoia per la sola lettura. Vedi ADR-0079.
       args:
-        GIT_SHA: '${GIT_SHA:?build di produzione senza GIT_SHA — esporta GIT_SHA con git rev-parse HEAD prima del build}'
+        GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
     image: gestionale/restaurant-api
     restart: unless-stopped
     # JWT/Throttle/Lockout/SMTP + GROQ_API_KEY dal .env (AI futura eredita da qui);
@@ -166,11 +178,15 @@ services:
     build:
       context: .
       dockerfile: apps/restaurant-web/Dockerfile
-      # Provenienza fail-closed: senza GIT_SHA in ambiente il build ABORTA prima
-      # di partire, stessa forma di ${DATABASE_URL_DOCKER:?...} sopra. Impedisce
-      # che un'immagine di produzione nasca senza il commit che la origina.
+      # Provenienza fail-closed: impedisce che un'immagine di produzione nasca
+      # senza il commit che la origina. Stessa forma di ${DATABASE_URL_DOCKER:?...}.
+      #
+      # RAGGIO: Compose interpola l'INTERO modello al caricamento del file, quindi
+      # questo :? blocca OGNI comando compose (config/ps/logs/up/restart), non solo
+      # build. Voluto ma non gratuito -> il messaggio deve dare entrambi i gesti:
+      # l'export per build/deploy e la scorciatoia per la sola lettura. Vedi ADR-0079.
       args:
-        GIT_SHA: '${GIT_SHA:?build di produzione senza GIT_SHA — esporta GIT_SHA con git rev-parse HEAD prima del build}'
+        GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
     image: gestionale/restaurant-web
     restart: unless-stopped
     # Next standalone (server.js) legge PORT/HOSTNAME a runtime. HOSTNAME 0.0.0.0
