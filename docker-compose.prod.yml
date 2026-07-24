@@ -77,6 +77,18 @@ services:
       # Same-origin (routing path-based /api/*) -> CORS di fatto non scatta;
       # valore di sicurezza per eventuali richieste cross-origin.
       CORS_ORIGIN: https://studiodesk.cloud
+      # Root degli allegati (documenti, comunicazioni, note spese). Valore
+      # LETTERALE, non ${STORAGE_LOCAL_ROOT:?}: e' un path interno al container,
+      # non un segreto, e non deve dipendere da una riga che qualcuno si deve
+      # ricordare di aggiungere al .env dell'host. Senza questa var il default del
+      # codice e' <cwd>/var/storage = layer scrivibile del container, distrutto a
+      # ogni recreate (perdita gia' avvenuta il 10/07). Vedi ADR-0079.
+      STORAGE_LOCAL_ROOT: /var/lib/gestionale/storage
+    volumes:
+      # Unico servizio con storage persistente: solo accountant-api importa
+      # StorageModule (documenti, comunicazioni, note-spese). restaurant-api NON
+      # lo usa -> nessun volume di sua competenza. Verificato in ADR-0079.
+      - storage_data:/var/lib/gestionale/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,3 +168,13 @@ services:
 networks:
   web:
     external: true
+
+# Named volume (non bind mount) per gli allegati: eredita ownership e contenuto
+# dalla dir creata nel Dockerfile alla prima creazione, evitando la classe di
+# problemi uid/gid dei bind mount. La chiave è `storage_data` perché Compose
+# prefissa col nome progetto -> volume reale `gestionale_storage_data`, stesso
+# pattern di postgres_data -> gestionale_postgres_data. Vedi ADR-0079.
+#
+# NB: questo volume NON è coperto dal pg_dump. Vedi TD-storage-backup-blob.
+volumes:
+  storage_data:

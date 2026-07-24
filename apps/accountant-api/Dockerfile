@@ -53,6 +53,17 @@ COPY --from=builder /app/apps/accountant-api/node_modules ./apps/accountant-api/
 COPY --from=builder /app/apps/accountant-api/dist ./apps/accountant-api/dist
 COPY --from=builder /app/apps/accountant-api/package.json ./apps/accountant-api/
 
+# Root dello storage locale (STORAGE_LOCAL_ROOT, valorizzata nel compose di prod).
+# Deliberatamente FUORI da /app: il mount point non deve dipendere dal layout del
+# monorepo dentro l'immagine. Serve che la dir esista gia' qui perche' il named
+# volume ne eredita ownership e contenuto alla prima creazione.
+#
+# Nessun `chown`: i runner stage girano come root (nessuna direttiva USER in
+# nessuna delle quattro app), quindi non c'e' un utente da accontentare e un
+# `chown root:root` sarebbe un no-op che suggerisce al lettore un de-privilegio
+# inesistente. Vedi TD-container-runs-as-root in ADR-0079.
+RUN mkdir -p /var/lib/gestionale/storage
+
 WORKDIR /app/apps/accountant-api
 EXPOSE 3002
 CMD ["node", "dist/src/main.js"]
