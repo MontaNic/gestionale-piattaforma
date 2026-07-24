@@ -12,7 +12,8 @@
       "fatture": "Fatture",
       "circolari": "Circolari",
       "margine": "Margine",
-      "platform": "Piattaforma"
+      "platform": "Piattaforma",
+      "note-spese": "Note spese"
     },
     "navGroups": {
       "report": "Report"
@@ -815,6 +816,72 @@
       "ore": "Ore",
       "fatturabile": "Fatt.",
       "importo": "Importo"
+    }
+  },
+  "noteSpese": {
+    "listTitle": "Note spese",
+    "listSubtitle": "Le tue spese di trasferta, mese per mese",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "empty": "Nessuna nota spese in questo mese.",
+    "emptyDay": "Nessuna nota spese in questa giornata.",
+    "selezionaGiorno": "Seleziona un giorno per vedere le note spese.",
+    "indietro": "Indietro",
+    "totaleMese": "Totale mese",
+    "totaleGiorno": "Totale",
+    "allegatiPresenti": "{count, plural, one {# allegato} other {# allegati}}",
+    "noteCount": "{count, plural, one {# nota} other {# note}}",
+    "giornoAria": "Giorno {giorno}, {count, plural, =0 {nessuna nota} one {# nota} other {# note}}",
+    "readOnlyHint": "Hai accesso in sola lettura alle note spese.",
+    "vista": {
+      "calendario": "Calendario",
+      "elenco": "Elenco"
+    },
+    "mese": {
+      "prev": "Mese precedente",
+      "next": "Mese successivo",
+      "oggi": "Oggi"
+    },
+    "stato": {
+      "bozza": "Bozza",
+      "inviata": "Inviata",
+      "approvata": "Approvata",
+      "respinta": "Respinta"
+    },
+    "tipoSpesa": {
+      "vitto": "Vitto",
+      "alloggio": "Alloggio",
+      "trasporto": "Trasporto",
+      "carburante": "Carburante",
+      "pedaggio": "Pedaggio",
+      "parcheggio": "Parcheggio",
+      "rappresentanza": "Rappresentanza",
+      "formazione": "Formazione",
+      "cancelleria": "Cancelleria",
+      "altro": "Altro"
+    },
+    "metodoPagamento": {
+      "contanti": "Contanti",
+      "carta_aziendale": "Carta aziendale",
+      "carta_personale": "Carta personale",
+      "bonifico": "Bonifico"
+    },
+    "aliquotaIva": {
+      "iva_22": "IVA 22%",
+      "iva_10": "IVA 10%",
+      "iva_4": "IVA 4%",
+      "esente": "Esente",
+      "non_applicabile": "Non applicabile"
+    },
+    "deducibilita": {
+      "d_100": "Deducibile 100%",
+      "d_75": "Deducibile 75%",
+      "d_50": "Deducibile 50%",
+      "d_0": "Non deducibile"
+    },
+    "tipoAllegato": {
+      "giustificativo": "Giustificativo",
+      "scontrino_pos": "Scontrino POS"
     }
   }
 }
