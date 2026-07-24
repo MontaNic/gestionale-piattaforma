@@ -3492,6 +3492,28 @@ Primo dei prerequisiti alla finestra di deploy S19. **Nessuna migrazione, nessun
 
 ---
 
+## [2026-07-24] PR-B preflight deploy S19 — seed fail-closed su `NODE_ENV` ([ADR-0080](docs/architecture/ADR-0080-seed-fail-closed-node-env.md))
+
+Secondo prerequisito alla finestra, dopo lo storage di PR-A. Preceduto dall'**OPS backup**: primo dump di produzione mai esistito (`pg_dump -Fc`, 265K, 0,2s) **con ripristino verificato** in container effimero isolato — diff dei conteggi vuoto su 46 tabelle / 1776 righe, RLS 37 tabelle con `FORCE` e 37 policy identiche fra prod e copia, `GRANT` a `gestionale_app` su 46/46 tabelle. Blocco ① sciolto.
+
+**Il difetto.** Il seed decideva su `NODE_ENV !== 'production'`. `NODE_ENV` è assente da `.env` e lo script non la forzava → con la variabile non impostata il seed entra nel ramo **dev** e fa upsert dei tenant `demo`/`acme` con password note (`Admin123!`, `Manager123!`). Quei tenant **esistono già su produzione**: una riesecuzione avrebbe riportato le password ai default.
+
+**Il fix**: `assertValidNodeEnv`, funzione pura, **set chiuso** `{production, development, test}`, **nessun default** — l'assenza aborta, e il confronto è esatto (`prod` e `Production` sono errori, non sinonimi). Il ramo dev è ora espresso in **positivo** (`allowsDevData`): era proprio il `!== 'production'` a lasciar passare la variabile assente.
+
+**La parte non ovvia (D3).** L'abort deve precedere l'istanziazione del client Prisma, che in `packages/db` (ESM) è **eager** all'import di `../src/index`. Gli import sono hoisted, quindi una statement in cima a `seed.ts` girerebbe *dopo*. I moduli importati sono invece valutati nell'ordine di dichiarazione → `seed-preflight.ts` come **primo import**, che importa il modulo guard e non il barrel. **L'ordine di quell'import è il presidio**, ed è il punto fragile della soluzione (annotato).
+
+**Sub-DP risolto empiricamente**: `db:seed` **ha** un consumatore (`ci.yml:241`) → non rinominato. `db:seed` resta con `NODE_ENV=development`, si aggiunge `db:seed:prod`. Verificato leggendo `ci.yml` che togliere `ALLOW_PROD_DB_ACCESS` non rompe la CI (target `postgres:5432/gestionale_test`: host e nome DB entrambi diversi da quelli protetti). **Conseguenza voluta**: `db:seed` non può più colpire il DB di produzione.
+
+**GATE (solo DB dev `:55432`, mai `5432`)**: G1 11 test unitari · **G2** seed senza `NODE_ENV` → `exit=1`, abort in `seed-preflight.ts:31`, e sul DB i contatori **cumulativi** `tup_inserted`/`tup_updated` a **delta 0** — prova che nessuna query è stata eseguita, non solo nessuna scrittura (uno snapshot di `pg_stat_activity` avrebbe potuto mancarla) · **G4 controllo negativo**: pre-fix la stessa invocazione usciva `exit=0` entrando nel ramo dev · G3 `devdb:seed` verde e idempotente · G5 16/16 typecheck, 15/15 test.
+
+**Impatto altro verticale: verificato.** `packages/db` è condiviso, ma il guard vive su un percorso che solo il seed attraversa (`assertValidNodeEnv` ← `seed-preflight.ts` ← `seed.ts`): nessun runtime applicativo lo tocca. Suite verde su entrambi.
+
+**Debito aperto**: `README.md` documenta ancora `db:seed` come setup locale — va allineato al flusso `devdb:*` nel PR docs di chiusura.
+
+- Commit: `feat(db)`(guard) · `chore(db)`(script) · `docs(adr)`(ADR-0080).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
