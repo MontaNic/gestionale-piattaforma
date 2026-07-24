@@ -21,6 +21,14 @@
 //   (oppure: pnpm --filter @gestionale/db exec prisma db seed)
 // =============================================================================
 
+// PRIMO import, deliberatamente: valida NODE_ENV e aborta prima che
+// `../src/index` venga valutato e istanzi il client Prisma (eager). In ESM i
+// moduli sono valutati nell'ordine di dichiarazione, quindi l'ordine di questa
+// riga E' il presidio: non spostarla sotto. Vedi seed-preflight.ts e ADR-0080.
+import { allowsDevData } from '../src/assert-valid-node-env';
+
+import { SEED_NODE_ENV } from './seed-preflight';
+
 import argon2 from 'argon2';
 
 import {
@@ -1962,10 +1970,14 @@ async function main(): Promise<void> {
   // Per ogni tenant: sede + user + clone Super Admin template + role_permissions
   // + assignment tenant-wide. Idempotente: re-run safe.
   //
-  // Solo dev locale. Per skippare: NODE_ENV=production prisma db seed.
+  // Solo dev locale. In produzione: `pnpm --filter @gestionale/db db:seed:prod`.
+  //
+  // Condizione in POSITIVO su un set chiuso (`development` | `test`), non per
+  // esclusione da 'production': era proprio il `!== 'production'` a far entrare
+  // qui un seed con NODE_ENV assente. SEED_NODE_ENV e' gia' validato dal guard.
   // ───────────────────────────────────────────────────────────────────────────
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('Dev data (NODE_ENV != "production"):');
+  if (allowsDevData(SEED_NODE_ENV)) {
+    console.log(`Dev data (NODE_ENV=${SEED_NODE_ENV}):`);
 
     // Carica una volta il template Super Admin (riusato per tutti i tenant)
     const superAdminTpl = await prisma.systemRoleTemplate.findUnique({
@@ -2097,7 +2109,7 @@ async function main(): Promise<void> {
 
     console.log('');
   } else {
-    console.log('Dev data: SKIPPED (NODE_ENV=production)\n');
+    console.log(`Dev data: SKIPPED (NODE_ENV=${SEED_NODE_ENV})\n`);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -2107,7 +2119,7 @@ async function main(): Promise<void> {
   console.log(`  Permissions:           ${PERMISSIONS.length}`);
   console.log(`  Role templates:        ${ROLE_TEMPLATES.length}`);
   console.log(`  Total mappings:        ${mapTotal}`);
-  if (process.env.NODE_ENV !== 'production') {
+  if (allowsDevData(SEED_NODE_ENV)) {
     console.log(`  Dev tenants:`);
     console.log(`    - demo  (admin@demo.local / Admin123!)`);
     console.log(`        + direzione@demo.local (ruolo Direzione, non-super — tavoli.gestisci)`);
