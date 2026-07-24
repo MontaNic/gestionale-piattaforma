@@ -102,6 +102,11 @@ export { PrismaClient, Prisma };
 //
 // Quando aggiungi un nuovo enum a schema.prisma, aggiungilo qui per renderlo
 // disponibile cross-package senza bumpare dep root.
+//
+// NB consumer: questi re-export servono i **backend** (NestJS), non il frontend.
+// Le app web NON importano @gestionale/db: replicano gli enum come union +
+// const array nel proprio `*-types.ts` (vedi documenti-types.ts). Es. i 6 enum
+// Note Spese sono consumati da accountant-api (DTO `@IsEnum` + service/controller).
 // -----------------------------------------------------------------------------
 
 export {
