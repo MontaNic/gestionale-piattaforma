@@ -79,6 +79,19 @@ export const DEDUCIBILITA: readonly DeducibilitaFiscale[] = ['d_100', 'd_75', 'd
 export type TipoAllegatoNotaSpesa = 'giustificativo' | 'scontrino_pos';
 export const TIPI_ALLEGATO: readonly TipoAllegatoNotaSpesa[] = ['giustificativo', 'scontrino_pos'];
 
+/** Autore/decisore esposti dai read path (PR-5a): solo identificativi. */
+export interface UtenteRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+/** Nome visualizzabile di un utente (fallback difensivo se i campi sono vuoti). */
+export function nomeUtente(u: UtenteRef | null | undefined): string {
+  if (!u) return '';
+  return `${u.firstName} ${u.lastName}`.trim();
+}
+
 /** Allegato nella lista (payload leggero, PR-3a). */
 export interface AllegatoRef {
   id: string;
@@ -117,6 +130,10 @@ interface NotaSpesaBase {
   motivoRifiuto: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Autore della spesa (PR-5a). Sempre presente nei read path. */
+  user: UtenteRef;
+  /** Chi ha deciso (approva/respingi); null finché non decisa. */
+  decisaDa: UtenteRef | null;
 }
 
 /** Elemento di lista: allegati leggeri (badge + indicatore presenza). */

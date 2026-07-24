@@ -13,7 +13,8 @@
       "circolari": "Circulars",
       "margine": "Margin",
       "platform": "Platform",
-      "note-spese": "Expense reports"
+      "note-spese": "Expense reports",
+      "approvazione-spese": "Expense approval"
     },
     "navGroups": {
       "report": "Reports"
@@ -925,6 +926,25 @@
       "body": "This is permanent and also removes its attachments.",
       "confirmLabel": "Delete",
       "cancelLabel": "Cancel"
+    }
+  },
+  "approvazioneSpese": {
+    "title": "Expense approval",
+    "subtitle": "Expense entries awaiting a decision",
+    "nessunaNota": "No expense entries match these filters.",
+    "inCoda": "{count, plural, =0 {no entries} one {# entry} other {# entries}}",
+    "tuaNota": "your entry",
+    "decisaDa": "Decided by",
+    "allegati": "Attachments",
+    "filtri": {
+      "stato": "Status",
+      "utente": "User",
+      "periodo": "Period",
+      "tutti": "All"
+    },
+    "serveLeggiTutte": {
+      "titolo": "You also need the extended read permission.",
+      "corpo": "You can approve expense entries, but without «notespese.leggi_tutte» you only see your own — and you cannot decide your own entries. Ask an administrator to add the extended read permission to your role."
     }
   }
 }
