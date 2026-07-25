@@ -3514,6 +3514,29 @@ Secondo prerequisito alla finestra, dopo lo storage di PR-A. Preceduto dall'**OP
 
 ---
 
+## [2026-07-25] Deploy S19 ESEGUITO in produzione (Option 2) — runbook [`docs/runbook-deploy-infrastrutturale.md`](docs/runbook-deploy-infrastrutturale.md)
+
+**La finestra di deploy è avvenuta.** Base `main` @ `f7b5d19`. Forma Option 2: infrastruttura + migrazione + permessi, **propagazione ai ruoli esclusa e differita** (ADR-0066). Preceduta da: backup con restore provato (blocco ①), PR-A #184 (`8becc84`), PR-B #185 (`f7b5d19`).
+
+**Sei passi P0–P7, zero scostamenti, zero STOP incontrati:**
+- **P0** preflight: 32 migrazioni (gate: non già 33), 0 utenti a dominio reale (gate premessa Option 2), baseline 60/249/245.
+- **P1** backup fresco `pre-migrate33_f7b5d19` (`PGDMP`, sha `3d87cd85…`).
+- **P2** tag `rollback-pre-s19` sulle 4 immagini, digest verificati coincidenti con le immagini **in esercizio** (non con ciò che `:latest` puntava).
+- **P3** `migrate deploy` dall'host (Prisma 6.19.3, `DIRECT_URL` postgres@127.0.0.1:5432) → **→33**, exit 0. Punto di non ritorno.
+- **P4 gate schema** (riuscita vs sicura): `FORCE RLS` `t|t` su entrambe le tabelle + `GRANT` `gestionale_app` ereditati. È il controllo che distingue "applicata" da "applicata e sicura" — `relforcerowsecurity` senza cui l'isolamento fra tenant sarebbe apparente.
+- **P5** build+rollout con provenienza: 4 label `revision=f7b5d19`, immagini nuove in esercizio (per digest), entrambi i verticali health 200 end-to-end via Caddy. Impatto altro verticale verificato: `tenants`/`users` intatti dopo i lock FK, dati food integri.
+- **P6** `db:seed:prod`: 60→63 / 249→262 / **role_perms 245 INVARIATO** + `Dev data: SKIPPED (NODE_ENV=production)` + tenant fermi al 30/06. Firma Option 2 confermata dai due lati.
+
+**I due presidi della sessione hanno tenuto sul vivo nella prima finestra reale.** PR-A (`GIT_SHA`) e PR-B (`NODE_ENV`), nati come risposta a due failure-mode di STOP 0, le hanno chiuse alla prima occasione. La **quarta failure-mode di S18** (deployment drift invisibile) è chiusa sulle 4 label OCI.
+
+**Riconferma ADR-0066**: caratterizzazione tenant (C1–C5, read-only) — nessun cliente reale, propagazione permessi differita. Trigger invariato (primo tenant non well-known via API).
+
+**Resta aperto e differito**: propagazione `notespese.*` ai ruoli → UI Note Spese nascosta (stato voluto). **TD nuovi**: `TD-backup-automation`, `TD-storage-backup-blob`, `TD-container-runs-as-root`, `TD-dev-processes-orphaned-on-prod-host`.
+
+- Docs (questo PR): runbook versionato · HANDOFF (deploy registrato + 4 TD) · README allineato su `db:seed`.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

@@ -1,7 +1,43 @@
 # HANDOFF — gestionale-piattaforma
 
-**Snapshot**: Main @ `b8fa054` (+1 commit `docs(handoff)` in arrivo via PR)
-**Sessione**: 2026-07-24 — 16 PR mergiate (#167 → #182)
+**Snapshot**: Main @ `f7b5d19` — **deploy S19 ESEGUITO in produzione** il 2026-07-25 (Option 2)
+**Sessioni**: 2026-07-24 (16 PR, #167→#182) + 2026-07-25 (preflight + PR-A #184 + PR-B #185 + finestra di deploy)
+
+---
+
+# S19 — Finestra di deploy eseguita (2026-07-25)
+
+**Forma Option 2**: infrastruttura + migrazione + permessi, **propagazione ai ruoli esclusa e differita** (ADR-0066). Sei passi P0–P7, **zero scostamenti, zero STOP incontrati**. Runbook riutilizzabile versionato in [`docs/runbook-deploy-infrastrutturale.md`](../runbook-deploy-infrastrutturale.md).
+
+**Cosa è in produzione ora**:
+
+- Schema **→33** (`add_note_spese`), `FORCE RLS` verificato `t|t` su entrambe le tabelle + `GRANT` a `gestionale_app` ereditati dalle default privileges (nessun GRANT manuale).
+- **4 immagini ribuildate** con provenienza OCI `revision=f7b5d19`, in esercizio su entrambi i verticali (health end-to-end via Caddy: `studiodesk.cloud` + `food.studiodesk.cloud` → 200 `db:connected`).
+- Permessi **60→63** (`notespese.*`), template-perms **249→262**, **`role_permissions` 245 INVARIATO** — la firma di Option 2: i permessi arrivano ai template ma **non** ai ruoli esistenti. Note Spese è quindi raggiungibile a livello di codice ma **UI nascosta** finché la propagazione non avviene (comportamento atteso, non un difetto).
+
+**I due presidi della sessione, verificati sul vivo nella prima finestra reale**:
+
+- **PR-A `GIT_SHA`** (#184): il build è passato perché la variabile era presente; le 4 label `revision=f7b5d19` lo provano. Inoltre `${GIT_SHA:?}` blocca **ogni** comando compose contro prod, non solo `build` (Compose interpola l'intero modello al load).
+- **PR-B `NODE_ENV`** (#185): il seed è passato (`NODE_ENV=production` valido) e ha **saltato il ramo dev** (`Dev data: SKIPPED` nell'output **e** `role_permissions` invariato + `tenants.max(updated_at)` fermo al 30/06 nel DB — la stessa cosa dai due lati). Le password note dei tenant fittizi **non** sono state riportate ai default: il landmine di STOP 0, neutralizzato sul vivo.
+
+È la tesi di S18 — i presidi che dipendono dalla memoria vanno meccanizzati — verificata dal lato costruttivo: nati come risposta a due failure-mode di STOP 0, le hanno chiuse alla prima occasione reale.
+
+**Backup con restore provato** prima della finestra: `gestionale_20260724T161844Z_pre-deploy-s19_8becc84.dump` (24/07, restore effimero completo, diff conteggi vuoto, RLS 37/37) + `gestionale_20260725T202336Z_pre-migrate33_f7b5d19.dump` (25/07, pre-`migrate deploy`, magic-bytes `PGDMP`, sha `3d87cd85…`).
+
+**Rollback point**: tag `rollback-pre-s19` sulle 4 immagini pre-deploy (digest annotati in ADR/registrazione), verificati per digest coincidenti con le immagini che erano in esercizio.
+
+**ADR prodotti S19**: [0079](../architecture/ADR-0079-storage-persistente-provenienza-immagini.md) (storage persistente + provenienza), [0080](../architecture/ADR-0080-seed-fail-closed-node-env.md) (seed fail-closed).
+
+**Riconferma ADR-0066** (propagazione permessi differita): caratterizzazione tenant del 24/07 (READ-ONLY, C1–C5) — nessuno dei 4 tenant di produzione ha utenti a dominio non-`.local`. `acme`/`demo`/`oneplatform` = seed-residui (food/platform), `studio-demo` = tenant-di-lavoro incerto con dati accountant ma utenti tutti `.local`. **Nessun cliente reale da servire → propagazione differita**, stesso differimento del 01/07, riconfermato empiricamente. Trigger invariato: **primo tenant non well-known via API**. Non un nuovo ADR: riconferma di quello esistente.
+
+**TD nuovi della sessione S19** (dettaglio in ADR-0079, tranne il primo):
+
+| TD                                       | Trigger                                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `TD-backup-automation`                   | primo cliente reale in produzione — il dump è one-shot, manuale, sullo stesso disco del volume Postgres |
+| `TD-storage-backup-blob`                 | primo allegato caricato da un cliente reale — il `pg_dump` non copre i blob                             |
+| `TD-container-runs-as-root`              | prossima PR sui runner stage, o primo cliente con requisiti di audit — i 4 runner girano come root      |
+| `TD-dev-processes-orphaned-on-prod-host` | prossima sessione che apre un dev server sull'host, o esito verifica firewall porta 3000                |
 
 ---
 
@@ -105,20 +141,15 @@ Più: la convenzione FE (zero import di `@gestionale/db`, enum replicati nei `*-
 
 # PARTE B — Operativo
 
-## B.1 PRIORITÀ: deployment drift
+## B.1 deployment drift — RISOLTO (deploy S19 eseguito 2026-07-25)
 
-**Tutto il lavoro user-facing di oggi è su `main` e NON in produzione.** KDS board e Note Spese v1 per intero. Prod è a 32 migrazioni dal cutover del 15/07.
+**Il divario è chiuso.** Il lavoro user-facing del 24/07 (KDS board, Note Spese v1) è ora in produzione insieme allo schema →33. Vedi la sezione **S19 — Finestra di deploy eseguita** in testa. Prod era a 32 migrazioni dal cutover del 15/07; ora è →33 con le 4 immagini `f7b5d19`.
 
-Il divario è più ampio di quello da 9 giorni già scoperto in passato. **Il prossimo passo naturale è il deploy, non un nuovo fronte.**
+La **quarta failure-mode strutturale** — _deployment drift invisibile_, l'unica ancora scoperta a fine 24/07 (vedi A.1) — è ora chiusa non a parole ma sulle 4 label OCI `revision`: da questo deploy ogni immagine in esercizio dichiara il commit da cui è nata, e il presidio `${GIT_SHA:?}` rende impossibile un build di produzione senza SHA.
 
-Sequenza deploy accountant:
+Caddy: **nessuna modifica necessaria** al deploy (confermato in preflight) — le rotte nuove cadono sotto gli `handle` catch-all già instradati. Reload **mai** restart se mai servisse (`caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`), config reale in `infra/caddy/conf/`.
 
-1. **Tag di rollback** `:rollback-pre-note-spese` **prima** del rebuild
-2. `migrate deploy` → 33 (`add_note_spese`)
-3. **Re-seed** per i 3 permessi `notespese.*` e i role template (Collaboratore/Direzione)
-4. Verifica post-deploy
-
-Caddy: reload **mai** restart (`caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`), config reale in `infra/caddy/conf/`.
+**Resta aperto e differito**: la propagazione dei permessi `notespese.*` ai ruoli esistenti (Option 2, ADR-0066). Oggi la UI Note Spese è nascosta a tutti perché `role_permissions` è invariato a 245 — è lo stato voluto, non un bug. Si sblocca al trigger "primo tenant non well-known via API".
 
 ## B.2 Residui per blocco
 
