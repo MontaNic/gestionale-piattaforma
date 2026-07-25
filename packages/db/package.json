@@ -53,9 +53,10 @@
     "smoke:rls-e2e": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- tsx scripts/smoke-rls-e2e.ts",
     "smoke:rls-core": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- tsx scripts/smoke-rls-core.ts",
     "purge-tenant": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- tsx scripts/purge-tenant.ts",
-    "db:seed": "ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- prisma db seed",
+    "db:seed": "NODE_ENV=development dotenv -e ../../.env -- prisma db seed",
+    "db:seed:prod": "NODE_ENV=production ALLOW_PROD_DB_ACCESS=1 dotenv -e ../../.env -- prisma db seed",
     "devdb:migrate": "dotenv -e ../../.env.devdb -e ../../.env -- prisma migrate deploy",
-    "devdb:seed": "dotenv -e ../../.env.devdb -e ../../.env -- prisma db seed",
+    "devdb:seed": "NODE_ENV=development dotenv -e ../../.env.devdb -e ../../.env -- prisma db seed",
     "verify:guard-runtime": "bash scripts/verify-guard-runtime.sh",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
