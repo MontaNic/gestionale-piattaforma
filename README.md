@@ -107,9 +107,12 @@ Da E1 (2026-05-13) `packages/db` ha **build step via `tsup`** ([ADR-0011](./docs
    ```bash
    psql "$DIRECT_URL" -c "ALTER ROLE gestionale_app PASSWORD '$APP_DB_PASSWORD'"
    ```
-5. **Seed dati base** (idempotente):
+5. **Seed dati base** (idempotente). Lo script porta `NODE_ENV` esplicito (fail-closed, ADR-0080) e — senza `ALLOW_PROD_DB_ACCESS` — **aborta se il target ha la firma di prod** (`{127.0.0.1|localhost}:5432/gestionale`). Scegli in base al DB che hai bootstrappato:
    ```bash
-   pnpm --filter @gestionale/db db:seed
+   # DB dev isolato (55432): il flusso locale raccomandato
+   pnpm --filter @gestionale/db devdb:seed
+   # DB di produzione (intenzionale, seed permessi/template): fail-closed esplicito
+   pnpm --filter @gestionale/db db:seed:prod
    ```
 
 Per fresh bootstrap docker (volume nuovo): lo script [`infra/postgres/init/01-create-app-role.sh`](./infra/postgres/init/01-create-app-role.sh) crea il role con la password reale da `$APP_DB_PASSWORD` al primo avvio del container, prima che la migration giri (l'`IF NOT EXISTS` la rende no-op). In quel caso lo step 4 è no-op.
@@ -155,8 +158,14 @@ pnpm --filter @gestionale/db prisma:generate
 # Esplora il DB in browser
 pnpm --filter @gestionale/db prisma:studio
 
-# Popola permission catalog + 6 system role templates (idempotente)
-pnpm --filter @gestionale/db db:seed
+# Popola permission catalog + system role templates (idempotente).
+# Su questo host `.env` DATABASE_URL punta a prod (127.0.0.1:5432/gestionale):
+# `db:seed` ha NODE_ENV=development e NON il flag ALLOW_PROD_DB_ACCESS, quindi
+# `assertSafeDbTarget` lo ABORTA contro quel target (voluto, ADR-0080). Per il
+# seed locale usa il DB dev isolato (55432); per il seed di produzione, l'apposito
+# script fail-closed. Vedi "Dev DB isolato" sopra e ADR-0080.
+pnpm --filter @gestionale/db devdb:seed        # seed del DB dev isolato (55432)
+# pnpm --filter @gestionale/db db:seed:prod    # seed di PRODUZIONE (NODE_ENV=production + ALLOW_PROD_DB_ACCESS)
 
 # Validazione end-to-end soft-delete extension (5 scenari)
 pnpm --filter @gestionale/db smoke:soft-delete
