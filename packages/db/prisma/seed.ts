@@ -3,7 +3,7 @@
 // =============================================================================
 // Popola due cataloghi globali (no tenant_id):
 //
-//   1. permissions          (63 permessi atomici namespaced)
+//   1. permissions          (64 permessi atomici namespaced)
 //   2. system_role_templates (11 template predefiniti, isDefault: true)
 //      + system_role_template_permissions (mapping role -> permissions)
 //   3. scadenze_categorie    (7 categorie piattaforma, tenant_id NULL)
@@ -280,8 +280,18 @@ const PERMISSIONS: PermissionSeed[] = [
   { code: 'comande.visualizza', description: 'Visualizzazione comande', category: 'comande' },
   { code: 'comande.stato.cambia', description: 'Cambio stato (cucina/bar)', category: 'comande' },
 
-  // cassa.* (4)
+  // cassa.* (5) — Cassa pre-fiscale (ADR-0081 D5)
+  // `cassa.scontrino.emetti` e `cassa.chiusura.giornaliera` restano ORFANI di
+  // proposito: il primo è riservato al blocco RT/certificazione fiscale (differito
+  // fino a cliente reale), il secondo alla sessione cassa / Z-report
+  // (TD-cassa-chiusura-giornaliera, ADR-0081 D6). Enforced in PR1:
+  // `cassa.pagamento.registra`, `cassa.storno.esegui`, `cassa.visualizza`.
   { code: 'cassa.scontrino.emetti', description: 'Emissione scontrino fiscale', category: 'cassa' },
+  {
+    code: 'cassa.pagamento.registra',
+    description: 'Registrazione pagamenti sul conto',
+    category: 'cassa',
+  },
   { code: 'cassa.storno.esegui', description: 'Esecuzione storni cassa', category: 'cassa' },
   {
     code: 'cassa.chiusura.giornaliera',
@@ -417,6 +427,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'comande.elimina',
       'comande.visualizza',
       'cassa.scontrino.emetti',
+      'cassa.pagamento.registra',
       'cassa.storno.esegui',
       'cassa.chiusura.giornaliera',
       'cassa.visualizza',
@@ -442,6 +453,7 @@ const ROLE_TEMPLATES: RoleTemplateSeed[] = [
       'comande.elimina',
       'comande.visualizza',
       'cassa.scontrino.emetti',
+      'cassa.pagamento.registra',
       'cassa.storno.esegui',
       'cassa.chiusura.giornaliera',
       'cassa.visualizza',

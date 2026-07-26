@@ -9,6 +9,12 @@
 //   - Soft-delete storno (CHECK-BE-2): invisibile in GET, fisicamente presente
 //   - Isolamento tenant (404)
 //   - Audit-in-tx (conto.aperto|chiuso, conto_riga.stornata)
+//
+// ⚠️ Dipendenza dalla Cassa pre-fiscale (ADR-0081 D3): `chiudi` esige ora un conto
+// saldato. I test che chiudono un conto CON righe passano da `pagaSaldo()` prima
+// della chiusura; quelli che chiudono un conto vuoto (o con le sole righe
+// soft-deleted) restano invariati — totale 0 ⇒ guardia soddisfatta. La copertura
+// della cassa vera vive in `cassa.e2e-spec.ts`.
 // =============================================================================
 
 import type { INestApplication } from '@nestjs/common';
@@ -87,6 +93,26 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
       .send({ channel: 'cassa', coperti: 4, tavoloId: data.tavoloId })
       .expect(201);
     return res.body.data.id as string;
+  }
+
+  /**
+   * Salda il conto registrando UN pagamento pari al residuo corrente.
+   * Necessario prima di `chiudi` da quando esiste la guardia di saldo
+   * (ADR-0081 D3): un conto con righe non si chiude più senza incasso.
+   * No-op se il residuo è già 0 (conto senza righe) → chiamabile sempre.
+   */
+  async function pagaSaldo(contoId: string, metodo = 'contanti'): Promise<void> {
+    const conto = await request(app.getHttpServer())
+      .get(`${API}/${contoId}`)
+      .set(auth(demoJwt))
+      .expect(200);
+    const residuo = Number(conto.body.data.residuo);
+    if (residuo <= 0) return;
+    await request(app.getHttpServer())
+      .post(`${API}/${contoId}/pagamenti`)
+      .set(auth(demoJwt))
+      .send({ metodo, importo: residuo })
+      .expect(201);
   }
 
   // ===========================================================================
@@ -601,6 +627,7 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
     it('invio: conto non-aperto → 409 E_CONTO_NOT_OPEN', async () => {
       const contoId = await apriCassa();
       await addRigaTo(contoId, data.articleAId);
+      await pagaSaldo(contoId); // guardia di saldo D3: il conto ha righe → serve incasso
       await request(app.getHttpServer())
         .post(`${API}/${contoId}/chiudi`)
         .set(auth(demoJwt))
@@ -717,6 +744,7 @@ describe('Comande E2E — /api/v1/conti (PR-2, ADR-0068)', () => {
       const chiuso = await apriCassa();
       await addRigaTo(chiuso, data.articleBId);
       await invia(chiuso);
+      await pagaSaldo(chiuso); // guardia di saldo D3: "chiuso (pagato)" ora è letterale
       await request(app.getHttpServer())
         .post(`${API}/${chiuso}/chiudi`)
         .set(auth(demoJwt))

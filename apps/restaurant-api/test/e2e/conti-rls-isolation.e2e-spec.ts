@@ -16,6 +16,8 @@
 //      dalle query normali ma restano fisicamente (deleted_at valorizzato)
 //   4. Snapshot pricing (DP-C) — nomeArticolo/prezzoUnitario/reparto della riga
 //      sono colonne indipendenti: modificare l'Article sorgente NON li tocca
+//   5. RLS su `pagamenti` (Cassa pre-fiscale, ADR-0081) — read + write isolation
+//      sulla policy `pagamenti_tenant_isolation`
 // =============================================================================
 
 import { Client } from 'pg';
@@ -26,6 +28,7 @@ import {
   runInTenantContext,
   id,
   Channel,
+  MetodoPagamentoConto,
   PrintDepartment,
   type ExtendedPrismaClient,
 } from '@gestionale/db';
@@ -68,7 +71,7 @@ async function rawCount(superuserUrl: string, sql: string): Promise<number> {
 async function seedContoFor(
   prisma: ExtendedPrismaClient,
   tenantId: string,
-): Promise<{ articleId: string; contoId: string; rigaId: string }> {
+): Promise<{ articleId: string; contoId: string; rigaId: string; pagamentoId: string }> {
   return runInTenantContext({ tenantId, isSuperAdmin: false }, async () => {
     const menu = await prisma.menu.create({ data: { id: id(), tenantId, name: 'Menu Test' } });
     const category = await prisma.menuCategory.create({
@@ -105,7 +108,23 @@ async function seedContoFor(
         reparto: article.printDepartment,
       },
     });
-    return { articleId: article.id, contoId: conto.id, rigaId: riga.id };
+    // Pagamento sul conto (Cassa pre-fiscale, ADR-0081): la tabella `pagamenti` è
+    // tenant-scoped con RLS FORCE come conti/conti_righe → va esercitata qui.
+    const pagamento = await prisma.pagamento.create({
+      data: {
+        id: id(),
+        tenantId,
+        contoId: conto.id,
+        metodo: MetodoPagamentoConto.contanti,
+        importo: 17,
+      },
+    });
+    return {
+      articleId: article.id,
+      contoId: conto.id,
+      rigaId: riga.id,
+      pagamentoId: pagamento.id,
+    };
   });
 }
 
@@ -114,7 +133,7 @@ describe('Conti RLS isolation + soft-delete E2E — layer DB come gestionale_app
   let prisma: ExtendedPrismaClient;
   let demoTenantId: string;
   let acmeTenantId: string;
-  let demo: { articleId: string; contoId: string; rigaId: string };
+  let demo: { articleId: string; contoId: string; rigaId: string; pagamentoId: string };
 
   beforeAll(async () => {
     containers = await startTestContainers();
@@ -266,5 +285,71 @@ describe('Conti RLS isolation + soft-delete E2E — layer DB come gestionale_app
     expect(riga.nomeArticolo).toBe('Spaghetti'); // snapshot congelato
     expect(Number(riga.prezzoUnitario)).toBe(8.5); // snapshot congelato
     expect(riga.reparto).toBe(PrintDepartment.cucina); // snapshot congelato
+  });
+
+  // ---------------------------------------------------------------------------
+  // 5. RLS su `pagamenti` (Cassa pre-fiscale, ADR-0081)
+  // ---------------------------------------------------------------------------
+  // La policy `pagamenti_tenant_isolation` è nuova: va esercitata come
+  // `gestionale_app` (non-superuser) o il FORCE non prova nulla. `pagamenti` NON
+  // ha `deletedAt` (storno via `stornato`) → nessun test di soft-delete qui.
+  it('5a. tenant acme NON legge i Pagamento di demo (findMany + findUnique isolati)', async () => {
+    const pagamentiAcme = await runInTenantContext(
+      { tenantId: acmeTenantId, isSuperAdmin: false },
+      () => prisma.pagamento.findMany(),
+    );
+    expect(pagamentiAcme.find((p) => p.id === demo.pagamentoId)).toBeUndefined();
+    expect(pagamentiAcme).toHaveLength(0);
+
+    const found = await runInTenantContext({ tenantId: acmeTenantId, isSuperAdmin: false }, () =>
+      prisma.pagamento.findUnique({ where: { id: demo.pagamentoId } }),
+    );
+    expect(found).toBeNull();
+
+    // …mentre demo lo vede: il fail-closed non è un falso negativo generale.
+    const pagamentiDemo = await runInTenantContext(
+      { tenantId: demoTenantId, isSuperAdmin: false },
+      () => prisma.pagamento.findMany(),
+    );
+    expect(pagamentiDemo.map((p) => p.id)).toEqual([demo.pagamentoId]);
+  });
+
+  it('5b. tenant acme NON storna il Pagamento di demo (update → throw, riga intatta)', async () => {
+    await expect(
+      runInTenantContext({ tenantId: acmeTenantId, isSuperAdmin: false }, () =>
+        prisma.pagamento.update({
+          where: { id: demo.pagamentoId },
+          data: { stornato: true, stornatoIl: new Date() },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    const pagamentoDemo = await runInTenantContext(
+      { tenantId: demoTenantId, isSuperAdmin: false },
+      () => prisma.pagamento.findUnique({ where: { id: demo.pagamentoId } }),
+    );
+    expect(pagamentoDemo?.stornato).toBe(false);
+  });
+
+  it('5c. tenant acme NON crea un Pagamento con tenantId=demo (WITH CHECK RLS blocca)', async () => {
+    await expect(
+      runInTenantContext({ tenantId: acmeTenantId, isSuperAdmin: false }, () =>
+        prisma.pagamento.create({
+          data: {
+            id: id(),
+            tenantId: demoTenantId,
+            contoId: demo.contoId,
+            metodo: MetodoPagamentoConto.carta,
+            importo: 1,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    const total = await rawCount(
+      containers.databaseUrl,
+      `SELECT count(*)::int AS count FROM pagamenti WHERE tenant_id = '${demoTenantId}'`,
+    );
+    expect(total).toBe(1); // solo quello seedato in beforeEach
   });
 });

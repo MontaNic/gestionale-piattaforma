@@ -7,7 +7,14 @@ import { test, expect } from '@playwright/test';
  *
  * Esercita la catena INTEGRATA mappa↔conti da browser reale:
  *   /mappa → tap tavolo libero → dialog apertura conto cassa → /comande/{id}
- *   → aggiungi una riga → totale > 0 → chiudi conto → /mappa → tavolo di nuovo libero.
+ *   → aggiungi una riga → totale > 0 → ANNULLA conto → /mappa → tavolo di nuovo libero.
+ *
+ * ⚠️ Il passo finale usa "Annulla conto", non "Chiudi conto": dalla Cassa
+ * pre-fiscale (ADR-0081 D3) `chiudi` esige un conto SALDATO, e la UI per
+ * registrare un pagamento arriva con la cassa FE (PR2). `annulla` è l'altra
+ * transizione terminale — porta il conto fuori da `aperto` e libera il tavolo,
+ * che è esattamente ciò che questo smoke verifica (catena mappa↔conti). La
+ * variante paga-poi-chiudi diventerà uno spec FE della cassa in PR2.
  *
  * Pattern storageState: riusa `e2e/.auth/demo.json` (auth.setup.ts, admin@demo.local
  * = Super Admin → possiede comande.* + tavoli.gestisci; nessuna modifica al seed).
@@ -25,7 +32,9 @@ const SLUG = 'demo';
 test.describe('Comande — flusso da tavolo (PR-2, ADR-0068)', () => {
   test.use({ storageState: DEMO_STORAGE });
 
-  test('apri conto da tavolo libero → aggiungi riga → chiudi → tavolo libero', async ({ page }) => {
+  test('apri conto da tavolo libero → aggiungi riga → annulla → tavolo libero', async ({
+    page,
+  }) => {
     await page.goto(`/t/${SLUG}/mappa`);
 
     // ── 1. Individua un tavolo LIBERO sul canvas e ricordane l'id ──────────────
@@ -68,12 +77,14 @@ test.describe('Comande — flusso da tavolo (PR-2, ADR-0068)', () => {
       )
       .toBeGreaterThan(0);
 
-    // ── 6. Chiudi il conto (conferma) ─────────────────────────────────────────
-    await page.getByRole('button', { name: /chiudi conto|close tab/i }).click();
+    // ── 6. Annulla il conto (conferma) ────────────────────────────────────────
+    // Vedi nota in testa: `chiudi` esigerebbe un pagamento a saldo (ADR-0081 D3)
+    // e la UI cassa è PR2. `annulla` è l'altra transizione terminale.
+    await page.getByRole('button', { name: /annulla conto|cancel tab/i }).click();
     const confirm = page.getByRole('dialog');
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: /conferma|confirm/i }).click();
-    // Banner sola-lettura conferma la chiusura (stato != aperto)
+    // Banner sola-lettura conferma la transizione terminale (stato != aperto)
     await expect(page.getByText(/sola lettura|read only|read-only/i)).toBeVisible({
       timeout: 10_000,
     });
