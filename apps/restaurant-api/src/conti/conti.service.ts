@@ -14,6 +14,16 @@
 //   Ogni mutazione (righe, chiudi, annulla) esige stato `aperto` → E_CONTO_NOT_OPEN.
 // - Snapshot pricing (D2): prezzo/nome/reparto congelati via PricingService.
 // - Totale conto: derivato in read (mai persistito — YAGNI).
+//
+// Cassa pre-fiscale (ADR-0081):
+// - Pagamenti = child table (D1), split payment nativo. `registraPagamento` /
+//   `stornaPagamento` esigono conto `aperto` come ogni altra mutazione.
+// - `residuo` / `statoPagamento` / `riepilogoIva` sono DERIVATI (D2), mai
+//   persistiti — stessa scelta di `totale`. Unica eccezione: il riepilogo IVA
+//   viene CONGELATO su `Conto.riepilogoIvaSnapshot` alla chiusura (D4).
+// - `chiudi` ha una guardia di saldo (D3): residuo == 0 oppure totale == 0.
+//   ⚠️ CAMBIO DI CONTRATTO rispetto a PR-2/ADR-0068 (dove `chiudi` era una pura
+//   transizione di stato). `annulla` resta la via per chiudere senza incasso.
 // =============================================================================
 
 import {
@@ -30,6 +40,7 @@ import {
   type Conto,
   type ContoRiga,
   id,
+  type Pagamento,
   Prisma,
   type PrintDepartment,
   type StatoConto,
@@ -43,8 +54,40 @@ import { PricingService } from '../pricing/pricing.service';
 import type { CreateContoDto } from './dto/create-conto.dto';
 import type { AddRigaDto } from './dto/add-riga.dto';
 import type { UpdateRigaDto } from './dto/update-riga.dto';
+import type { RegistraPagamentoDto } from './dto/registra-pagamento.dto';
 
-export type ContoWithRighe = Conto & { righe: ContoRiga[]; totale: string };
+/**
+ * Stato di pagamento DERIVATO (ADR-0081 D2) — mai persistito. Precedenza:
+ * `saldato` (residuo azzerato, incluso il conto a totale 0) → `da_pagare`
+ * (nessun incasso) → `parziale` (incassato in parte).
+ */
+export type StatoPagamento = 'da_pagare' | 'parziale' | 'saldato';
+
+/**
+ * Un gruppo del riepilogo IVA (scorporo dal lordo, ADR-0070 + ADR-0081 D4).
+ * Importi come stringhe decimali a 2 cifre: Decimal→string sul wire, mai float.
+ *
+ * `type` e NON `interface`: solo i type alias ricevono l'index signature
+ * implicita che `Prisma.InputJsonValue` esige per scriverlo su una colonna Json
+ * (il congelamento in `transitionStato`) senza cast.
+ */
+export type RiepilogoIvaGruppo = {
+  vatPercent: number;
+  lordo: string;
+  imponibile: string;
+  iva: string;
+};
+
+export type ContoWithRighe = Conto & {
+  righe: ContoRiga[];
+  totale: string;
+  // Cassa (ADR-0081): pagamenti reali + tre derivati. `pagamenti` include gli
+  // stornati (restano visibili marcati, come le righe stornate).
+  pagamenti: Pagamento[];
+  residuo: string;
+  statoPagamento: StatoPagamento;
+  riepilogoIva: RiepilogoIvaGruppo[];
+};
 
 /** Esito dell'invio: una Comanda creata per ogni reparto presente tra le righe pending. */
 export interface ComandaInviata {
@@ -88,23 +131,112 @@ export class ContiService {
       include: {
         // filtro esplicito deletedAt: le righe stornate non entrano nel totale
         righe: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' } },
+        // `pagamenti` non ha deletedAt (storno via `stornato`) → nessun filtro:
+        // gli stornati arrivano al client marcati, come le righe stornate.
+        pagamenti: { orderBy: { createdAt: 'asc' } },
       },
     });
     if (!conto) {
       throw new NotFoundException({ errorCode: 'E_CONTO_NOT_FOUND', message: 'Conto not found' });
     }
-    return { ...conto, totale: this.computeTotale(conto.righe) };
+    const totale = this.totaleDecimal(conto.righe);
+    const pagato = this.pagatoDecimal(conto.pagamenti);
+    return {
+      ...conto,
+      totale: totale.toFixed(2),
+      residuo: totale.minus(pagato).toFixed(2),
+      statoPagamento: this.computeStatoPagamento(totale, pagato),
+      riepilogoIva: this.computeRiepilogoIva(conto.righe),
+    };
   }
 
-  private computeTotale(righe: ContoRiga[]): string {
-    // Escluse le stornate (ADR-storno): il cliente non paga una riga revocata.
-    // Le soft-deleted sono già fuori (getById filtra deletedAt); qui filtriamo
-    // `stornata` che NON è coperto dalla soft-delete extension (boolean normale).
-    // Le righe stornate restano però nel payload `righe` per il rendering (barrata).
-    const totale = righe
+  /** Lista dei pagamenti di un conto (gate `cassa.visualizza`). Include gli stornati. */
+  async listPagamenti(tenantId: string, contoId: string): Promise<Pagamento[]> {
+    // Il conto deve esistere nel tenant: senza questo check un id di altro tenant
+    // restituirebbe [] (indistinguibile da "conto senza pagamenti") invece di 404.
+    const conto = await this.db.prisma.conto.findFirst({
+      where: { id: contoId, tenantId },
+      select: { id: true },
+    });
+    if (!conto) {
+      throw new NotFoundException({ errorCode: 'E_CONTO_NOT_FOUND', message: 'Conto not found' });
+    }
+    return this.db.prisma.pagamento.findMany({
+      where: { contoId, tenantId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // --- derivati (mai persistiti) ---------------------------------------------
+
+  /**
+   * Totale LORDO del conto — ex `computeTotale` (ADR-0068), ora reso Decimal
+   * perché residuo e scorporo lo compongono: la serializzazione a stringa avviene
+   * al bordo (`getById`). Semantica IDENTICA e volutamente invariata (ADR-0070 D1:
+   * Σ prezzo×qta, nessuna IVA aggiunta) — chi cerca lo scorporo qui non lo trova,
+   * è in `computeRiepilogoIva`.
+   *
+   * Escluse le stornate (ADR-storno): il cliente non paga una riga revocata. Le
+   * soft-deleted sono già fuori (getById filtra deletedAt); qui filtriamo
+   * `stornata` che NON è coperto dalla soft-delete extension (boolean normale).
+   * Le righe stornate restano però nel payload `righe` per il rendering (barrata).
+   */
+  private totaleDecimal(righe: ContoRiga[]): Prisma.Decimal {
+    return righe
       .filter((r) => !r.stornata)
       .reduce((acc, r) => acc.plus(r.prezzoUnitario.times(r.quantita)), new Prisma.Decimal(0));
-    return totale.toFixed(2);
+  }
+
+  /** Σ degli importi APPLICATI: i pagamenti stornati non contano (ADR-0081). */
+  private pagatoDecimal(pagamenti: Pagamento[]): Prisma.Decimal {
+    return pagamenti
+      .filter((p) => !p.stornato)
+      .reduce((acc, p) => acc.plus(p.importo), new Prisma.Decimal(0));
+  }
+
+  /**
+   * Stato di pagamento derivato (D2). `residuo == 0` vince su tutto: copre sia il
+   * conto saldato sia il conto a totale 0 (nulla da incassare). Un conto può avere
+   * residuo NEGATIVO solo dopo lo storno di una riga già pagata (vedi
+   * `assertSettled`) → resta `saldato`, non è un quarto stato.
+   */
+  private computeStatoPagamento(totale: Prisma.Decimal, pagato: Prisma.Decimal): StatoPagamento {
+    const residuo = totale.minus(pagato);
+    if (residuo.lessThanOrEqualTo(0)) return 'saldato';
+    if (pagato.isZero()) return 'da_pagare';
+    return 'parziale';
+  }
+
+  /**
+   * Riepilogo IVA per aliquota — SCORPORO dal lordo (ADR-0070 D1/D2 + ADR-0081 D4).
+   * I prezzi sono lordi: `imponibile = lordo / (1 + vat/100)` arrotondato a 2
+   * decimali HALF_UP, e `iva = lordo − imponibile` (differenza, NON un secondo
+   * arrotondamento) così che imponibile + iva == lordo **esattamente** per ogni
+   * gruppo. L'aliquota è quella snapshottata sulla riga (`vatPercent`), non quella
+   * corrente dell'articolo. Gruppi ordinati per aliquota crescente (output stabile
+   * → confrontabile con lo snapshot congelato). Esclude stornate e soft-deleted.
+   */
+  private computeRiepilogoIva(righe: ContoRiga[]): RiepilogoIvaGruppo[] {
+    const lordoPerAliquota = new Map<number, Prisma.Decimal>();
+    for (const r of righe.filter((x) => !x.stornata)) {
+      const acc = lordoPerAliquota.get(r.vatPercent) ?? new Prisma.Decimal(0);
+      lordoPerAliquota.set(r.vatPercent, acc.plus(r.prezzoUnitario.times(r.quantita)));
+    }
+
+    return [...lordoPerAliquota.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([vatPercent, lordo]) => {
+        const divisore = new Prisma.Decimal(1).plus(new Prisma.Decimal(vatPercent).dividedBy(100));
+        const imponibile = lordo
+          .dividedBy(divisore)
+          .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+        return {
+          vatPercent,
+          lordo: lordo.toFixed(2),
+          imponibile: imponibile.toFixed(2),
+          iva: lordo.minus(imponibile).toFixed(2),
+        };
+      });
   }
 
   // --- lifecycle conto -------------------------------------------------------
@@ -182,12 +314,31 @@ export class ContiService {
     return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
       const conto = await this.loadOpenConto(tx, tenantId, contoId);
 
+      // Guardia di saldo (D3) — SOLO su `chiudi`. `annulla` resta la via per
+      // uscire da un conto senza incasso (errore, no-show, cliente andato via).
+      // Il riepilogo IVA si congela solo quando c'è una chiusura vera.
+      let riepilogoIvaSnapshot: Prisma.InputJsonValue | undefined;
+      if (target === 'chiuso') {
+        const righe = await tx.contoRiga.findMany({
+          where: { contoId, tenantId },
+          orderBy: { createdAt: 'asc' },
+        });
+        const pagamenti = await tx.pagamento.findMany({ where: { contoId, tenantId } });
+        const totale = this.totaleDecimal(righe);
+        this.assertSettled(totale, this.pagatoDecimal(pagamenti));
+        // Congelato UNA SOLA VOLTA (D4): questo è l'unico path che lo scrive, e la
+        // transizione è terminale → nessun secondo passaggio possibile.
+        riepilogoIvaSnapshot = this.computeRiepilogoIva(righe);
+      }
+
       const updated = await tx.conto.update({
         where: { id: contoId },
         data: {
           stato: target,
           // chiusoIl valorizzato solo alla chiusura; annullato non è "chiuso".
           chiusoIl: target === 'chiuso' ? new Date() : conto.chiusoIl,
+          // key omessa su `annulla` → colonna invariata (resta NULL).
+          riepilogoIvaSnapshot,
         },
       });
 
@@ -200,12 +351,178 @@ export class ContiService {
           entityType: 'Conto',
           entityId: contoId,
           beforeValue: { stato: conto.stato },
-          afterValue: { stato: updated.stato, chiusoIl: updated.chiusoIl },
+          // Il riepilogo congelato entra in audit solo su `chiudi` (undefined su
+          // annulla → key assente nel JSON). L'action mantiene il nome storico
+          // `conto.chiuso` (anchor stability per i consumer audit esistenti).
+          afterValue: {
+            stato: updated.stato,
+            chiusoIl: updated.chiusoIl,
+            riepilogoIvaSnapshot,
+          },
         },
       });
 
       this.logger.log(`Conto ${target}: ${contoId} tenant=${tenantId}`);
       return updated;
+    });
+  }
+
+  // --- pagamenti (Cassa pre-fiscale, ADR-0081) -------------------------------
+
+  /**
+   * Registra un pagamento sul conto. Split payment nativo: N chiamate → N righe
+   * `Pagamento`, il pagamento singolo è il caso degenere N=1 (D1).
+   * @throws NotFound E_CONTO_NOT_FOUND — conto assente o di altro tenant
+   * @throws Conflict E_CONTO_NOT_OPEN — conto già chiuso/annullato
+   * @throws Conflict E_PAGAMENTO_EXCEEDS_RESIDUO — overpay non modellato (il resto
+   *         contanti è concern FE, TD-cassa-resto-drawer)
+   */
+  async registraPagamento(
+    tenantId: string,
+    userId: string,
+    contoId: string,
+    dto: RegistraPagamentoDto,
+  ): Promise<Pagamento> {
+    return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      await this.loadOpenConto(tx, tenantId, contoId);
+
+      const residuo = await this.residuoInTx(tx, tenantId, contoId);
+      // Decimal, non float: `importo` arriva come number dal DTO (max 2 decimali
+      // validati) e va confrontato in decimale esatto col residuo.
+      const importo = new Prisma.Decimal(dto.importo);
+      if (importo.greaterThan(residuo)) {
+        throw new ConflictException({
+          errorCode: 'E_PAGAMENTO_EXCEEDS_RESIDUO',
+          message: `Importo ${importo.toFixed(2)} exceeds residuo ${residuo.toFixed(2)}`,
+        });
+      }
+
+      const pagamento = await tx.pagamento.create({
+        data: {
+          id: id(),
+          tenantId,
+          contoId,
+          metodo: dto.metodo,
+          importo,
+          operatoreId: userId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          id: id(),
+          tenantId,
+          userId,
+          action: 'conto.pagamento_registrato',
+          entityType: 'Pagamento',
+          entityId: pagamento.id,
+          beforeValue: { residuoPrima: residuo.toFixed(2) },
+          afterValue: {
+            contoId,
+            metodo: pagamento.metodo,
+            importo: pagamento.importo.toString(),
+            residuoDopo: residuo.minus(importo).toFixed(2),
+          },
+        },
+      });
+
+      this.logger.log(
+        `Pagamento registrato: ${pagamento.id} conto=${contoId} metodo=${pagamento.metodo} tenant=${tenantId}`,
+      );
+      return pagamento;
+    });
+  }
+
+  /**
+   * Storna un pagamento (soft, `stornato=true`): l'incasso è ESISTITO — resta
+   * visibile e in audit, esce solo dal residuo. Terminale, no toggle (come
+   * `ContoRiga.stornata`).
+   * @throws Conflict E_CONTO_NOT_OPEN — su conto chiuso lo storno riaprirebbe un
+   *         residuo su un conto terminale (e invaliderebbe lo snapshot IVA)
+   * @throws NotFound E_PAGAMENTO_NOT_FOUND — pagamento assente o di altro conto
+   * @throws Conflict E_PAGAMENTO_ALREADY_STORNATO — idempotenza esplicita
+   */
+  async stornaPagamento(
+    tenantId: string,
+    userId: string,
+    contoId: string,
+    pagamentoId: string,
+  ): Promise<Pagamento> {
+    return withTenantContextAtomicTx(this.db.prisma, tenantId, async (tx) => {
+      await this.loadOpenConto(tx, tenantId, contoId);
+
+      const before = await tx.pagamento.findFirst({
+        where: { id: pagamentoId, contoId, tenantId },
+      });
+      if (!before) {
+        throw new NotFoundException({
+          errorCode: 'E_PAGAMENTO_NOT_FOUND',
+          message: 'Pagamento not found',
+        });
+      }
+      if (before.stornato) {
+        throw new ConflictException({
+          errorCode: 'E_PAGAMENTO_ALREADY_STORNATO',
+          message: 'Pagamento already stornato',
+        });
+      }
+
+      const updated = await tx.pagamento.update({
+        where: { id: pagamentoId },
+        data: { stornato: true, stornatoIl: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          id: id(),
+          tenantId,
+          userId,
+          action: 'conto.pagamento_stornato',
+          entityType: 'Pagamento',
+          entityId: pagamentoId,
+          beforeValue: {
+            contoId,
+            metodo: before.metodo,
+            importo: before.importo.toString(),
+            stornato: before.stornato,
+          },
+          afterValue: { stornato: updated.stornato, stornatoIl: updated.stornatoIl },
+        },
+      });
+
+      this.logger.log(`Pagamento stornato: ${pagamentoId} conto=${contoId} tenant=${tenantId}`);
+      return updated;
+    });
+  }
+
+  /** Residuo corrente del conto letto DENTRO la tx (evita race sul concorrente). */
+  private async residuoInTx(
+    tx: TenantTx,
+    tenantId: string,
+    contoId: string,
+  ): Promise<Prisma.Decimal> {
+    const righe = await tx.contoRiga.findMany({ where: { contoId, tenantId } });
+    const pagamenti = await tx.pagamento.findMany({ where: { contoId, tenantId } });
+    return this.totaleDecimal(righe).minus(this.pagatoDecimal(pagamenti));
+  }
+
+  /**
+   * Guardia di saldo (D3): si chiude solo un conto saldato. ⚠️ CAMBIO DI CONTRATTO
+   * rispetto ad ADR-0068 (dove `chiudi` era una pura transizione di stato).
+   *
+   * Ammesso se `residuo == 0` **oppure** `totale == 0`. La seconda clausola NON è
+   * ridondante: se una riga già pagata viene stornata, il residuo diventa
+   * NEGATIVO — con un solo articolo il totale va a 0 e la chiusura resta possibile.
+   * Con residuo negativo e totale > 0 (storno parziale di un conto già saldato) la
+   * chiusura è invece BLOCCATA: via d'uscita = storna il pagamento e ri-registralo
+   * al nuovo totale, oppure `annulla`. Limite noto e dichiarato (ADR-0081 D3).
+   */
+  private assertSettled(totale: Prisma.Decimal, pagato: Prisma.Decimal): void {
+    const residuo = totale.minus(pagato);
+    if (residuo.isZero() || totale.isZero()) return;
+    throw new ConflictException({
+      errorCode: 'E_CONTO_NOT_SETTLED',
+      message: `Conto not settled: residuo ${residuo.toFixed(2)} (totale ${totale.toFixed(2)}, pagato ${pagato.toFixed(2)})`,
     });
   }
 

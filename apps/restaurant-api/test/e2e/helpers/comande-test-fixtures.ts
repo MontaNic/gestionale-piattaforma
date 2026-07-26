@@ -1,11 +1,13 @@
 // =============================================================================
 // comande-test-fixtures.ts — E2E helper COMANDE (PR-2, ADR-0068)
 // =============================================================================
-// - seedComandePermissions: assegna i permessi `comande.*` a un utente via
+// - seedComandePermissions: assegna i permessi `comande.*`/`cassa.*` a un utente via
 //   permission catalog + role tenant-scoped + user_role. `grant`:
-//     'full'   → comande.crea + modifica + elimina + visualizza (operativi)
-//     'viewer' → solo comande.visualizza (legge, 403 su POST/PATCH/DELETE)
-//   (comande.stato.cambia esiste nel catalog ma è orfano intenzionale → mai grantato)
+//     'full'   → comande.* operativi + i 3 cassa.* enforced (ADR-0081 D5)
+//     'viewer' → solo comande.visualizza (legge il conto, 403 su ogni mutazione
+//                E su tutte le rotte cassa — prova che `cassa.*` è enforced)
+//     'cassa'  → comande.visualizza + i 3 cassa.* (profilo Cassiere: batte
+//                pagamenti senza poter toccare le righe)
 // - seedComandeData: menu/categoria + 2 articoli + PriceList "Base" (con override
 //   solo su articleA) + tavolo. Baseline pricing per esercitare il resolver.
 // - insertActivePriceList: 2° listino attivo su un canale → collisione ambiguità.
@@ -18,22 +20,42 @@ export const COMANDE_PERMISSION_CODES = [
   'comande.elimina',
   'comande.visualizza',
   'comande.stato.cambia',
+  // cassa.* enforced dalla Cassa pre-fiscale (ADR-0081 D5). `cassa.scontrino.emetti`
+  // e `cassa.chiusura.giornaliera` restano fuori: orfani di proposito (RT / D6).
+  'cassa.pagamento.registra',
+  'cassa.storno.esegui',
+  'cassa.visualizza',
 ] as const;
 
-export type ComandeGrant = 'full' | 'viewer';
+/** Categoria = primo segmento prima del primo punto (convenzione seed.ts). */
+function categoryOf(code: string): string {
+  return code.split('.')[0] ?? 'comande';
+}
+
+export type ComandeGrant = 'full' | 'viewer' | 'cassa';
+
+const CASSA_CODES = [
+  'cassa.pagamento.registra',
+  'cassa.storno.esegui',
+  'cassa.visualizza',
+] as const;
 
 const GRANTED: Record<ComandeGrant, readonly string[]> = {
   // 'full' = tutti i permessi comande OPERATIVI, incluso `comande.stato.cambia`
   // (KDS: transizioni stato comanda). Non più orfano da quando il layer Comanda è
-  // attivo (ADR-attivazione-layer-comanda).
+  // attivo (ADR-attivazione-layer-comanda). + i cassa.* enforced: dalla guardia di
+  // saldo (ADR-0081 D3) chiudere un conto con righe ESIGE un pagamento a saldo,
+  // quindi il profilo operativo pieno deve poter battere cassa.
   full: [
     'comande.crea',
     'comande.modifica',
     'comande.elimina',
     'comande.visualizza',
     'comande.stato.cambia',
+    ...CASSA_CODES,
   ],
   viewer: ['comande.visualizza'],
+  cassa: ['comande.visualizza', ...CASSA_CODES],
 };
 
 export async function seedComandePermissions(
@@ -45,7 +67,12 @@ export async function seedComandePermissions(
 
   const grant = opts.grant ?? 'full';
   const grantedCodes = GRANTED[grant];
-  const roleName = opts.roleName ?? (grant === 'full' ? 'Comande Full' : 'Comande Viewer');
+  const DEFAULT_ROLE_NAME: Record<ComandeGrant, string> = {
+    full: 'Comande Full',
+    viewer: 'Comande Viewer',
+    cassa: 'Comande Cassa',
+  };
+  const roleName = opts.roleName ?? DEFAULT_ROLE_NAME[grant];
 
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
@@ -54,10 +81,10 @@ export async function seedComandePermissions(
     for (const code of COMANDE_PERMISSION_CODES) {
       const res = await client.query<{ id: string }>(
         `INSERT INTO permissions (id, code, description, category, is_pre_f2)
-         VALUES ($1, $2, $3, 'comande', false)
+         VALUES ($1, $2, $3, $4, false)
          ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description
          RETURNING id;`,
-        [uuidv7(), code, `E2E ${code}`],
+        [uuidv7(), code, `E2E ${code}`, categoryOf(code)],
       );
       const id = res.rows[0]?.id;
       if (!id) throw new Error(`Insert permission failed: ${code}`);

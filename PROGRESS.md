@@ -3537,6 +3537,34 @@ Secondo prerequisito alla finestra, dopo lo storage di PR-A. Preceduto dall'**OP
 
 ---
 
+## [2026-07-27] Cassa pre-fiscale PR1 — schema + BE ([ADR-0081](docs/architecture/ADR-0081-cassa-pre-fiscale-pr1-pagamenti.md))
+
+**Terzo blocco della sequenza food** Comande → KDS → **Cassa pre-fiscale** → RT differito. PR1 = schema + BE; la cassa FE è PR2, speccata dopo che PR1 è verde. Sblocca lo scorporo che [ADR-0070](docs/architecture/ADR-0070-prezzi-lordi-snapshot-aliquota-riga.md) aveva differito congelando `vatPercent` sulla riga.
+
+**Cosa non esisteva** (STOP 0 read-only): zero concetto di pagamento (nessun importo-pagato/metodo/resto/stato-pagamento), zero scorporo imponibile/IVA, zero movimento cassa. I 4 permessi `cassa.*` erano **seedati e orfani** (0 `@RequirePermissions('cassa.*')` in tutto il codice). `chiudi` era una **pura transizione di stato**: chiudeva un conto da 200 € senza aver incassato nulla.
+
+**Decisioni.** **D1** pagamento = *child table* (1 conto → N pagamenti): lo **split payment è il caso nativo**, il pagamento singolo il degenere N=1 — campi sulla testata avrebbero reso lo split un'eccezione da rimodellare su dati già scritti. Overpay non modellato (`E_PAGAMENTO_EXCEEDS_RESIDUO`), resto contanti concern FE. **D2** nessuno stato-pagamento persistito: `da_pagare/parziale/saldato` derivato — un enum scritto sarebbe un secondo posto dove la verità diverge, e divergerebbe al primo storno. **D4** scorporo derivato + riepilogo IVA **congelato sul `Conto`** alla chiusura (`riepilogoIvaSnapshot`, scritto una volta): l'IVA è proprietà di *cosa* è stato venduto, non di *come* è stato pagato — sul singolo `Pagamento` sarebbe duplicata N volte con l'ambiguità di quale sia quella buona. Invariante `imponibile + iva == lordo` **esatto** per gruppo (`iva` come differenza, non secondo arrotondamento).
+
+**D3 — cambio di contratto deliberato su path live.** `chiudi` ammesso solo se `residuo == 0` **oppure** `totale == 0`, altrimenti `E_CONTO_NOT_SETTLED`; `annulla` resta la via senza incasso. Il permesso **non** si sposta (`comande.modifica`) → l'unica cosa che cambia per un chiamante è la guardia. La seconda clausola **non è ridondante**: lo storno di una riga già pagata manda il residuo in negativo, e con una riga sola il totale torna a 0. **Limite dichiarato** (con test): storno *parziale* di un conto già saldato → `totale > 0`, `residuo < 0` → chiusura bloccata; via d'uscita = storna il pagamento e ri-registra, oppure `annulla`. Non allargato a `residuo <= 0` perché renderebbe chiudibile un conto pagato in eccesso — la condizione che D1 ha deciso di non modellare.
+
+**Blast radius D3 misurato, non stimato.** Baseline pre-modifica catturata (16 file, 147 passed | 5 skipped, exit 0). Degli 11 punti che chiudono un conto, **9 chiudono a totale 0** → invariati; **2 rotti by design** aggiornati con pagamento a saldo (helper `pagaSaldo`) — dove il commento "conto chiuso (pagato)" è ora letterale. **Terzo consumer fuori dalla suite BE**: lo smoke Playwright `comande-flow.spec.ts` chiudeva un conto con totale > 0 dalla UI → passa a `annulla` (l'altra transizione terminale, libera il tavolo = ciò che quello smoke verifica); la variante paga-poi-chiudi diventa uno spec FE in PR2.
+
+**Permessi 63 → 64** (via **lunghezza array**, non `grep -c`): nuovo `cassa.pagamento.registra` su Direzione (32→33) e Cassiere (11→12). **3 dei 5 `cassa.*` non più orfani** (`pagamento.registra`, `storno.esegui`, `visualizza`); `scontrino.emetti` (RT) e `chiusura.giornaliera` (D6) restano orfani **dichiarati con trigger**. Verificato sul DB dev: `SELECT count(*) FROM permissions` → **64**.
+
+**Discovery — TD-BS Sub-2 è più ampio del documentato.** Nel harness E2E **nemmeno i DTO `@Body`** vengono validati (la `ValidationPipe` non riceve `design:paramtypes`): dimostrato sul DTO **pre-esistente** `AddRigaDto` (`quantita: 0` → 201 invece di 400) → limitazione del harness, non regressione di questa PR. Constraint spostati su 11 casi unit (`registra-pagamento.dto.spec.ts`), assert e2e `it.skip` col marker — stesso pattern di `list-conti.query.dto.spec.ts`.
+
+**GATE**: migration applicata su dev DB `:55432` (mai `5432`) e in container fresco; `pagamenti` con `relrowsecurity|relforcerowsecurity = t|t` e policy `pagamenti_tenant_isolation` verificate via `pg_class`/`\d`; typecheck + lint verdi; `nest build --builder swc` 64 file; **e2e 17 file, 175 passed | 6 skipped** (da 16/147/5 → **+28 test**, +1 skip documentato); unit 11 file / 95 test. RLS su `pagamenti` esercitata come `gestionale_app` non-superuser (3 test read/write/WITH-CHECK) — come superuser la policy sarebbe bypassata e non proverebbe nulla.
+
+**Impatto altro verticale: verificato.** `Pagamento`/`MetodoPagamentoConto`/`riepilogoIvaSnapshot` sotto il confine **DOMINIO**; `AuditLog` (CORE) **non toccato** (`action` String libera → le 2 nuove action non richiedono modifiche allo schema); grep a **zero** occorrenze in `apps/accountant-api` e `apps/accountant-web` (soli hit = re-export del barrel). Nessun riuso di `MetodoPagamentoNotaSpesa`: scelta esplicita, domini diversi.
+
+**TD nuovi**: 🆕 `TD-cassa-resto-drawer` (resto contanti / riconciliazione cassetto non persistiti — **trigger:** il cliente chiede la riconciliazione cassetto/fondo cassa) · 🆕 `TD-cassa-chiusura-giornaliera` (sessione cassa / Z-report / fondo cassa, D6 — **trigger:** il pilota chiede il riepilogo di fine giornata).
+
+**Forward**: **PR2 cassa FE** (pannello pagamento, split, storno, riepilogo IVA) — da speccare ora che PR1 è verde. RT/certificazione fiscale differita fino a cliente reale (`cassa.scontrino.emetti` è il segnaposto).
+
+- Commit: `feat(db)`(schema+migration) · `feat(restaurant-api)`(BE+seed+test) · `docs(adr)`(ADR-0081).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
