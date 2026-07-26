@@ -92,6 +92,7 @@ model Tenant {
   conti                Conto[]
   contiRighe           ContoRiga[]
   comandas             Comanda[]
+  pagamenti            Pagamento[]
   notaSpesas           NotaSpesa[]
 
   @@map("tenants")
@@ -780,6 +781,19 @@ enum StatoConto {
   @@map("stato_conto")
 }
 
+// Metodo di pagamento di un `Pagamento` sul conto (Cassa pre-fiscale, ADR-0081 D1).
+// Tre valori nudi: `contanti`/`carta` coprono il reale del pilota, `altro` è la
+// valvola per buoni pasto/satispay/bonifico senza inventare un enum speculativo
+// (Pattern 43). Distinto da `MetodoPagamentoNotaSpesa` (verticale accountant,
+// dominio diverso): NESSUN riuso cross-verticale — vedi ADR-0081.
+enum MetodoPagamentoConto {
+  contanti
+  carta
+  altro
+
+  @@map("metodo_pagamento_conto")
+}
+
 // Stato della Comanda (livello KDS, ADR-attivazione-layer-comanda). Forward-only:
 // inviata → in_preparazione → pronta (ammesso lo skip inviata → pronta). Nessuno
 // stato `servita` (fuori scope KDS-core).
@@ -792,23 +806,35 @@ enum StatoComanda {
 }
 
 model Conto {
-  id        String     @id
-  tenantId  String     @map("tenant_id")
-  tavoloId  String?    @map("tavolo_id") // nullable: asporto/delivery non hanno tavolo
-  channel   Channel // riusa l'enum food esistente — binding canale↔pricing
-  coperti   Int? // nullable: asporto non ha coperti
-  stato     StatoConto @default(aperto)
-  apertoIl  DateTime   @default(now()) @map("aperto_il")
-  chiusoIl  DateTime?  @map("chiuso_il")
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
-  deletedAt DateTime?  @map("deleted_at")
+  id                   String     @id
+  tenantId             String     @map("tenant_id")
+  tavoloId             String?    @map("tavolo_id") // nullable: asporto/delivery non hanno tavolo
+  channel              Channel // riusa l'enum food esistente — binding canale↔pricing
+  coperti              Int? // nullable: asporto non ha coperti
+  stato                StatoConto @default(aperto)
+  apertoIl             DateTime   @default(now()) @map("aperto_il")
+  chiusoIl             DateTime?  @map("chiuso_il")
+  // Riepilogo IVA CONGELATO alla chiusura (Cassa pre-fiscale, ADR-0081 D4).
+  // Forma: `[{ vatPercent, lordo, imponibile, iva }]` ordinato per vatPercent asc,
+  // importi come stringhe decimali a 2 cifre (Decimal→string, mai float).
+  // Scritto UNA SOLA VOLTA da `chiudi`, immutabile per convenzione (nessun
+  // trigger DB: nessun altro path lo scrive, e la riga chiusa è già congelata
+  // dalla state machine terminale). NULL su conti aperti/annullati e su tutti i
+  // conti pre-migration → NO backfill (il riepilogo di un conto già chiuso non è
+  // ricostruibile-come-allora, e i dati esistenti sono demo — vedi ADR-0070 D3).
+  // Il riepilogo LIVE resta derivato (`computeRiepilogoIva`): lo snapshot è la
+  // fotografia fiscale, non la fonte di verità del conto aperto.
+  riepilogoIvaSnapshot Json?      @map("riepilogo_iva_snapshot")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+  deletedAt            DateTime?  @map("deleted_at")
 
   // Relations
-  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tavolo  Tavolo?     @relation(fields: [tavoloId], references: [id], onDelete: SetNull)
-  righe   ContoRiga[]
-  comande Comanda[]
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tavolo    Tavolo?     @relation(fields: [tavoloId], references: [id], onDelete: SetNull)
+  righe     ContoRiga[]
+  comande   Comanda[]
+  pagamenti Pagamento[]
 
   @@index([tenantId])
   @@index([tavoloId])
@@ -899,6 +925,61 @@ model Comanda {
   @@index([contoId])
   @@index([tenantId, stato, reparto]) // feed KDS: GET /comande?stato=&reparto=
   @@map("comande")
+}
+
+// =============================================================================
+// Pagamento — Cassa pre-fiscale (ADR-0081, terzo blocco della sequenza food)
+// =============================================================================
+// Sequenza food: Comande → KDS → **Cassa pre-fiscale** → RT differito.
+//
+// D1 — child table, NON campi su Conto: 1 conto → N pagamenti. Lo split payment
+// (metà carta, metà contanti) è il caso NATIVO; il pagamento singolo è il caso
+// degenere N=1. Nessun campo pagamento/importoPagato/resto su `Conto`.
+//
+// D2 — nessuno stato-pagamento persistito: `da_pagare`/`parziale`/`saldato` è
+// DERIVATO (Σ importi non-stornati vs `computeTotale`), come il totale. Un enum
+// persistito sarebbe un secondo posto dove la verità può divergere. `StatoConto`
+// resta invariato (`aperto`/`chiuso`/`annullato`).
+//
+// `importo` = importo **applicato al conto** (non versato): l'overpay non è
+// modellato (guardia applicativa `importo <= residuo` → E_PAGAMENTO_EXCEEDS_RESIDUO).
+// Il resto contanti (versato − applicato) è concern FE, non persistito →
+// TD-cassa-resto-drawer. Sessione cassa / Z-report / fondo cassa fuori scope →
+// TD-cassa-chiusura-giornaliera (ADR-0081 D6).
+//
+// Storno soft via `stornato`/`stornatoIl` (NON `deletedAt`, coerente con
+// `ContoRiga.stornata`): un pagamento stornato è ESISTITO — resta visibile e in
+// audit, esce solo dal residuo. Terminale (no toggle). Nessun `deletedAt` →
+// il modello è fuori dall'auto-detect della soft-delete extension (come AuditLog).
+//
+// `operatoreId` = userId di chi ha battuto il pagamento. Colonna nuda SENZA FK a
+// `users` (come il resto del food: Menu/Article/Tavolo/Conto non hanno createdBy) —
+// l'attribuzione forte vive in `AuditLog.userId`. Nullable: sopravvive alla
+// cancellazione dell'operatore senza SetNull esplicito.
+//
+// Tenant-scoped, RLS FORCE + policy `pagamenti_tenant_isolation` replicata 1:1 dal
+// pattern conti/conti_righe/comande. Relazioni Cascade identiche a `Comanda`
+// (tenant + conto): la struttura è la stessa — figlio tenant-scoped di Conto.
+// =============================================================================
+model Pagamento {
+  id          String               @id
+  tenantId    String               @map("tenant_id") // RLS FORCE (vincolo)
+  contoId     String               @map("conto_id")
+  metodo      MetodoPagamentoConto
+  importo     Decimal              @db.Decimal(10, 2) // importo APPLICATO al conto (lordo, ADR-0070)
+  stornato    Boolean              @default(false)
+  stornatoIl  DateTime?            @map("stornato_il")
+  operatoreId String?              @map("operatore_id") // userId, colonna nuda (no FK)
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conto  Conto  @relation(fields: [contoId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([contoId])
+  @@map("pagamenti")
 }
 
 // =============================================================================
