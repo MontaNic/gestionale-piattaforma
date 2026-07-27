@@ -24,6 +24,7 @@ import { AppController } from './app.controller';
 import { ArticlesModule } from './articles/articles.module';
 import { ContiModule } from './conti/conti.module';
 import { ComandeModule } from './comande/comande.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { DbModule } from '@gestionale/db/nest';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
@@ -57,6 +58,7 @@ import { TablesModule } from './tables/tables.module';
     TablesModule,
     ContiModule,
     ComandeModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [
