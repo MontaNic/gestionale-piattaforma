@@ -15,6 +15,7 @@ import { useAuth } from '@gestionale/auth-web';
 import { ApiError } from '@gestionale/api-client';
 import { cn } from '@gestionale/ui';
 import { messageForError } from '@/lib/error-codes';
+import { formatEuro } from '@/lib/format';
 import {
   addRiga,
   annullaConto,
@@ -65,10 +66,6 @@ function groupInviate(righe: ContoRiga[]): ComandaGroup[] {
 // per il picker è composto dagli endpoint esistenti (menu→categorie→articoli):
 // nessun endpoint "tutti gli articoli" a catalogo esiste in F1.
 // =============================================================================
-
-function formatEuro(value: number): string {
-  return `€ ${value.toFixed(2)}`;
-}
 
 export default function ContoDetailPage(): JSX.Element {
   const t = useTranslations('comande');

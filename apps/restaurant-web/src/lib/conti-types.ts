@@ -44,9 +44,61 @@ export interface Conto {
   stato: StatoConto;
   apertoIl: string;
   chiusoIl: string | null;
+  /**
+   * Riepilogo IVA CONGELATO alla chiusura (ADR-0081 D4). `null` su conti aperti,
+   * annullati e su tutti i conti pre-migration. Gli importi restano STRINGHE
+   * decimali: è una fotografia fiscale, non un dato da ricalcolare — il mapper
+   * la converte a number solo per il render (`RiepilogoIvaGruppo`).
+   */
+  riepilogoIvaSnapshot: RawRiepilogoIvaGruppo[] | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+// ── Cassa pre-fiscale (ADR-0081 / ADR-0082) ──────────────────────────────────
+
+/** Metodi di pagamento del conto. Distinti da quelli delle note spese (accountant). */
+export const METODI_PAGAMENTO = ['contanti', 'carta', 'altro'] as const;
+export type MetodoPagamentoConto = (typeof METODI_PAGAMENTO)[number];
+
+/**
+ * Stato di pagamento DERIVATO dal BE (ADR-0081 D2), mai persistito e mai
+ * ricalcolato qui: `saldato` copre anche il conto sovra-pagato (residuo < 0) e
+ * il conto a totale 0. ⚠️ `saldato` NON implica chiudibile — per la chiusura
+ * l'unica autorità è `ContoWithRighe.chiudibile`.
+ */
+export type StatoPagamento = 'da_pagare' | 'parziale' | 'saldato';
+
+export interface Pagamento {
+  id: string;
+  tenantId: string;
+  contoId: string;
+  metodo: MetodoPagamentoConto;
+  /** Importo APPLICATO al conto. Decimal(10,2) sul wire (stringa) → number nel dominio. */
+  importo: number;
+  /** Storno soft (ADR-0081): resta visibile marcato, esce dal residuo. Terminale. */
+  stornato: boolean;
+  stornatoIl: string | null;
+  operatoreId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Gruppo del riepilogo IVA per aliquota — scorporo dal lordo (ADR-0070/ADR-0081 D4). */
+export interface RiepilogoIvaGruppo {
+  vatPercent: number;
+  lordo: number;
+  imponibile: number;
+  iva: number;
+}
+
+/** Stessa forma con gli importi come arrivano dal wire (stringhe decimali). */
+export interface RawRiepilogoIvaGruppo {
+  vatPercent: number;
+  lordo: string;
+  imponibile: string;
+  iva: string;
 }
 
 export interface ContoRiga {
@@ -83,6 +135,26 @@ export interface ContoWithRighe extends Conto {
   righe: ContoRiga[];
   /** Derivato dal backend, Decimal sul wire (stringa) → number nel dominio. */
   totale: number;
+  /** Pagamenti del conto, ordinati per createdAt asc. Include gli STORNATI (marcati). */
+  pagamenti: Pagamento[];
+  /**
+   * `totale − Σ pagamenti non stornati`. Può essere NEGATIVO (sovra-pagato):
+   * accade stornando una riga già pagata. Derivato dal BE.
+   */
+  residuo: number;
+  statoPagamento: StatoPagamento;
+  /** Riepilogo IVA LIVE (derivato a ogni GET). Lo snapshot congelato è su `Conto`. */
+  riepilogoIva: RiepilogoIvaGruppo[];
+  /**
+   * Predicato della guardia di saldo D3 così com'è nel BE (ADR-0082):
+   * `residuo == 0 || totale == 0`, con `== 0` STRETTO.
+   *
+   * ⚠️ È l'UNICA autorità sulla chiudibilità: non ricalcolarlo da `residuo` né
+   * da `statoPagamento`. Un conto sovra-pagato è `statoPagamento: 'saldato'` con
+   * `chiudibile: false` — derivarlo lato UI produrrebbe un bottone che il BE
+   * rifiuta con 409 E_CONTO_NOT_SETTLED.
+   */
+  chiudibile: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -110,6 +182,16 @@ export interface UpdateRigaInput {
    * pending (riga inviata → 409 E_RIGA_ALREADY_SENT).
    */
   note?: string;
+}
+
+/**
+ * Body di `POST /conti/:id/pagamenti` (RegistraPagamentoDto BE). `importo` in
+ * EURO con max 2 decimali, `>= 0.01`; il tetto reale è il residuo del conto e lo
+ * verifica il BE (409 E_PAGAMENTO_EXCEEDS_RESIDUO) — il cap lato UI è solo UX.
+ */
+export interface RegistraPagamentoInput {
+  metodo: MetodoPagamentoConto;
+  importo: number;
 }
 
 /**
