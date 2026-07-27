@@ -3591,6 +3591,36 @@ Secondo prerequisito alla finestra, dopo lo storage di PR-A. Preceduto dall'**OP
 
 ---
 
+## [2026-07-27] Design system PR1 — seam a token per-verticale ([ADR-0083](docs/architecture/ADR-0083-design-system-token-seam.md))
+
+**Prima PR dell'iniziativa di restyling** (multi-PR, UI **condivisa** fra i due verticali). Costruisce **solo il meccanismo**: nessun redesign, nessun ritocco alle 12 primitive, nessuna primitiva nuova. L'estetica si applica in P2–P4 *attraverso* questo seam.
+
+**Cosa esisteva prima** (STOP 0 read-only): due `tailwind.config.ts` **byte-identiche** (`TD-tailwind-config-dup`) e due `globals.css` che divergevano per 3 variabili — senza che nulla nel codice dicesse quali fossero divergenza **voluta** e quali copia da riallineare a mano. ⚠️ **Correzione allo STOP 1**: la spec dava il blocco `.dark` per "identico nei due globals". **Non lo era**: `--primary`, `--primary-foreground` e `--ring` divergono **in entrambi i temi**. Il seam reale è quindi 3 variabili × 2 temi, non 3 in totale.
+
+**Struttura**: `packages/ui/src/tokens.css` (base condivisa: neutri, superfici, tipografia, radii, regole base `*`/`body`) + `packages/ui/tailwind-preset.ts` (mapping nome-Tailwind → token, una volta sola). Le app tengono la propria `tailwind.config.ts` solo per `content` e `plugins`, e nei `globals.css` resta il **blocco seam** per-verticale: 5 coppie di token (`--primary`, `--ring`, `--accent-soft`, `--brand` + i rispettivi `-foreground`). Token additivi non adottati (`--font-display`, `--warn`, `--warn-soft`) → zero impatto sul rendering.
+
+**Il seam per-tenant è previsto e volutamente VUOTO** (YAGNI): la legge "zero letterali nei componenti" lo rende raggiungibile come swap di valori, senza toccare un solo componente. Trigger: un tenant chiede branding proprio.
+
+**Due fix atomici inclusi.** (1) **Drift tipografico**: restaurant ereditava il font di sistema mentre accountant caricava Inter — era un drift mai notato, non una decisione; chiuso caricando Inter anche su restaurant. **Unica modifica visiva della PR**, sul verticale che stiamo per ridisegnare. (2) **Violazione token**: `bg-blue-100 … dark:bg-blue-900/30` hardcoded in `accountant-web` `Sidebar.tsx` passa dalla coppia `--accent-soft`.
+
+⚠️ **Scostamento dallo STOP 1, motivato.** La spec diceva che la Sidebar dovesse passare da `--primary`/`--accent`, ma imponeva anche di dimostrare il rendering accountant **invariato**: `--accent` è un grigio quasi-bianco, lo swap si sarebbe **visto**. Risolto usando `--accent-soft`, token che la PR già introduce, con valori = esattamente blue-100/blue-900. Serve la controparte `--accent-soft-foreground`, aggiunta oltre l'elenco della spec (stessa convenzione `X`/`X-foreground` di tutti gli altri token).
+
+**Verifica dell'invarianza — senza rete di visual regression.** Diff del **CSS emesso da `next build`** (non solo dalla CLI), baseline `bc36e7d` vs PR, su entrambe le app: estratto il valore finale di ogni custom property dopo la cascata in `:root` e `.dark`. Risultato **puramente additivo**: **zero dichiarazioni modificate, zero rimosse** (accountant +13 token, restaurant +14 di cui `--font-sans`). Nessuna regola CSS del baseline è sparita → il purge di `packages/ui` è intatto. **Colori computati a runtime** su stato attivo Sidebar: light `rgb(219,234,254)`/`rgb(30,58,138)`, dark `rgba(30,58,138,0.3)`/`rgb(219,234,254)` = **identici al pixel** ai letterali sostituiti (conversione hex→HSL esatta al roundtrip).
+
+**`postcss-import` aggiunto a entrambe le app** — non cosmetico: Next processa un `@import` di CSS da package come **modulo separato** e Tailwind vi gira sopra senza `@tailwind base`, facendo **fallire il build**. La CLI invece inlinea. Il plugin allinea i due comportamenti. Costo: 6 righe di lockfile, nessun pacchetto nuovo nello store. **Sul lockfile**: `tailwindcss` in `packages/ui` per un solo import di tipo trascinava `jiti` e ~230 righe di churn nel peer graph → scartato, il preset resta non typecheckato come i `tailwind.config.ts` per-app (già oggi fuori dai rispettivi `include`).
+
+**GATE**: typecheck 16/16 · lint · prettier · unit 15/15 · `next build` verde su entrambe le app. **Verifica manuale runtime** (stack dev su DB dev `:55432`, ruolo **non-superuser** `collaboratore@studio.local`): sidebar accountant light **e** dark, tipografia restaurant su login e dashboard, nessun danno di layout.
+
+**Impatto altro verticale: verificato = INVARIATO.** È il punto della PR: tocca `packages/ui` (condiviso), e la prova che accountant non cambia è quella sopra — valori identici, unico edit il token-swap a resa identica. `packages/db`/schema/seed **non toccati** → migration e propagazione permessi **N.A.**
+
+**TD**: 🆕 `TD-visual-regression-net` (baseline Playwright su `page-manifest` × light/dark — **trigger:** prima di P4, il ritocco delle primitive condivise; nasce come **strumento di iterazione, NON gate**, dato lo stato pre-lancio senza clienti reali). ✅ `TD-tailwind-config-dup` risolto.
+
+**Forward**: P2 primitive additive + rebuild dashboard restaurant (oggi stampa i permessi) · P3 estetica A su shell/pagine restaurant · P4 ritocco delle 12 primitive (79 file, 2 app: unica fase non isolabile → ultima). Restano ~13 letterali colore in note-spese/preventivi/mandati/KDS: si estinguono in P3/P4 con la primitiva `badge`.
+
+- Commit: `feat(ui)`(tokens+preset) · `refactor(web)`(app sul seam) · `fix(web)`(Inter restaurant + token Sidebar) · `docs(adr)`(ADR-0083).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).

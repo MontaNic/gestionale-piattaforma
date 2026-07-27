@@ -42,6 +42,16 @@ Aggiungere un verticale futuro = fornire **una sola istanza `brand`** conforme a
 - **Negative / debito residuo:** `FoodDesk` è un segnaposto (sostituibile in una riga). Il brand resta build-time: un branding per-tenant (T) o per-verticale-da-dato è lavoro futuro legato al verticale-dato. La `CardDescription` del login resta hardcoded IT (famiglia TD-i18n preesistente, fuori dal perimetro brand — non allargato per non fare scope creep).
 - **GATE ADR-0052:** completo (FE live). CHECK-FE-1 dark ✅ (wordmark non sparisce, render reale light+dark) · FE-2 i18n IT↔EN ✅ (`auth.login.title`, brand come param) · FE-3 no IT hardcoded reintrodotto ✅ · FE-4 `next build` ✅ entrambe · FE-5 responsive ✅ · FE-6 a11y ✅ (`role="img"` + accessible name = titolo i18n).
 
+## Update (2026-07-27) — il colore-brand entra nel design system
+
+[ADR-0083](./ADR-0083-design-system-token-seam.md) estende questo ADR su un punto solo. Il "NIENTE colori" qui sopra
+resta valido per il **brand object TypeScript** (`productName`, `Logo`, `favicon`): la palette continua a non passare
+di lì. Ma il **colore-brand** non è più implicito dentro `--primary`: diventa il token `--brand`/`--brand-foreground`,
+distinto dall'accento operativo proprio perché ha un ruolo diverso (prima impressione vs azione quotidiana). La
+palette non vive più solo nei `globals.css` per-app: i neutri sono condivisi in `packages/ui/src/tokens.css` e nei
+`globals.css` resta il **seam** per-verticale. Il branding per-tenant citato qui come "lavoro futuro" ha ora un seam
+previsto (e volutamente vuoto) in ADR-0083 §3.
+
 ## Links
 
-- [ADR-0049](./ADR-0049-landing-pubblica-tenant.md) (identità pubblica per-tenant, dimensione T), [ADR-0060](./ADR-0060-sync-permessi-template-tenant-noop.md) (3 TD del verticale-dato), [ADR-0027](./ADR-0027-composizione-core-condiviso.md) (estrazione core / `packages/ui`).
+- [ADR-0049](./ADR-0049-landing-pubblica-tenant.md) (identità pubblica per-tenant, dimensione T), [ADR-0060](./ADR-0060-sync-permessi-template-tenant-noop.md) (3 TD del verticale-dato), [ADR-0027](./ADR-0027-composizione-core-condiviso.md) (estrazione core / `packages/ui`), [ADR-0083](./ADR-0083-design-system-token-seam.md) (architettura a token, seam per-verticale).
