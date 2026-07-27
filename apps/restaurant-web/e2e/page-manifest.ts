@@ -51,7 +51,7 @@ export const RESTAURANT_MANIFEST: readonly RoleManifest[] = [
       { path: 'menu/listini' },
       { path: 'mappa', note: 'tavoli — pagina del bug 403 che motiva lo smoke' },
       { path: 'comande', note: 'PlaceholderPage' },
-      { path: 'cassa', note: 'PlaceholderPage' },
+      { path: 'cassa', note: 'index cassa — conti aperti da incassare (PR2, ADR-0082)' },
       { path: 'kds', note: 'PlaceholderPage' },
       { path: 'report', note: 'PlaceholderPage' },
       { path: 'settings', note: 'PlaceholderPage' },

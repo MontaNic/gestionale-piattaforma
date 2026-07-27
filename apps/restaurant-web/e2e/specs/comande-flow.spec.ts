@@ -10,11 +10,11 @@ import { test, expect } from '@playwright/test';
  *   → aggiungi una riga → totale > 0 → ANNULLA conto → /mappa → tavolo di nuovo libero.
  *
  * ⚠️ Il passo finale usa "Annulla conto", non "Chiudi conto": dalla Cassa
- * pre-fiscale (ADR-0081 D3) `chiudi` esige un conto SALDATO, e la UI per
- * registrare un pagamento arriva con la cassa FE (PR2). `annulla` è l'altra
+ * pre-fiscale (ADR-0081 D3) `chiudi` esige un conto SALDATO. `annulla` è l'altra
  * transizione terminale — porta il conto fuori da `aperto` e libera il tavolo,
  * che è esattamente ciò che questo smoke verifica (catena mappa↔conti). La
- * variante paga-poi-chiudi diventerà uno spec FE della cassa in PR2.
+ * variante paga-poi-chiudi vive in `cassa-flow.spec.ts` (PR2, ADR-0082): le due
+ * spec coprono le due uscite dal conto aperto.
  *
  * Pattern storageState: riusa `e2e/.auth/demo.json` (auth.setup.ts, admin@demo.local
  * = Super Admin → possiede comande.* + tavoli.gestisci; nessuna modifica al seed).

@@ -296,7 +296,8 @@
       "pendingEmpty": "Nessuna riga da inviare. Aggiungi un articolo.",
       "inviateTitle": "Inviate in cucina",
       "note": "Nota",
-      "editRiga": "Modifica riga"
+      "editRiga": "Modifica riga",
+      "incassa": "Incassa"
     },
     "addRiga": {
       "title": "Aggiungi articolo",
@@ -345,6 +346,87 @@
       "confirmTitle": "Inviare in cucina?",
       "confirmBody": "{count, plural, =1 {# riga verrà inviata} other {# righe verranno inviate}} in cucina e non saranno più modificabili.",
       "confirmLabel": "Invia"
+    }
+  },
+  "cassa": {
+    "listTitle": "Cassa",
+    "listSubtitle": "Conti aperti da incassare. Apri un conto per registrare il pagamento.",
+    "listEmpty": "Nessun conto aperto da incassare.",
+    "noAccess": "Non hai i permessi per visualizzare la cassa.",
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "open": "Incassa",
+    "tavolo": "Tavolo",
+    "noTavolo": "Senza tavolo",
+    "coperti": "Coperti",
+    "totale": "Totale",
+    "residuo": "Residuo",
+    "channel": {
+      "cassa": "Cassa",
+      "menu_online": "Menu online",
+      "asporto": "Asporto",
+      "delivery": "Delivery"
+    },
+    "stato": {
+      "aperto": "Aperto",
+      "chiuso": "Chiuso",
+      "annullato": "Annullato"
+    },
+    "statoPagamento": {
+      "da_pagare": "Nessun incasso registrato.",
+      "parziale": "Incassato in parte.",
+      "saldato": "Nulla da incassare."
+    },
+    "detail": {
+      "backToList": "Torna alla cassa",
+      "notFound": "Conto non trovato.",
+      "readOnly": "Conto {stato}: sola lettura.",
+      "righeTitle": "Righe del conto",
+      "righeEmpty": "Nessuna riga sul conto.",
+      "quantita": "q.tà",
+      "vaiAlConto": "Modifica in Comande"
+    },
+    "riepilogo": {
+      "title": "Riepilogo IVA",
+      "titleSnapshot": "Riepilogo IVA (congelato alla chiusura)",
+      "aliquota": "Aliquota",
+      "imponibile": "Imponibile",
+      "iva": "IVA",
+      "lordo": "Lordo",
+      "empty": "Nessun riepilogo IVA: il conto non ha righe."
+    },
+    "pagamento": {
+      "title": "Registra pagamento",
+      "metodoLabel": "Metodo",
+      "metodo": {
+        "contanti": "Contanti",
+        "carta": "Carta",
+        "altro": "Altro"
+      },
+      "importoLabel": "Importo (€)",
+      "submit": "Registra pagamento",
+      "submitting": "Registrazione…",
+      "importoInvalid": "Importo non valido: usa un numero maggiore di zero, con al massimo 2 decimali.",
+      "importoOverResiduo": "L'importo supera il residuo ({residuo}). Registra al massimo il residuo: il resto va dato in cassa."
+    },
+    "pagamenti": {
+      "title": "Pagamenti registrati",
+      "empty": "Nessun pagamento registrato.",
+      "stornato": "Stornato",
+      "storna": "Storna"
+    },
+    "chiusura": {
+      "saldato": "Conto saldato: puoi chiuderlo.",
+      "chiudi": "Chiudi conto",
+      "residuoDaIncassare": "Restano {importo} da incassare prima di poter chiudere il conto.",
+      "sovrapagato": "Conto sovra-pagato di {importo}.",
+      "sovrapagatoHelp": "È stato incassato più del totale attuale, perché una riga già pagata è stata stornata. Per chiudere: storna il pagamento e registralo di nuovo sul totale corretto, oppure annulla il conto da Comande."
+    },
+    "confirm": {
+      "stornaTitle": "Stornare il pagamento?",
+      "stornaBody": "Il pagamento di {importo} ({metodo}) verrà stornato: resterà visibile ma uscirà dal saldo, riaprendo il residuo. L'azione è irreversibile.",
+      "chiudiTitle": "Chiudere il conto?",
+      "chiudiBody": "Il conto verrà chiuso e il riepilogo IVA congelato. Non sarà più modificabile."
     }
   },
   "kds": {
