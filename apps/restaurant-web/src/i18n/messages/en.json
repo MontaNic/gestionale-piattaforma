@@ -296,7 +296,8 @@
       "pendingEmpty": "No lines to send yet. Add an item.",
       "inviateTitle": "Sent to kitchen",
       "note": "Note",
-      "editRiga": "Edit line"
+      "editRiga": "Edit line",
+      "incassa": "Take payment"
     },
     "addRiga": {
       "title": "Add item",
@@ -345,6 +346,87 @@
       "confirmTitle": "Send to kitchen?",
       "confirmBody": "{count, plural, =1 {# line will be sent} other {# lines will be sent}} to the kitchen and can no longer be modified.",
       "confirmLabel": "Send"
+    }
+  },
+  "cassa": {
+    "listTitle": "Register",
+    "listSubtitle": "Open bills awaiting payment. Open a bill to record the payment.",
+    "listEmpty": "No open bills to settle.",
+    "noAccess": "You do not have permission to view the register.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "open": "Take payment",
+    "tavolo": "Table",
+    "noTavolo": "No table",
+    "coperti": "Covers",
+    "totale": "Total",
+    "residuo": "Balance due",
+    "channel": {
+      "cassa": "Register",
+      "menu_online": "Online menu",
+      "asporto": "Takeaway",
+      "delivery": "Delivery"
+    },
+    "stato": {
+      "aperto": "Open",
+      "chiuso": "Closed",
+      "annullato": "Cancelled"
+    },
+    "statoPagamento": {
+      "da_pagare": "No payment recorded.",
+      "parziale": "Partially paid.",
+      "saldato": "Nothing left to collect."
+    },
+    "detail": {
+      "backToList": "Back to register",
+      "notFound": "Bill not found.",
+      "readOnly": "Bill {stato}: read only.",
+      "righeTitle": "Bill lines",
+      "righeEmpty": "No lines on this bill.",
+      "quantita": "qty",
+      "vaiAlConto": "Edit in Orders"
+    },
+    "riepilogo": {
+      "title": "VAT summary",
+      "titleSnapshot": "VAT summary (frozen at closing)",
+      "aliquota": "Rate",
+      "imponibile": "Net",
+      "iva": "VAT",
+      "lordo": "Gross",
+      "empty": "No VAT summary: the bill has no lines."
+    },
+    "pagamento": {
+      "title": "Record payment",
+      "metodoLabel": "Method",
+      "metodo": {
+        "contanti": "Cash",
+        "carta": "Card",
+        "altro": "Other"
+      },
+      "importoLabel": "Amount (€)",
+      "submit": "Record payment",
+      "submitting": "Recording…",
+      "importoInvalid": "Invalid amount: use a number greater than zero, with at most 2 decimals.",
+      "importoOverResiduo": "The amount exceeds the balance due ({residuo}). Record at most the balance due: give the change from the till."
+    },
+    "pagamenti": {
+      "title": "Recorded payments",
+      "empty": "No payment recorded.",
+      "stornato": "Voided",
+      "storna": "Void"
+    },
+    "chiusura": {
+      "saldato": "Bill settled: you can close it.",
+      "chiudi": "Close bill",
+      "residuoDaIncassare": "{importo} still to collect before the bill can be closed.",
+      "sovrapagato": "Bill overpaid by {importo}.",
+      "sovrapagatoHelp": "More was collected than the current total, because a line that had already been paid was voided. To close: void the payment and record it again on the correct total, or cancel the bill from Orders."
+    },
+    "confirm": {
+      "stornaTitle": "Void this payment?",
+      "stornaBody": "The {importo} payment ({metodo}) will be voided: it stays visible but leaves the balance, reopening the amount due. This cannot be undone.",
+      "chiudiTitle": "Close this bill?",
+      "chiudiBody": "The bill will be closed and the VAT summary frozen. It will no longer be editable."
     }
   },
   "kds": {

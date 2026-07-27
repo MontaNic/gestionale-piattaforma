@@ -23,6 +23,10 @@ import type {
   ContoWithRighe,
   CreateContoInput,
   ListContiParams,
+  Pagamento,
+  RawRiepilogoIvaGruppo,
+  RegistraPagamentoInput,
+  RiepilogoIvaGruppo,
   UpdateRigaInput,
 } from './conti-types';
 
@@ -33,19 +37,54 @@ interface Wrapped<T> {
 // ── Wire shapes + normalizzazione Decimal→number ─────────────────────────────
 // Il backend serializza i Decimal come stringa: qui i tipi "Raw" li tengono
 // stringa e i mapper li convertono a number prima di consegnarli alla UI.
+//
+// Cassa (ADR-0082): `residuo` e `pagamenti[].importo` sono Decimal → stessa
+// normalizzazione di `totale`. `statoPagamento` e `chiudibile` arrivano già
+// tipizzati dal BE e NON vengono toccati: sono autoritativi, ricalcolarli qui
+// reintrodurrebbe la divergenza che il campo `chiudibile` esiste per evitare.
+// `riepilogoIvaSnapshot` resta stringa nel dominio (fotografia fiscale, ADR-0081
+// D4): il mapper lo converte solo al momento del render.
 
 type RawContoRiga = Omit<ContoRiga, 'prezzoUnitario'> & { prezzoUnitario: string };
-type RawContoWithRighe = Omit<ContoWithRighe, 'righe' | 'totale'> & {
+type RawPagamento = Omit<Pagamento, 'importo'> & { importo: string };
+type RawContoWithRighe = Omit<
+  ContoWithRighe,
+  'righe' | 'totale' | 'pagamenti' | 'residuo' | 'riepilogoIva'
+> & {
   righe: RawContoRiga[];
   totale: string;
+  pagamenti: RawPagamento[];
+  residuo: string;
+  riepilogoIva: RawRiepilogoIvaGruppo[];
 };
 
 function mapContoRiga(r: RawContoRiga): ContoRiga {
   return { ...r, prezzoUnitario: Number(r.prezzoUnitario) };
 }
 
+function mapPagamento(p: RawPagamento): Pagamento {
+  return { ...p, importo: Number(p.importo) };
+}
+
+/** Wire→dominio del riepilogo IVA. Esportata: la usa anche lo SNAPSHOT congelato. */
+export function mapRiepilogoIva(g: RawRiepilogoIvaGruppo): RiepilogoIvaGruppo {
+  return {
+    vatPercent: g.vatPercent,
+    lordo: Number(g.lordo),
+    imponibile: Number(g.imponibile),
+    iva: Number(g.iva),
+  };
+}
+
 function mapContoWithRighe(c: RawContoWithRighe): ContoWithRighe {
-  return { ...c, righe: c.righe.map(mapContoRiga), totale: Number(c.totale) };
+  return {
+    ...c,
+    righe: c.righe.map(mapContoRiga),
+    totale: Number(c.totale),
+    pagamenti: c.pagamenti.map(mapPagamento),
+    residuo: Number(c.residuo),
+    riepilogoIva: c.riepilogoIva.map(mapRiepilogoIva),
+  };
 }
 
 // ── Conto ────────────────────────────────────────────────────────────────────
@@ -94,6 +133,51 @@ export async function inviaConto(contoId: string): Promise<ComandaInviata[]> {
     authOptions(),
   );
   return res.data;
+}
+
+// ── Pagamenti (Cassa pre-fiscale, ADR-0081 / ADR-0082) ───────────────────────
+// Le 3 rotte vivono sotto i permessi `cassa.*`, distinti da `comande.*`: un
+// cassiere può incassare senza toccare le righe. Nessuna delle 3 restituisce il
+// conto aggiornato → dopo ogni mutazione il chiamante rifà `getConto` (pattern
+// pessimistico di `comande/[contoId]`), che è anche l'unica fonte di `residuo`
+// e `chiudibile` freschi.
+
+/** `GET /conti/:id/pagamenti` (gate `cassa.visualizza`). Include gli stornati, marcati. */
+export async function listPagamenti(contoId: string): Promise<Pagamento[]> {
+  const res = await apiGet<Wrapped<RawPagamento[]>>(`/conti/${contoId}/pagamenti`, authOptions());
+  return res.data.map(mapPagamento);
+}
+
+/**
+ * `POST /conti/:id/pagamenti` (gate `cassa.pagamento.registra`). Ritorna il
+ * SINGOLO pagamento creato, non il conto. Errori: 409 `E_PAGAMENTO_EXCEEDS_RESIDUO`
+ * (overpay non modellato), 409 `E_CONTO_NOT_OPEN`, 400 sui vincoli del DTO.
+ */
+export async function registraPagamento(
+  contoId: string,
+  input: RegistraPagamentoInput,
+): Promise<Pagamento> {
+  const res = await apiPost<Wrapped<RawPagamento>>(
+    `/conti/${contoId}/pagamenti`,
+    input,
+    authOptions(),
+  );
+  return mapPagamento(res.data);
+}
+
+/**
+ * `POST /conti/:id/pagamenti/:pagamentoId/storna` (gate `cassa.storno.esegui`).
+ * Storno SOFT e terminale: il pagamento resta visibile marcato ed esce dal
+ * residuo. Errori: 409 `E_PAGAMENTO_ALREADY_STORNATO`, 409 `E_CONTO_NOT_OPEN`,
+ * 404 `E_PAGAMENTO_NOT_FOUND`.
+ */
+export async function stornaPagamento(contoId: string, pagamentoId: string): Promise<Pagamento> {
+  const res = await apiPost<Wrapped<RawPagamento>>(
+    `/conti/${contoId}/pagamenti/${pagamentoId}/storna`,
+    undefined,
+    authOptions(),
+  );
+  return mapPagamento(res.data);
 }
 
 // ── Righe ─────────────────────────────────────────────────────────────────────

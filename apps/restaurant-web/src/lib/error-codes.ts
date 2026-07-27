@@ -126,8 +126,25 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   E_CONTO_NOTE_TOO_LONG: 'La nota della riga non può superare 200 caratteri.',
   E_TAVOLO_NOT_FOUND: 'Tavolo non trovato.',
 
+  // Cassa pre-fiscale (ADR-0081 / ADR-0082)
+  // `E_CONTO_NOT_SETTLED` era già raggiungibile dal Chiudi di comande/[contoId]
+  // (guardia di saldo D3, PR1) ma cadeva sul fallback generico: il messaggio dice
+  // ora cosa fare, non solo che è andata male.
+  E_CONTO_NOT_SETTLED:
+    'Il conto non è saldato: incassa il residuo prima di chiuderlo, oppure annullalo.',
+  E_PAGAMENTO_EXCEEDS_RESIDUO:
+    "L'importo supera il residuo del conto. Registra al massimo il residuo (il resto va dato in cassa).",
+  E_PAGAMENTO_ALREADY_STORNATO: 'Questo pagamento è già stato stornato.',
+  E_PAGAMENTO_NOT_FOUND: 'Pagamento non trovato.',
+  E_PAGAMENTO_METODO_INVALID: 'Metodo di pagamento non valido.',
+  E_PAGAMENTO_IMPORTO_INVALID:
+    "L'importo non è valido: deve essere maggiore di zero, con al massimo 2 decimali.",
+
   // KDS — invio comanda (ADR-0069)
   E_RIGA_ALREADY_SENT: 'Questa riga è già stata inviata in cucina e non è più modificabile.',
+  E_RIGA_NOT_SENT:
+    'Questa riga non è ancora stata inviata in cucina: rimuovila invece di stornarla.',
+  E_RIGA_ALREADY_STORNATA: 'Questa riga è già stata stornata.',
   E_COMANDA_NO_RIGHE_PENDING: 'Nessuna riga da inviare: aggiungi almeno una riga prima di inviare.',
   E_PRICE_AMBIGUOUS:
     'Prezzo ambiguo per questo articolo: più listini attivi coprono il canale. Correggi i listini prima di aggiungerlo.',

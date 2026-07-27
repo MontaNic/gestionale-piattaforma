@@ -15,6 +15,7 @@ import { useAuth } from '@gestionale/auth-web';
 import { ApiError } from '@gestionale/api-client';
 import { cn } from '@gestionale/ui';
 import { messageForError } from '@/lib/error-codes';
+import { formatEuro } from '@/lib/format';
 import {
   addRiga,
   annullaConto,
@@ -66,10 +67,6 @@ function groupInviate(righe: ContoRiga[]): ComandaGroup[] {
 // nessun endpoint "tutti gli articoli" a catalogo esiste in F1.
 // =============================================================================
 
-function formatEuro(value: number): string {
-  return `€ ${value.toFixed(2)}`;
-}
-
 export default function ContoDetailPage(): JSX.Element {
   const t = useTranslations('comande');
   const { tenant, permissions } = useAuth();
@@ -78,6 +75,7 @@ export default function ContoDetailPage(): JSX.Element {
 
   const canModify = permissions.includes('comande.modifica');
   const canDelete = permissions.includes('comande.elimina');
+  const canIncassa = permissions.includes('cassa.visualizza');
 
   const [conto, setConto] = useState<ContoWithRighe | null>(null);
   // Label tavolo risolta (numero) — fallback all'id grezzo se il fetch fallisce
@@ -547,14 +545,30 @@ export default function ContoDetailPage(): JSX.Element {
           </div>
 
           {/* ── Azioni conto ───────────────────────────────────────────────── */}
-          {isOpen && canModify && (
+          {isOpen && (canIncassa || canModify) && (
             <div className="flex gap-2">
-              <Button variant="default" onClick={() => setPendingChiudi(true)}>
-                {t('detail.chiudi')}
-              </Button>
-              <Button variant="outline" onClick={() => setPendingAnnulla(true)}>
-                {t('detail.annulla')}
-              </Button>
+              {/* Incassa → pannello cassa (ADR-0082 D1). Gated `cassa.visualizza`,
+                  indipendente da `comande.modifica`: chi incassa non modifica le
+                  righe. `Chiudi` resta qui per il conto a totale 0, dove non c'è
+                  nulla da incassare. */}
+              {canIncassa && (
+                <Button asChild variant="default">
+                  <Link href={`/t/${tenant.slug}/cassa/${conto.id}`}>{t('detail.incassa')}</Link>
+                </Button>
+              )}
+              {canModify && (
+                <>
+                  <Button
+                    variant={canIncassa ? 'outline' : 'default'}
+                    onClick={() => setPendingChiudi(true)}
+                  >
+                    {t('detail.chiudi')}
+                  </Button>
+                  <Button variant="outline" onClick={() => setPendingAnnulla(true)}>
+                    {t('detail.annulla')}
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </>

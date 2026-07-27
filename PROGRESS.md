@@ -3565,6 +3565,32 @@ Secondo prerequisito alla finestra, dopo lo storage di PR-A. Preceduto dall'**OP
 
 ---
 
+## [2026-07-27] Cassa pre-fiscale PR2 — FE + contratto `chiudibile` ([ADR-0082](docs/architecture/ADR-0082-cassa-pre-fiscale-pr2-fe-chiudibile.md))
+
+**Chiude il blocco Cassa pre-fiscale**: PR1 aveva schema e BE, la UI era una `PlaceholderPage` di 4 righe e i 3 permessi `cassa.*` enforced non avevano **nessun consumer FE**.
+
+**Cosa mancava** (STOP 0 read-only): il tipo FE `ContoWithRighe` si fermava a `righe`+`totale` → `pagamenti`/`residuo`/`statoPagamento`/`riepilogoIva` arrivavano dal BE ma **non tipizzati e non normalizzati** (`residuo` restava la stringa raw del Decimal); zero funzioni FE per le 3 rotte cassa; **8 error code senza messaggio IT**, fra cui `E_CONTO_NOT_SETTLED` — già raggiungibile dal "Chiudi" di `comande/[contoId]` **dalla PR1**, dove il cambio di contratto D3 arrivava in UI come "Si è verificato un errore. Riprova.".
+
+**D2 — il predicato di chiusura diventa contratto.** `GET /conti/:id` espone `chiudibile`, calcolato da `isChiudibile(totale, pagato)`, la **stessa funzione** che `assertSettled` usa per emettere `E_CONTO_NOT_SETTLED`. Il FE ci lega il bottone e **non lo ricalcola**. L'alternativa (derivare `residuo === 0` in UI) sarebbe stata sbagliata proprio nel caso non ovvio: il conto **sovra-pagato** è `statoPagamento: 'saldato'` ma **non** chiudibile. ⚠️ La divergenza fra `computeStatoPagamento` (`residuo <= 0`) e `isChiudibile` (`isZero()` **stretto**) è **voluta**: unificarli rimetterebbe il sovra-pagato fra i chiudibili, cioè la condizione che ADR-0081 D1 ha deciso di non modellare. Divieto scritto nel docstring, coperto da unit dedicato e da un e2e che verifica **campo ed esito reale di `chiudi` nella stessa prova**. Additivo puro: **nessuna migration, nessun permesso nuovo** (restano 64), throw invariato.
+
+**D1 vista dedicata** (`/cassa` index + `/cassa/[contoId]`), non un pannello dentro comande: sono due mestieri e spesso due persone, ed è la stessa separazione che il BE ha già fatto tenendo `cassa.*` distinti da `comande.*`. `comande/[contoId]` guadagna solo il bottone "Incassa". **D3 il residuo negativo si dice**: tre stati tutti parlanti, **nessun bottone disabilitato in silenzio** — chiudibile → Chiudi; `residuo > 0` → "Restano € X da incassare" (la CTA è il blocco pagamento); `residuo < 0` → riquadro **sovra-pagato** con causa e via d'uscita. Il limite D3 di ADR-0081 **resta**: questa PR lo rende comprensibile dove capita, non lo rimuove. **D4** metodo segmentato (3 Button, non `<select>`: la cassa è touch), importo pre-compilato col residuo, split = lista di pagamenti con storno per riga; cap sull'importo **solo UX**, l'autorità resta il BE. **D5** index **senza importi** (`GET /conti` è flat: mostrarli = N fetch) → 🆕 `TD-conti-list-amounts`.
+
+**Isolamento smoke dai tavoli seedati.** `cassa-flow.spec.ts` **crea ed elimina un proprio tavolo**: DP-2 "un tavolo, un conto aperto" rende il tavolo risorsa **esclusiva** e il pool di 2 era già conteso (`coperti-warning` ne occupa uno in modo permanente, `comande-flow` prende il primo libero). In `fullyParallel` le due spec flow finivano sullo **stesso** conto e si annullavano a vicenda — **osservato, non ipotizzato**. Nessuna modifica alle spec esistenti né al seed.
+
+**GATE**: unit **12 file / 102 test** (+7, il predicato); e2e BE **17 file, 179 passed | 6 skipped** (+4, `chiudibile`) con gli assert `E_CONTO_NOT_SETTLED` pre-esistenti verdi = refactor a comportamento invariato; typecheck + lint + prettier verdi; **Playwright chromium 19 passed | 1 skipped | 0 failed** con le impostazioni CI (`workers=1`, `THROTTLE_AUTH_LIMIT=100`, fixture conti pulita).
+
+**Verifica manuale runtime** (ruolo **non-superuser** `direzione@demo.local`): index cassa · conto `da_pagare` · parziale (nessun bottone chiudi) · importo oltre residuo (submit disabilitato + messaggio) · split carta+contanti a saldo (compare Chiudi) · **sovra-pagato** dopo storno di una riga pagata (riquadro + via d'uscita, chiusura bloccata) · storno pagamenti · ri-paga il totale corretto · chiusura con **riepilogo IVA congelato** a schermo.
+
+**Impatto altro verticale: verificato.** `chiudibile` è derivato in memoria dentro `apps/restaurant-api` → **nessun tocco a `packages/db`/schema/seed**: migration **N.A.**, propagazione permessi **N.A.** `packages/api-client` (condiviso) **non toccato** — le 3 funzioni nuove stanno nel layer di dominio di restaurant-web. Grep a **zero** occorrenze di `chiudibile`/`Pagamento`/`cassa.` in `apps/accountant-api` e `apps/accountant-web`.
+
+**TD nuovi**: 🆕 `TD-conti-list-amounts` (l'index cassa non mostra totale/residuo — **trigger:** il cassiere deve prioritizzare i conti per importo a colpo d'occhio dall'index).
+
+**Forward**: RT/certificazione fiscale differita fino a cliente reale (`cassa.scontrino.emetti`); chiusura giornaliera/Z-report su trigger del pilota (`TD-cassa-chiusura-giornaliera`); resto contanti su trigger riconciliazione cassetto (`TD-cassa-resto-drawer`).
+
+- Commit: `feat(restaurant-api)`(chiudibile+test) · `feat(restaurant-web)`(plumbing) · `feat(restaurant-web)`(viste+smoke) · `docs(adr)`(ADR-0082).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
