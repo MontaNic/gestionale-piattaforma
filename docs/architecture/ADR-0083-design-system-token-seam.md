@@ -12,8 +12,11 @@ Il design system condiviso (`packages/ui`) è nato agnostico rispetto al colore:
 (wordmark, nome prodotto, favicon), ma ha lasciato tre problemi aperti:
 
 1. **Duplicazione senza seam.** Le due `tailwind.config.ts` erano **byte-identiche** (`TD-tailwind-config-dup`) e i due
-   `globals.css` differivano per sole 3 variabili — ma nulla nel codice diceva _quali_ fossero il punto di divergenza
-   voluto e quali invece una copia da tenere allineata a mano.
+   `globals.css` differivano per 3 variabili — `--primary`, `--primary-foreground`, `--ring` — ma nulla nel codice
+   diceva _quali_ fossero il punto di divergenza voluto e quali invece una copia da tenere allineata a mano.
+   ⚠️ La divergenza è in **entrambi** i temi, non solo in light: la ricognizione iniziale aveva letto il blocco
+   `.dark` come identico fra le due app, e non lo è. Il seam preesistente era quindi **3 variabili × 2 temi**.
+   Il numero corretto viene dal diff contro il build reale (§Verifica), non dall'ispezione a vista.
 2. **Letterali nei componenti.** Lo stato attivo della Sidebar accountant usava `bg-blue-100 … dark:bg-blue-900/30`
    hardcoded: un colore che non passa da nessun token e che quindi nessun cambio di tema può raggiungere.
 3. **Drift tipografico non dichiarato.** accountant caricava Inter via `next/font`, restaurant ereditava il font di
@@ -110,8 +113,10 @@ Non esiste rete di visual regression (`TD-visual-regression-net`), quindi l'inva
 
 ## Conseguenze
 
-**Positive** — il punto di divergenza fra i due verticali è ora esplicito e piccolo (5 coppie di token); il tema è
-definito una volta; il per-tenant è raggiungibile senza toccare componenti; `TD-tailwind-config-dup` è risolto.
+**Positive** — il punto di divergenza fra i due verticali è ora esplicito e circoscritto: **7 variabili × 2 temi**
+(le 3 preesistenti + `--accent-soft`/`--accent-soft-foreground` e `--brand`/`--brand-foreground` introdotte qui).
+Il tema è definito una volta; il per-tenant è raggiungibile senza toccare componenti; `TD-tailwind-config-dup` è
+risolto.
 
 **Negative / accettate**
 
@@ -135,4 +140,17 @@ base` directive is present``). `postcss-import` lo inlinea prima di `tailwindcss
 - 🆕 **`TD-visual-regression-net`** — baseline Playwright su `page-manifest` × light/dark. **Trigger**: prima di P4
   (ritocco delle primitive condivise). Nasce come **strumento di iterazione, NON come gate**, dato lo stato pre-lancio
   senza clienti reali.
+
+  **Il debito è già coperto a metà, gratis.** Il diff dei valori computati usato in §Verifica è il cugino economico
+  della rete screenshot per tutto ciò che è **cambio di token**: deterministico, nessuna baseline binaria da
+  mantenere, nessun flake da rendering. Va **riusato prima di P4** e la rete screenshot va costruita solo per il
+  residuo che questo diff non vede — geometria, spaziatura, ritorni a capo, cioè esattamente ciò che il ritocco delle
+  primitive tocca. Ricetta: worktree della baseline → `next build` su entrambi → estrarre il valore finale di ogni
+  custom property dopo la cascata in `:root`/`.dark` dal CSS emesso → il diff deve essere puramente additivo.
+
+- 🆕 **`TD-smoke-punta-solo-a-prod`** — `page-tour.spec.ts` ha `baseURL` sull'URL **pubblico** (`studiodesk.cloud`) in
+  entrambe le app, quindi **non può validare un branch prima del merge**: eseguirlo su una PR misura la produzione,
+  non la PR. In PR1 il sostituto è stato la verifica runtime su stack dev buildato dal branch. È un **limite
+  dell'infrastruttura di test**, non di una singola PR. **Trigger**: quando serve una smoke per-ruolo gatante in CI
+  su codice non ancora deployato — allora il `baseURL` va parametrizzato su un'istanza effimera costruita dal branch.
 - ✅ **`TD-tailwind-config-dup`** — risolto da questa PR.
