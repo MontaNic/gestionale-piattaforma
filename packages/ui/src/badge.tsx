@@ -6,18 +6,23 @@ import { cn } from './utils';
 // =============================================================================
 // badge.tsx — pastiglia di stato (ADR-0084 §PR2)
 // =============================================================================
-// Sostituisce i 24+ `<span>` inline `rounded-full px-2 py-0.5 text-xs` sparsi
-// nei due verticali, e le 7 mappe `STATO_BADGE`/`STATO_CLASS` che ne
-// duplicavano il vocabolario di colore con rese divergenti (`bg-green-900/30`
-// vs `/40`, `annullato` una volta grigio e una volta `bg-muted`).
+// Sostituisce i 24+ `<span>` pastiglia inline sparsi nei due verticali, e le 7
+// mappe `STATO_BADGE`/`STATO_CLASS` che ne duplicavano il vocabolario di colore
+// con rese divergenti (lo stesso verde in dark a due opacità diverse, lo stato
+// "annullato" una volta su grigio letterale e una volta sul token neutro).
 //
 // Le variant NON sono inventate: vengono dai call-site reali. `default`,
-// `secondary` e `destructive` erano già token; `info`, `success` e `warn`
-// erano letterali Tailwind (`bg-blue-100 text-blue-800` & co.) e ora passano
-// dai token di stato — legge #1 di ADR-0083, zero letterali.
+// `secondary` e `destructive` erano già su token; `info`, `success` e `warn`
+// erano letterali della scala Tailwind (blu / verde / ambra) e ora passano dai
+// token di stato — legge #1 di ADR-0083, zero letterali.
 //
-// `size="lg"` è la taglia del KDS (`px-3 py-1 text-sm font-semibold`), l'unica
-// che divergeva dalla base: la board si legge da lontano.
+// ⚠️ NIENTE nomi di utility letterali nei commenti di questo package: le app
+// hanno `packages/ui/src/**` nel `content` di Tailwind, che estrae i candidati
+// dal testo GREZZO del file. Un letterale citato in un commento diventa una
+// regola CSS vera nel bundle di entrambe le app — verificato sul diff del build.
+//
+// `size="lg"` è la taglia del KDS, l'unica che divergeva dalla base: la board
+// si legge da lontano.
 //
 // Server-safe di proposito (nessun `'use client'`): è un `<span>` senza stato
 // né handler, e nessun altro file del barrel porta la direttiva.

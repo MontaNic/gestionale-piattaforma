@@ -59,8 +59,8 @@
      * `text-<stato>` su `bg-<stato>-soft`, e regge in entrambi i temi perché
      * ENTRAMBI i token si ribaltano in `.dark` (forte 600→400, soft 100→950).
      * Valori presi dalla scala Tailwind, stessa forma già scelta per `--warn`
-     * in ADR-0083. Sostituiscono i letterali `bg-green-100 text-green-800` &
-     * co. sparsi nei badge di stato (legge #1: zero letterali). */
+     * in ADR-0083. Sostituiscono i letterali di verde/blu/ambra sparsi nei
+     * badge di stato (legge #1: zero letterali). */
     --warn: 32.1 94.6% 43.7%; /* amber-600 */
     --warn-soft: 48 96.5% 88.8%; /* amber-100 */
     --success: 142.1 76.2% 36.3%; /* green-600 */

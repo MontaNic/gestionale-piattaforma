@@ -55,7 +55,9 @@ describe('Badge', () => {
   });
 
   // Ogni variant applica la SUA coppia di token. È il test che impedisce di
-  // reintrodurre un letterale (`bg-green-100`) al posto del token di stato.
+  // reintrodurre un colore letterale al posto del token di stato. (Nessun nome
+  // di utility letterale nemmeno qui: Tailwind scansiona il testo grezzo dei
+  // file di questo package, commenti e test inclusi — vedi badge.tsx.)
   it.each([
     ['secondary', 'bg-secondary', 'text-secondary-foreground'],
     ['destructive', 'bg-destructive-soft', 'text-destructive-soft-foreground'],
