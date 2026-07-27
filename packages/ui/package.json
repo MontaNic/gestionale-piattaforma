@@ -8,12 +8,18 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./src/tokens.css": "./src/tokens.css",
+    "./tailwind-preset": {
+      "types": "./tailwind-preset.ts",
+      "default": "./tailwind-preset.ts"
     }
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "files": [
-    "src"
+    "src",
+    "tailwind-preset.ts"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

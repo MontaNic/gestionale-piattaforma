@@ -126,8 +126,12 @@ export function Sidebar({ onNavigate }: SidebarProps): JSX.Element {
           aria-current={isActive ? 'page' : undefined}
           className={cn(
             'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            // ADR-0083 legge #1 (zero letterali): lo stato attivo passa dalla
+            // coppia `--accent-soft`, i cui valori nel seam accountant sono
+            // esattamente blue-100/blue-900 → resa invariata. In dark la coppia
+            // si inverte, quindi basta ridurre l'opacità del fondo.
             isActive
-              ? 'bg-blue-100 text-blue-900 font-semibold dark:bg-blue-900/30 dark:text-blue-100'
+              ? 'bg-accent-soft text-accent-soft-foreground font-semibold dark:bg-accent-soft/30'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground',
           )}
         >
