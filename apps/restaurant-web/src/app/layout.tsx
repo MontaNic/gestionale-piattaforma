@@ -1,8 +1,18 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 
 import './globals.css';
 import { brand } from '@/lib/brand';
+
+// ADR-0083: la tipografia è condivisa (`--font-sans` in tokens.css punta a
+// `--font-inter`). Restaurant ereditava il font di sistema — drift non
+// dichiarato, non una decisione: qui viene chiuso allineandosi ad accountant.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: brand.productName,
@@ -23,7 +33,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }): JSX.Element {
   return (
-    <html lang="it" suppressHydrationWarning>
+    <html lang="it" suppressHydrationWarning className={inter.variable}>
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           {children}
