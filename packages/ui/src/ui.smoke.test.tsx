@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import { Alert, AlertDescription, AlertTitle } from './alert';
+import { Badge } from './badge';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './dialog';
@@ -42,6 +43,47 @@ describe('Button', () => {
     );
     const link = screen.getByRole('link', { name: 'Vai' });
     expect(link).toHaveAttribute('href', '/dashboard');
+  });
+});
+
+describe('Badge', () => {
+  it('renderizza il children come <span> con la variant di default', () => {
+    render(<Badge>Bozza</Badge>);
+    const badge = screen.getByText('Bozza');
+    expect(badge.tagName).toBe('SPAN');
+    expect(badge).toHaveClass('bg-muted', 'text-muted-foreground', 'rounded-full');
+  });
+
+  // Ogni variant applica la SUA coppia di token. È il test che impedisce di
+  // reintrodurre un letterale (`bg-green-100`) al posto del token di stato.
+  it.each([
+    ['secondary', 'bg-secondary', 'text-secondary-foreground'],
+    ['destructive', 'bg-destructive-soft', 'text-destructive-soft-foreground'],
+    ['info', 'bg-info-soft', 'text-info'],
+    ['success', 'bg-success-soft', 'text-success'],
+    ['warn', 'bg-warn-soft', 'text-warn'],
+  ] as const)('variant %s applica %s + %s', (variant, bg, fg) => {
+    render(<Badge variant={variant}>Stato</Badge>);
+    expect(screen.getByText('Stato')).toHaveClass(bg, fg);
+  });
+
+  it('size lg è la taglia KDS (px-3 py-1 text-sm)', () => {
+    render(<Badge size="lg">Pronta</Badge>);
+    expect(screen.getByText('Pronta')).toHaveClass('px-3', 'py-1', 'text-sm');
+  });
+
+  it('size default è la taglia base (px-2 py-0.5 text-xs)', () => {
+    render(<Badge>Inviata</Badge>);
+    expect(screen.getByText('Inviata')).toHaveClass('px-2', 'py-0.5', 'text-xs');
+  });
+
+  // `className` passa DENTRO cva (come Button): l'utility del call-site deve
+  // vincere sul conflitto Tailwind, non essere sovrascritta dalla variant.
+  it('className del call-site vince sul conflitto (cn/twMerge last-wins)', () => {
+    render(<Badge className="px-4">Custom</Badge>);
+    const badge = screen.getByText('Custom');
+    expect(badge).toHaveClass('px-4');
+    expect(badge).not.toHaveClass('px-2');
   });
 });
 
