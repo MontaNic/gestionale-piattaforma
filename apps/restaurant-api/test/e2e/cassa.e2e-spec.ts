@@ -468,6 +468,74 @@ describe('Cassa pre-fiscale E2E — /api/v1/conti pagamenti (PR1, ADR-0081)', ()
   });
 
   // ===========================================================================
+  // `chiudibile` — il predicato della guardia esposto in lettura (ADR-0082)
+  // ===========================================================================
+  // Ogni caso verifica il campo E l'esito reale di `chiudi`: se i due divergono
+  // la UI mostrerebbe un bottone che il BE rifiuta (o lo nasconderebbe a torto).
+  it('chiudibile: aperto non pagato → false, e chiudi conferma 409', async () => {
+    const contoId = await apriCassa();
+    await addRiga(contoId, data.articleAId, 1);
+
+    const conto = await getConto(contoId);
+    expect(conto.chiudibile).toBe(false);
+    expect(conto.statoPagamento).toBe('da_pagare');
+
+    const res = await request(app.getHttpServer())
+      .post(`${API}/${contoId}/chiudi`)
+      .set(auth(demoJwt));
+    expect(res.status).toBe(409);
+    expect(res.body.errorCode).toBe('E_CONTO_NOT_SETTLED');
+  });
+
+  it('chiudibile: saldato esatto → true, e chiudi conferma 200', async () => {
+    const contoId = await apriCassa();
+    await addRiga(contoId, data.articleAId, 1);
+    expect((await paga(contoId, 8)).status).toBe(201);
+
+    expect((await getConto(contoId)).chiudibile).toBe(true);
+    await request(app.getHttpServer())
+      .post(`${API}/${contoId}/chiudi`)
+      .set(auth(demoJwt))
+      .expect(200);
+  });
+
+  it('chiudibile: sovra-pagato (residuo<0, totale>0) → false pur essendo statoPagamento=saldato', async () => {
+    // La divergenza voluta tra `isChiudibile` (isZero stretto) e
+    // `computeStatoPagamento` (<= 0): il campo segue la GUARDIA, non lo stato.
+    const contoId = await apriCassa();
+    await addRiga(contoId, data.articleAId, 1); // 8.00
+    const rigaB = await addRiga(contoId, data.articleBId, 1); // 5.00
+    expect((await paga(contoId, 13)).status).toBe(201);
+    await request(app.getHttpServer())
+      .delete(`${API}/${contoId}/righe/${rigaB}`)
+      .set(auth(demoJwt))
+      .expect(200);
+
+    const conto = await getConto(contoId);
+    expect(conto.residuo).toBe('-5.00');
+    expect(conto.statoPagamento).toBe('saldato');
+    expect(conto.chiudibile).toBe(false);
+
+    const res = await request(app.getHttpServer())
+      .post(`${API}/${contoId}/chiudi`)
+      .set(auth(demoJwt));
+    expect(res.status).toBe(409);
+    expect(res.body.errorCode).toBe('E_CONTO_NOT_SETTLED');
+  });
+
+  it('chiudibile: totale 0 (conto senza righe) → true senza pagamenti', async () => {
+    const contoId = await apriCassa();
+    const conto = await getConto(contoId);
+    expect(conto.totale).toBe('0.00');
+    expect(conto.chiudibile).toBe(true);
+
+    await request(app.getHttpServer())
+      .post(`${API}/${contoId}/chiudi`)
+      .set(auth(demoJwt))
+      .expect(200);
+  });
+
+  // ===========================================================================
   // Riepilogo IVA — scorporo derivato + snapshot congelato (D4)
   // ===========================================================================
   it('scorporo: multi-aliquota 10%+22% — imponibile+iva == lordo per ogni gruppo, ordinato per aliquota', async () => {

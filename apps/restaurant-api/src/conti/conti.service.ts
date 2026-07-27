@@ -24,6 +24,8 @@
 // - `chiudi` ha una guardia di saldo (D3): residuo == 0 oppure totale == 0.
 //   ⚠️ CAMBIO DI CONTRATTO rispetto a PR-2/ADR-0068 (dove `chiudi` era una pura
 //   transizione di stato). `annulla` resta la via per chiudere senza incasso.
+// - Il predicato della guardia è esposto in lettura come `chiudibile` su
+//   `getById` (ADR-0082): stessa funzione `isChiudibile` per l'UI e per il throw.
 // =============================================================================
 
 import {
@@ -87,7 +89,32 @@ export type ContoWithRighe = Conto & {
   residuo: string;
   statoPagamento: StatoPagamento;
   riepilogoIva: RiepilogoIvaGruppo[];
+  /**
+   * Predicato della guardia di saldo D3 esposto come dato (ADR-0082): il client
+   * lega il bottone "chiudi" a QUESTO campo invece di ri-derivarlo. Stessa
+   * funzione (`isChiudibile`) che `assertSettled` usa per throware
+   * `E_CONTO_NOT_SETTLED` → UI e guardia non possono divergere.
+   */
+  chiudibile: boolean;
 };
+
+/**
+ * Guardia di saldo D3 come PREDICATO PURO (ADR-0081 D3, esposto da ADR-0082).
+ * Chiudibile se `residuo == 0` **oppure** `totale == 0`.
+ *
+ * ⚠️ `isZero()` STRETTO, non `<= 0`: la divergenza da `computeStatoPagamento`
+ * (che usa `residuo <= 0` → `saldato`) è VOLUTA. Un conto sovra-pagato
+ * (residuo < 0, totale > 0 — storno parziale di un conto già saldato) è
+ * `saldato` ma NON chiudibile: la via d'uscita è stornare il pagamento e
+ * ri-registrarlo al nuovo totale, oppure `annulla`. Armonizzare i due predicati
+ * rimetterebbe il sovra-pagato tra i chiudibili → NON farlo.
+ *
+ * La seconda clausola (`totale.isZero()`) non è ridondante: con un solo articolo
+ * stornato dopo il pagamento il totale va a 0 e la chiusura resta possibile.
+ */
+export function isChiudibile(totale: Prisma.Decimal, pagato: Prisma.Decimal): boolean {
+  return totale.minus(pagato).isZero() || totale.isZero();
+}
 
 /** Esito dell'invio: una Comanda creata per ogni reparto presente tra le righe pending. */
 export interface ComandaInviata {
@@ -147,6 +174,7 @@ export class ContiService {
       residuo: totale.minus(pagato).toFixed(2),
       statoPagamento: this.computeStatoPagamento(totale, pagato),
       riepilogoIva: this.computeRiepilogoIva(conto.righe),
+      chiudibile: isChiudibile(totale, pagato),
     };
   }
 
@@ -197,8 +225,9 @@ export class ContiService {
   /**
    * Stato di pagamento derivato (D2). `residuo == 0` vince su tutto: copre sia il
    * conto saldato sia il conto a totale 0 (nulla da incassare). Un conto può avere
-   * residuo NEGATIVO solo dopo lo storno di una riga già pagata (vedi
-   * `assertSettled`) → resta `saldato`, non è un quarto stato.
+   * residuo NEGATIVO solo dopo lo storno di una riga già pagata → resta `saldato`,
+   * non è un quarto stato. ⚠️ `saldato` NON implica chiudibile: il predicato di
+   * chiusura è `isChiudibile` (isZero stretto), volutamente più severo.
    */
   private computeStatoPagamento(totale: Prisma.Decimal, pagato: Prisma.Decimal): StatoPagamento {
     const residuo = totale.minus(pagato);
@@ -510,16 +539,13 @@ export class ContiService {
    * Guardia di saldo (D3): si chiude solo un conto saldato. ⚠️ CAMBIO DI CONTRATTO
    * rispetto ad ADR-0068 (dove `chiudi` era una pura transizione di stato).
    *
-   * Ammesso se `residuo == 0` **oppure** `totale == 0`. La seconda clausola NON è
-   * ridondante: se una riga già pagata viene stornata, il residuo diventa
-   * NEGATIVO — con un solo articolo il totale va a 0 e la chiusura resta possibile.
-   * Con residuo negativo e totale > 0 (storno parziale di un conto già saldato) la
-   * chiusura è invece BLOCCATA: via d'uscita = storna il pagamento e ri-registralo
-   * al nuovo totale, oppure `annulla`. Limite noto e dichiarato (ADR-0081 D3).
+   * Il predicato vive in `isChiudibile` (modulo, puro e testabile) ed è LO STESSO
+   * che `getById` espone nel campo `chiudibile` (ADR-0082): la UI non può mostrare
+   * un bottone che il BE poi rifiuta. Qui resta solo il throw con il contesto.
    */
   private assertSettled(totale: Prisma.Decimal, pagato: Prisma.Decimal): void {
+    if (isChiudibile(totale, pagato)) return;
     const residuo = totale.minus(pagato);
-    if (residuo.isZero() || totale.isZero()) return;
     throw new ConflictException({
       errorCode: 'E_CONTO_NOT_SETTLED',
       message: `Conto not settled: residuo ${residuo.toFixed(2)} (totale ${totale.toFixed(2)}, pagato ${pagato.toFixed(2)})`,
