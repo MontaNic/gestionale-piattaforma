@@ -58,6 +58,23 @@ async function loginAsDemoAdmin(page: Page): Promise<void> {
   await page.locator('input[type="password"]').fill(password);
   await page.getByRole('button', { name: /^accedi$/i }).click();
   await page.waitForURL(`/t/${SLUG}/dashboard`, { timeout: 10_000 });
+
+  // ⚠️ Attendere che la dashboard si QUIETI prima di restituire il controllo.
+  // Da P2/PR3 non è più una welcome statica: al mount fa fetch autenticati
+  // propri (`/dashboard/stats`, `/conti`, `/tables`). Se il chiamante scade il
+  // token mentre quelle sono ancora in volo, sono LORO a prendere il 401 e a
+  // consumare il single-flight — e la navigazione successiva non vede più alcun
+  // 401 da rinnovare: il test misurerebbe 0 refresh invece di 1.
+  // Il fallimento è di TIMING, non deterministico: sul run della PR #193 la
+  // corsa era andata bene e il job era verde, su main no.
+  // Il segnale duro è la griglia KPI: si monta SOLO dopo che `/dashboard/stats`
+  // ha risolto (finché `stats` è null la sezione mostra il testo di loading).
+  // demo admin è Super Admin, quindi la sezione c'è di sicuro.
+  await page.getByTestId('dashboard').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.getByTestId('dashboard-kpi').waitFor({ state: 'visible', timeout: 10_000 });
+  // `networkidle` copre le restanti (`/conti`, `/tables`); best-effort perché
+  // con il dev server può non quietarsi mai — il segnale duro è quello sopra.
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 interface AccessPayload {
