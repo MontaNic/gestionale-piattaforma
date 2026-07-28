@@ -220,14 +220,37 @@ jobs:
         # Migration 20260513002159 crea role con PLACEHOLDER password che
         # DEVE essere ruotato (vedi commento header migration.sql).
         # In dev/prod questo step è eseguito manualmente o via deploy pipeline.
-        # NB: PGPASSWORD inline è accettabile per scope test-only (string contiene
-        # esplicito "test-only-not-a-real-secret"). Quando si introdurrà secret
-        # reale GitHub Actions, migrare a .pgpass pattern — vedi TD-AR ADR-0016.
+        #
+        # ⚠️ NIENTE `apt-get install postgresql-client` qui (TD-ci-apt-external-dep).
+        # L'immagine del job porta una apt source `nodesource` che ha iniziato a
+        # rispondere 403: `apt-get update` falliva → `psql: not found` → exit 127,
+        # con ZERO test eseguiti. Un presidio di CI non può dipendere da una
+        # risorsa di rete che il repo non controlla.
+        # Si usa `pg`, già dipendenza del workspace e già installata dallo step
+        # `pnpm install` sopra: nessuna rete, nessun tool da procurarsi.
+        # (`docker exec` sul service container non è una via: il job gira dentro
+        # `container:` e in quel caso il runner non monta il socket Docker.)
+        #
+        # La password NON passa per argv: prima era in chiaro sulla riga di
+        # `psql -c "ALTER ROLE ... PASSWORD '...'"`, che il runner echeggia nel
+        # log ed è visibile in `ps`. Ora si legge dalla env di JOB già esistente,
+        # e NON si dichiara alcuna env di step: un alias tipo `PGPASSWORD:` la
+        # farebbe ristampare una seconda volta nel preambolo `env:` dello step.
+        # La connessione riusa `DIRECT_URL` (unica fonte di verità, e il runner
+        # ne maschera le credenziali nel log).
+        # `ALTER ROLE` è una utility statement e non accetta bind parameter → il
+        # valore va interpolato, ma quotato con `escapeLiteral` del driver.
+        working-directory: apps/restaurant-api
         run: |
-          apt-get update -qq && apt-get install -y -qq postgresql-client
-          PGPASSWORD='${{ env.POSTGRES_PASSWORD }}' psql \
-            -h postgres -U postgres -d gestionale_test \
-            -c "ALTER ROLE gestionale_app PASSWORD '${{ env.APP_DB_PASSWORD }}';"
+          node -e '
+            const { Client } = require("pg");
+            const c = new Client({ connectionString: process.env.DIRECT_URL });
+            c.connect()
+              .then(() => c.query("ALTER ROLE gestionale_app PASSWORD " + c.escapeLiteral(process.env.APP_DB_PASSWORD)))
+              .then(() => c.end())
+              .then(() => { console.log("gestionale_app: password ruotata"); process.exit(0); })
+              .catch((e) => { console.error("Rotate fallito:", e.message); process.exit(1); });
+          '
 
       - name: Update .env with real DATABASE_URL (post-rotate)
         # Backend usa DATABASE_URL = gestionale_app role (NOSUPERUSER, RLS
@@ -312,11 +335,27 @@ jobs:
         # Empirical STOP 3 sessione 10: rate limit B1 (5 login fail/min) può
         # accumularsi tra setup login + auth-login fail test in workers
         # paralleli. FLUSHDB pre-test garantisce contatori puliti.
-        # Container Playwright Jammy NON ha redis-tools preinstallato
-        # (revealed first CI run PR #25, exit 127). Install inline.
+        # Il container Playwright Jammy NON ha redis-tools preinstallato
+        # (rivelato dal primo CI run della PR #25, exit 127). La risposta di
+        # allora fu `apt-get install redis-tools` — che ha retto finché la rete
+        # ha retto, poi è caduta con il 403 di nodesource (TD-ci-apt-external-dep,
+        # vedi lo step di rotate password). Ora si usa `ioredis`, già dipendenza
+        # del workspace e già installata: stesso FLUSHDB, zero rete esterna.
+        working-directory: apps/restaurant-api
         run: |
-          apt-get update -qq && apt-get install -y -qq redis-tools
-          redis-cli -h redis FLUSHDB
+          node -e '
+            const M = require("ioredis");
+            const Redis = M.default ?? M;
+            const c = new Redis({
+              host: process.env.REDIS_HOST,
+              port: Number(process.env.REDIS_PORT),
+              maxRetriesPerRequest: 1,
+            });
+            c.flushdb()
+              .then(() => c.quit())
+              .then(() => { console.log("Redis: FLUSHDB eseguito"); process.exit(0); })
+              .catch((e) => { console.error("FLUSHDB fallito:", e.message); process.exit(1); });
+          '
 
       - name: Run Playwright E2E (Chromium)
         working-directory: apps/restaurant-web
