@@ -231,24 +231,22 @@ jobs:
         # (`docker exec` sul service container non è una via: il job gira dentro
         # `container:` e in quel caso il runner non monta il socket Docker.)
         #
-        # La password NON passa mai per argv (niente `ps`, niente echo nei log):
-        # arriva via env. `ALTER ROLE` è una utility statement e non accetta bind
-        # parameter → il valore va interpolato, ma quotato con `escapeLiteral`
-        # del driver, non a mano.
+        # La password NON passa per argv: prima era in chiaro sulla riga di
+        # `psql -c "ALTER ROLE ... PASSWORD '...'"`, che il runner echeggia nel
+        # log ed è visibile in `ps`. Ora si legge dalla env di JOB già esistente,
+        # e NON si dichiara alcuna env di step: un alias tipo `PGPASSWORD:` la
+        # farebbe ristampare una seconda volta nel preambolo `env:` dello step.
+        # La connessione riusa `DIRECT_URL` (unica fonte di verità, e il runner
+        # ne maschera le credenziali nel log).
+        # `ALTER ROLE` è una utility statement e non accetta bind parameter → il
+        # valore va interpolato, ma quotato con `escapeLiteral` del driver.
         working-directory: apps/restaurant-api
-        env:
-          PGHOST: postgres
-          PGPORT: '5432'
-          PGUSER: postgres
-          PGDATABASE: gestionale_test
-          PGPASSWORD: ${{ env.POSTGRES_PASSWORD }}
-          NEW_APP_PASSWORD: ${{ env.APP_DB_PASSWORD }}
         run: |
           node -e '
             const { Client } = require("pg");
-            const c = new Client();
+            const c = new Client({ connectionString: process.env.DIRECT_URL });
             c.connect()
-              .then(() => c.query("ALTER ROLE gestionale_app PASSWORD " + c.escapeLiteral(process.env.NEW_APP_PASSWORD)))
+              .then(() => c.query("ALTER ROLE gestionale_app PASSWORD " + c.escapeLiteral(process.env.APP_DB_PASSWORD)))
               .then(() => c.end())
               .then(() => { console.log("gestionale_app: password ruotata"); process.exit(0); })
               .catch((e) => { console.error("Rotate fallito:", e.message); process.exit(1); });
