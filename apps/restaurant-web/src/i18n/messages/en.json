@@ -33,12 +33,31 @@
     }
   },
   "dashboard": {
-    "welcome": "Welcome {firstName} {lastName}",
-    "roles": "Roles",
-    "permissionsCount": "Permissions ({count})",
-    "profileUnavailable": "Profile unavailable",
-    "logoutButton": "Esci",
-    "loggingOut": "Uscita..."
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}"
+    },
+    "kpiTitle": "Today",
+    "kpi": {
+      "contiAperti": "Open tabs",
+      "incassoOggi": "Today's takings",
+      "copertiOggi": "Covers today",
+      "comandeInCorso": "Orders in progress"
+    },
+    "contiTitle": "Open tabs",
+    "contiEmpty": "No open tabs at the moment.",
+    "contiOpen": "Open",
+    "actionsTitle": "Quick actions",
+    "actions": {
+      "nuovoConto": "New tab",
+      "comande": "Go to orders",
+      "cassa": "Go to checkout",
+      "mappa": "Table map"
+    },
+    "loading": "Loading…",
+    "retry": "Retry",
+    "profileUnavailable": "Profile unavailable"
   },
   "placeholder": {
     "comingSoon": "Coming soon",

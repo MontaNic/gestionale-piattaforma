@@ -71,8 +71,11 @@ async function loginAndPersistStorage(page: Page, creds: TenantCreds): Promise<v
   await expect(page).toHaveURL(`/t/${creds.slug}/dashboard`);
 
   // Attendi che la dashboard finisca il caricamento (apiGet /me terminato).
-  // Loading state mostra "Caricamento...", post-load CardTitle "Welcome <firstName>".
-  await expect(page.getByText(/^welcome\s+/i)).toBeVisible({ timeout: 10_000 });
+  // Sentinel = `[data-testid="dashboard"]`, la radice della pagina: da P2/PR3 il
+  // saluto è italiano e dipende dall'ora del giorno, quindi non è agganciabile.
+  // ⚠️ Questo è il punto più critico della migrazione del sentinel: qui si
+  // produce lo storage state da cui dipendono TUTTI gli spec autenticati.
+  await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 10_000 });
 
   // Salva storage state (include localStorage tokens TD-2)
   await page.context().storageState({ path: storageFile });

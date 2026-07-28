@@ -38,8 +38,10 @@ test.describe('Login flow demo tenant', () => {
 
     await page.waitForURL('/t/demo/dashboard', { timeout: 10_000 });
     await expect(page).toHaveURL('/t/demo/dashboard');
-    // Dashboard CardTitle "Welcome <firstName>..." (shadcn renderizza come <div>)
-    await expect(page.getByText(/^welcome\s+/i)).toBeVisible({ timeout: 10_000 });
+    // Sentinel = `[data-testid="dashboard"]`, non il testo del saluto. Il saluto
+    // ora è italiano E dipende dall'ora del giorno (buongiorno/pomeriggio/sera):
+    // un match sul testo sarebbe verde o rosso a seconda di quando gira la CI.
+    await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 10_000 });
   });
 
   test('login FAIL with wrong password shows localized error and stays on login page', async ({

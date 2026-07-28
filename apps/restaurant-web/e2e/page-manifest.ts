@@ -46,7 +46,11 @@ export const RESTAURANT_MANIFEST: readonly RoleManifest[] = [
     slug: 'demo',
     surface: 'operatore',
     pages: [
-      { path: 'dashboard' },
+      // Da P2/PR3 NON è più una welcome statica: fa fetch reali
+      // (`/dashboard/stats` + `/conti`), ciascuno dietro il proprio permesso.
+      // È per questo che il gate è PRIMA del fetch e non un try/catch: qui il
+      // tour fallisce su qualunque response ≥400, anche se il JS la assorbe.
+      { path: 'dashboard', note: 'landing con KPI + conti aperti, sezioni gated' },
       { path: 'menu' },
       { path: 'menu/listini' },
       { path: 'mappa', note: 'tavoli — pagina del bug 403 che motiva lo smoke' },
