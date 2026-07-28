@@ -1,184 +1,94 @@
 # HANDOFF — gestionale-piattaforma
 
-**Snapshot**: Main @ `f7b5d19` — **deploy S19 ESEGUITO in produzione** il 2026-07-25 (Option 2)
-**Sessioni**: 2026-07-24 (16 PR, #167→#182) + 2026-07-25 (preflight + PR-A #184 + PR-B #185 + finestra di deploy)
-
----
-
-# S19 — Finestra di deploy eseguita (2026-07-25)
-
-**Forma Option 2**: infrastruttura + migrazione + permessi, **propagazione ai ruoli esclusa e differita** (ADR-0066). Sei passi P0–P7, **zero scostamenti, zero STOP incontrati**. Runbook riutilizzabile versionato in [`docs/runbook-deploy-infrastrutturale.md`](../runbook-deploy-infrastrutturale.md).
-
-**Cosa è in produzione ora**:
-
-- Schema **→33** (`add_note_spese`), `FORCE RLS` verificato `t|t` su entrambe le tabelle + `GRANT` a `gestionale_app` ereditati dalle default privileges (nessun GRANT manuale).
-- **4 immagini ribuildate** con provenienza OCI `revision=f7b5d19`, in esercizio su entrambi i verticali (health end-to-end via Caddy: `studiodesk.cloud` + `food.studiodesk.cloud` → 200 `db:connected`).
-- Permessi **60→63** (`notespese.*`), template-perms **249→262**, **`role_permissions` 245 INVARIATO** — la firma di Option 2: i permessi arrivano ai template ma **non** ai ruoli esistenti. Note Spese è quindi raggiungibile a livello di codice ma **UI nascosta** finché la propagazione non avviene (comportamento atteso, non un difetto).
-
-**I due presidi della sessione, verificati sul vivo nella prima finestra reale**:
-
-- **PR-A `GIT_SHA`** (#184): il build è passato perché la variabile era presente; le 4 label `revision=f7b5d19` lo provano. Inoltre `${GIT_SHA:?}` blocca **ogni** comando compose contro prod, non solo `build` (Compose interpola l'intero modello al load).
-- **PR-B `NODE_ENV`** (#185): il seed è passato (`NODE_ENV=production` valido) e ha **saltato il ramo dev** (`Dev data: SKIPPED` nell'output **e** `role_permissions` invariato + `tenants.max(updated_at)` fermo al 30/06 nel DB — la stessa cosa dai due lati). Le password note dei tenant fittizi **non** sono state riportate ai default: il landmine di STOP 0, neutralizzato sul vivo.
-
-È la tesi di S18 — i presidi che dipendono dalla memoria vanno meccanizzati — verificata dal lato costruttivo: nati come risposta a due failure-mode di STOP 0, le hanno chiuse alla prima occasione reale.
-
-**Backup con restore provato** prima della finestra: `gestionale_20260724T161844Z_pre-deploy-s19_8becc84.dump` (24/07, restore effimero completo, diff conteggi vuoto, RLS 37/37) + `gestionale_20260725T202336Z_pre-migrate33_f7b5d19.dump` (25/07, pre-`migrate deploy`, magic-bytes `PGDMP`, sha `3d87cd85…`).
-
-**Rollback point**: tag `rollback-pre-s19` sulle 4 immagini pre-deploy (digest annotati in ADR/registrazione), verificati per digest coincidenti con le immagini che erano in esercizio.
-
-**ADR prodotti S19**: [0079](../architecture/ADR-0079-storage-persistente-provenienza-immagini.md) (storage persistente + provenienza), [0080](../architecture/ADR-0080-seed-fail-closed-node-env.md) (seed fail-closed).
-
-**Riconferma ADR-0066** (propagazione permessi differita): caratterizzazione tenant del 24/07 (READ-ONLY, C1–C5) — nessuno dei 4 tenant di produzione ha utenti a dominio non-`.local`. `acme`/`demo`/`oneplatform` = seed-residui (food/platform), `studio-demo` = tenant-di-lavoro incerto con dati accountant ma utenti tutti `.local`. **Nessun cliente reale da servire → propagazione differita**, stesso differimento del 01/07, riconfermato empiricamente. Trigger invariato: **primo tenant non well-known via API**. Non un nuovo ADR: riconferma di quello esistente.
-
-**TD nuovi della sessione S19** (dettaglio in ADR-0079, tranne il primo):
-
-| TD                                       | Trigger                                                                                                 |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `TD-backup-automation`                   | primo cliente reale in produzione — il dump è one-shot, manuale, sullo stesso disco del volume Postgres |
-| `TD-storage-backup-blob`                 | primo allegato caricato da un cliente reale — il `pg_dump` non copre i blob                             |
-| `TD-container-runs-as-root`              | prossima PR sui runner stage, o primo cliente con requisiti di audit — i 4 runner girano come root      |
-| `TD-dev-processes-orphaned-on-prod-host` | prossima sessione che apre un dev server sull'host, o esito verifica firewall porta 3000                |
+**Snapshot:** `Main @ f5ec71c (#195) (+1 commit docs(handoff) in arrivo via PR)`
+**Chiusura sessione:** blocco Cassa pre-fiscale completo + deployato; design language avviato (seam + P2 completa) in `main`, non deployato. `main` verde pulito (0 flaky verificato su 4 run consecutivi).
 
 ---
 
 # PARTE A — Stato
 
-## A.1 Sintesi della sessione
+## Dove siamo
 
-Cinque fronti aperti a inizio giornata, tutti chiusi o portati a milestone:
+**Il loop restaurant `menu → tavoli → comande → KDS → cassa` è chiuso end-to-end, e la cassa è LIVE in produzione**, verificata nell'app reale (pagamento 201, guardia saldo D3 attiva, riepilogo IVA congelato esatto). È lo step di usabilità del piano a lungo termine: il verticale food è passato da demo a operabile in un servizio reale.
 
-| Fronte                        | Esito                                                                                  |
-| ----------------------------- | -------------------------------------------------------------------------------------- |
-| `TD-blob-download-no-refresh` | **Chiuso** e verificato end-to-end (Sub-2)                                             |
-| bug `app.is_super_admin`      | **Chiuso come non-bug** (fail-closed verificato staticamente)                          |
-| `TD-dev-env-punta-prod`       | **ESTINTO** (Sub-A guard + Sub-B dev env + Sub-2 verifica)                             |
-| `TD-ci-e2e-testcontainers-be` | **Fase 1 chiusa** (gate RLS dominio in CI, entrambi i verticali); Fase 2 trigger-gated |
-| KDS FE                        | **Fase 1 chiusa** (board operativa); Fase 2 trigger-gated                              |
-| Note Spese v1                 | **Completa** (7 PR: backend + entrambe le viste FE)                                    |
+**Nota stato produzione (critica, non dimenticare):** NON ci sono clienti reali né dati di valore in prod. Tutto pre-lancio/demo. Il blast radius su superfici condivise ha stakes BASSI ora; "corruzione irrecuperabile" non è uno scenario reale finché non arrivano clienti. La disciplina STOP-gate/test resta utile come abitudine e rete PER QUANDO arriveranno, ma va calibrata sul rischio attuale (basso), non su uno immaginato.
 
-**Tre delle quattro failure-mode strutturali ora hanno un meccanismo**: dev/prod confusion (guard), CI che non esercita il comportamento (gate RLS provato efficace), spec effimere (persistite in repo). Resta scoperto: **deployment drift invisibile** — vedi B.1.
+## Cosa è in `main`
 
-## A.2 PR mergiate
+| Blocco                                                                                   | PR         | ADR  | In prod?     |
+| ---------------------------------------------------------------------------------------- | ---------- | ---- | ------------ |
+| Cassa PR1 — schema `Pagamento` + BE (pagamenti, storno, riepilogo IVA, guardia saldo D3) | #187       | 0081 | ✅ deployato |
+| Cassa PR2 — contratto `chiudibile` + UI cassa                                            | #188       | 0082 | ✅ deployato |
+| Design seam — `tokens.css` + `tailwind-preset`, 4 leggi, contratto 7×2                   | #189       | 0083 | ❌           |
+| P2 endpoint — `GET /dashboard/stats` (4 aggregati)                                       | #190       | 0084 | ❌           |
+| CI fix — Playwright senza apt (pg/ioredis)                                               | #192       | —    | (CI)         |
+| P2 Badge — primitiva + token stati (6 var / 12 valori)                                   | #191       | 0085 | ❌           |
+| P2 dashboard FE — rebuild, Badge prima cliente, migrazione sentinel                      | #193       | —    | ❌           |
+| Fix flaky — single-flight deterministico (waiter espliciti)                              | #194, #195 | —    | ❌           |
 
-| PR   | SHA       | Contenuto                                                                                                      |
-| ---- | --------- | -------------------------------------------------------------------------------------------------------------- |
-| #167 | `7ffa268` | blob download/upload sopravvivono alla scadenza token (`fetchWithAuthRetry`, `apiGetBlob`, `apiPostMultipart`) |
-| #168 | `28d2b81` | guard anti-prod-da-host (`assertSafeDbTarget`) — Sub-A                                                         |
-| #169 | `ce30364` | docs sync Sub-A                                                                                                |
-| #170 | `d355ad3` | `is_super_admin` verificato non-bug + fold TD-CB                                                               |
-| #171 | `5b07790` | dev env isolato dev-by-default (55432) — Sub-B                                                                 |
-| #172 | `03f2717` | Sub-2: verifica full-stack blob/multipart contro BE reale                                                      |
-| #173 | `0a44dc3` | gate `E2E domain RLS` restaurant (Fase 1)                                                                      |
-| #174 | `978bd99` | KDS board Fase 1 (feed + avanzamento stato)                                                                    |
-| #175 | `c12e78f` | gate RLS esteso ad accountant (PR-0 Note Spese)                                                                |
-| #176 | `358cf96` | Note Spese: schema + permessi 60→63                                                                            |
-| #177 | `72ff995` | Note Spese: CRUD + allegati/storage                                                                            |
-| #178 | `e789502` | Note Spese: state machine + gating                                                                             |
-| #179 | `434b2e2` | Note Spese: allegati nei read path                                                                             |
-| #180 | `002d3af` | Note Spese: UI operatore                                                                                       |
-| #181 | `190ccc0` | Note Spese: autore nei read path                                                                               |
-| #182 | `b8fa054` | Note Spese: pannello approvazione                                                                              |
+**Deployato in prod:** solo la Cassa (PR1+PR2). Il seam e tutto P2 sono in `main` ma NON in prod. Il prossimo deploy porterà PR1-seam + P2 insieme.
 
-ADR prodotti: **0071** (aggiornato, CI e2e + gate esteso), **0072** (dev env Sub-B), **0073** (KDS board), **0074**–**0078** (Note Spese PR-1..PR-5).
+## Deploy cassa — cosa è stato fatto
 
-## A.3 Infrastruttura — stato
-
-**Produzione**: `gestionale_postgres` intatto, Up ~3 settimane. **32 migrazioni**, cutover 15/07.
-**Dev env (nuovo, Sub-B)**: `gestionale_postgres_dev` su `127.0.0.1:55432`, volume e rete dedicati, `gestionale_app` con password dev. Compose additivo standalone `docker-compose.devdb.yml` — **mai** nel merge prod. Lasciato **up** a fine sessione.
-**Guard DB**: `assertSafeDbTarget` in `createPrismaClient()` — aborta se `NODE_ENV != production` **e** target `{127.0.0.1|localhost}:5432/gestionale`. Whitelist `ALLOW_PROD_DB_ACCESS=1` su 5 wrapper di manutenzione. **Verificato a runtime.**
-**Dev-by-default**: gli script `dev` delle 2 API puntano al DB dev; puntare a prod richiede intenzione esplicita.
-
-## A.4 CI — stato
-
-**5 job**, paralleli con `needs: [checks]` (wall-clock dominato dal ramo più lento, ~4m):
-
-1. `Lint · Typecheck · Format · Test` (unit)
-2. `E2E Playwright` (restaurant-web)
-3. `E2E accountant-web blob` (route-mocked)
-4. `E2E domain RLS` (restaurant, testcontainers, `gestionale_app`) — 3 spec, 23 test
-5. `E2E domain RLS accountant` (testcontainers, `gestionale_app`) — 2 spec
-
-**Entrambi i gate RLS sono provati efficaci** (rottura → rosso → ripristino → verde), non solo verdi.
-
-## A.5 Debiti tecnici
-
-**Estinti oggi**: `TD-dev-env-punta-prod`, `TD-ci-e2e-accountant-web-fe`, `TD-blob-download-no-refresh`.
-
-**Nuovi (con trigger)**:
-
-| TD                                 | Tier        | Trigger                                                                                                    |
-| ---------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `TD-blob-retry-duplication`        | ALTO        | prossima modifica sostanziale alla logica retry/refresh → unificare `request()` sopra `fetchWithAuthRetry` |
-| `TD-db-dist-stale-runtime`         | MEDIO       | mecanizzare il rebuild (`predev` build, o risoluzione al sorgente TS, o `verify:guard-runtime` in CI)      |
-| `TD-ci-e2e-accountant-api`         | MEDIO       | `globalSetup` container condiviso → portare in CI le ~17 spec comportamentali                              |
-| `TD-prisma-studio-prod-unguarded`  | BASSO-MEDIO | prossimo hardening accesso host al DB                                                                      |
-| `TD-fe-errori-silenziati`          | MEDIO       | primo report "ho cliccato e non è successo niente", o prossimo intervento su quei path                     |
-| `TD-state-machine-read-then-write` | MEDIO       | primo stato incoerente sotto concorrenza, o prossimo intervento su comande/circolari                       |
-| `TD-verifica-porte-senza-sudo`     | BASSO-MEDIO | prima del primo GATE di **regressione**                                                                    |
-
-**Preesistenti**: `TD-ci-e2e-testcontainers-be` (Fase 2), `TD-storage-gc`, `TD-documenti-tipo-codice`, `TD-utente-enum-forward`, `TD-articles-flat-endpoint`, `TD-tavolo-stato-forward`, `TD-sala-forward`.
-
-**Nota su `TD-fe-errori-silenziati`**: copre **tre** meccanismi — catch muto, promise non gestita (entrambi grep-abili), **errore sovrascritto dal reload** (`try/catch` regolare, difetto di _sequenza temporale_, invisibile a qualunque analisi statica). Il censimento a 6 call-site è un **limite inferiore**, non l'inventario.
-
-## A.6 Discovery della sessione
-
-Otto correzioni empiriche di asserzioni statiche, la maggior parte di Claude strategico:
-
-1. **Nota network V5** — divergenza inesistente, mio errore di lettura in STOP 0. Memoria accurata, nessun claim da correggere.
-2. **Init script app-role rotto** — `:'app_db_password'` non interpolato dentro `DO $$…$$`; il role finiva con password placeholder. **Bug latente di bootstrap prod**, non solo dev. Fixato + fail-loud.
-3. **Guard Sub-A inerte a runtime** — attivo nel sorgente e nei test, **assente nel `dist`** che i dev server importano. Il near-incident è rimasto possibile dal merge di #168 fino al rebuild di Sub-B. → `TD-db-dist-stale-runtime`.
-4. **`conti-rls-isolation` bit-rotted** — `vatPercent` reso obbligatorio da #161, spec mai aggiornata, invisibile perché fuori CI. **Tesi del TD materializzata.**
-5. **Premessa "superuser in CI" errata** — la e2e BE non girava in CI _affatto_: gap di **assenza**, non di ruolo.
-6. **Falso-verde sul vettore di efficacia accountant** — i test HTTP sono anche app-filter-protected (`where:{tenantId}`), restano verdi sotto RLS bypassata. Il vettore efficace è la **policy**, non l'extension.
-7. **Spec "locked" non recuperabile** — viveva solo in chat. Recuperata via ricerca conversazioni e **persistita in repo**.
-8. **Re-export enum non orfano** — sospetto infondato: senza, `accountant-api` non compila.
-
-Più: la convenzione FE (zero import di `@gestionale/db`, enum replicati nei `*-types.ts`) ha superato una mia istruzione errata.
-
-**Gli ultimi due difetti della sessione non erano nel codice ma nei metodi di verifica**: un errore invisibile al grep perché temporale, e un `sudo` che falliva in silenzio facendo leggere l'assenza di output come "porte libere".
+- Migration additiva `20260726215242_add_pagamento_cassa` applicata al DB prod condiviso (`Pagamento` + RLS + colonna `riepilogo_iva_snapshot`).
+- **Riconciliazione Super Admin** all'invariante `ALL_PERMISSION_CODES` (idempotente, via `DIRECT_URL`): ha portato `cassa.pagamento.registra` + i 3 `notespese.*` arretrati ai ruoli Super Admin materializzati (60 permessi ciascuno). Ruoli operativi NON toccati (propagazione generale resta differita).
+- **Primo deploy con rollback point vero:** tag `deploy/s19-f7b5d19` + immagini `gestionale/restaurant-{api,web}:rollback-s19-f7b5d19`. Migration e permessi additivi → rollback = solo-container, nessun rollback DB.
 
 ---
 
-# PARTE B — Operativo
+# PARTE B — Contesto, debiti, prossimi passi
 
-## B.1 deployment drift — RISOLTO (deploy S19 eseguito 2026-07-25)
+## Registro TD (con trigger)
 
-**Il divario è chiuso.** Il lavoro user-facing del 24/07 (KDS board, Note Spese v1) è ora in produzione insieme allo schema →33. Vedi la sezione **S19 — Finestra di deploy eseguita** in testa. Prod era a 32 migrazioni dal cutover del 15/07; ora è →33 con le 4 immagini `f7b5d19`.
+**Aperti — prioritari:**
 
-La **quarta failure-mode strutturale** — _deployment drift invisibile_, l'unica ancora scoperta a fine 24/07 (vedi A.1) — è ora chiusa non a parole ma sulle 4 label OCI `revision`: da questo deploy ogni immagine in esercizio dichiara il commit da cui è nata, e il presidio `${GIT_SHA:?}` rende impossibile un build di produzione senza SHA.
+- `TD-dev-env-punta-prod` — **ha morso 3 volte questa sessione** (quasi-incidente DB prod in sessioni precedenti; divergenza template↔DB accountant; kill di un processo dentro un container durante pulizia dev). Il criterio giusto: un comando di dev **non può** raggiungere un processo di prod, non "mi ricordo di verificare dopo". Check concreto emerso: risalire al `ppid` → `containerd-shim` = container. È il più affilato dei quattro failure mode strutturali.
+- `TD-deploy-perm-reconcile-gate` — trigger: prossimo deploy che aggiunge permessi. Il check "permessi Super Admin prod == set del codice" va **scriptato come GATE pre-build**. Il debito di propagazione ha morso 3 volte (notespese S19, cassa S20, Direzione accountant di Studio Ferretti) — il trigger reale è "qualsiasi permesso aggiunto a un ruolo materializzato", non "primo tenant via API".
+- `TD-ci-e2e-testcontainers-be` — pre-sessione; verificare se resta scoperto qualcosa nella copertura comportamentale in CI.
 
-Caddy: **nessuna modifica necessaria** al deploy (confermato in preflight) — le rotte nuove cadono sotto gli `handle` catch-all già instradati. Reload **mai** restart se mai servisse (`caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`), config reale in `infra/caddy/conf/`.
+**Aperti — trigger-gated:**
 
-**Resta aperto e differito**: la propagazione dei permessi `notespese.*` ai ruoli esistenti (Option 2, ADR-0066). Oggi la UI Note Spese è nascosta a tutti perché `role_permissions` è invariato a 245 — è lo stato voluto, non un bug. Si sblocca al trigger "primo tenant non well-known via API".
+- `TD-conti-list-amounts` — trigger: il cassiere deve prioritizzare i conti per importo dall'index. `GET /conti` è flat, senza importi. (`statoPagamento` non è badgeabile sulla dashboard per lo stesso motivo.)
+- `TD-dashboard-service-day` — trigger: cliente reale con servizi oltre mezzanotte. "Oggi" = giorno solare Europe/Rome, non giorno di servizio.
+- `TD-visual-regression-net` — trigger: prima di P4 (ritocco primitive condivise). Ridotto: il **diff dei valori CSS computati** copre già i cambi di token in modo deterministico; la rete screenshot serve solo per il residuo (geometria, spaziatura, ritorni a capo).
+- `TD-smoke-punta-solo-a-prod` — trigger: serve una smoke per-ruolo gatante in CI su codice non deployato → il `baseURL` (oggi sull'URL pubblico) va parametrizzato su istanza effimera dal branch.
+- `TD-e2e-validationpipe-missing` — il harness E2E non esercita il `ValidationPipe`: nessun DTO `@Body` è validato in e2e. Trigger: un DTO con constraint di sicurezza/integrità entra in un path senza copertura unit equivalente.
+- `TD-cassa-resto-drawer` — trigger: cliente chiede riconciliazione cassetto/fondo cassa. Il resto contanti non è modellato.
+- `TD-cassa-chiusura-giornaliera` — trigger: pilota chiede riepilogo fine giornata (Z-report). `cassa.chiusura.giornaliera` resta orfano.
 
-## B.2 Residui per blocco
+**Chiusi questa sessione:** `TD-ci-apt-external-dep` (#192), `TD-tailwind-config-dup` (#189).
 
-**Note Spese** — v1 completa. Deferral trigger-gated invariati: **Client Portal** (trigger: primo cliente che richiede accesso diretto; costo BASSO/incrementale, segue pattern `portale-*`), **OCR/pre-compilazione** (trigger: decisione su provider vision — `GroqService` è text-only).
+## Le lezioni della sessione (il filo comune)
 
-**KDS Fase 2**: layout kiosk `(kiosk)/` route group, segnale storno sulla board, e2e KDS, SSE. SSE resta deferito, **trigger invariato** (latenza insufficiente su feedback reale, o multi-istanza).
+**"Il verde dimostra meno di quanto sembra."** Quattro manifestazioni concrete:
 
-**CI Fase 2**: suite comportamentale completa restaurant-api (13 spec) + accountant-api (~17 spec) — prerequisito `globalSetup` con container condiviso.
+1. La cassa sarebbe stata deployata read-only (403 su ogni pagamento) con CI e page-tour **verdi** — falliva con grazia. Presa dalla deploy-preflight.
+2. Il `ValidationPipe` non valida i DTO in e2e — constraint verdi mai esercitati. Presa perché un test nuovo è fallito.
+3. `report.operativo.visualizza` mancante su un ruolo materializzato pur avendolo il template — verificare **in DB, non nel seed**.
+4. Il test single-flight passava su una race vinta, poi si è nascosto dietro un **job `success` con 1 flaky** (retry Playwright che maschera il primo tentativo). Regola operativa: **1 flaky non è verde; leggere la riga di riepilogo, non la conclusion.**
 
-**Cassa pre-fiscale** (restaurant): non iniziata, **manca anche il BE**. Fronte BE+FE, sbloccata da `vatPercent` (#161). RT/certificazione fiscale deferita fino a cliente reale.
+Corollario operativo: **la verifica empirica mirata batte il GATE**. Costruire le condizioni perché un check eserciti davvero il punto (utente Cameriere temporaneo + conti creati apposta, altrimenti la lista era vuota e il Badge non si renderizzava mai). E fare il **grep di chiusura sui residui E sulle assunzioni implicite**, non solo sui sentinel — `grep waitForURL.*dashboard` avrebbe trovato i 5 call-site di quiete prima del merge di #193. La domanda mancante: "chi altro assume che questa pagina sia ferma?".
 
-## B.3 Ambiente lasciato
+**Altri principi rafforzati:**
 
-- `gestionale_postgres_dev` (55432) **up** — abbatterlo con `pnpm devdb:down` (preserva dati) o `down -v` (reset).
-- Nessun dev server in esecuzione.
-- Prod intatto. **Attenzione**: sull'host sono visibili `next-server` root-owned che sono i container di **produzione** — non sono processi di sviluppo orfani.
-- Verifica porte: usare `ss -tln` + `curl` + `/proc/<pid>/cwd`. **Mai `sudo lsof`**: richiede password, fallisce in silenzio, e l'assenza di output non è "porta libera".
-- Dati dev ad-hoc del GATE PR-5: ruolo **Direzione** + utente `direzione@studio.local` seedati **solo** sul dev DB (55432), mai nel seed del repo. Restano lì; se servissero stabilmente, vanno seedati per davvero.
+- Diff dei valori CSS computati > screenshot per i cambi di token (deterministico, nessuna baseline binaria). Ha trovato un letterale citato in un commento che Tailwind trasformava in CSS reale.
+- Riconcilia all'**invariante**, non cherry-pick (Super Admin = `ALL_PERMISSION_CODES`).
+- Un presidio che dipende da una risorsa che non controlli (apt source, memoria dell'operatore) **cede in silenzio** appena quella cambia.
+- Il contratto del seam (7×2) e il conteggio token (6/12) vengono dalla **misura** (diff del build, contrasto WCAG), non dall'ispezione a vista né dalla lista di scope.
+- Togliere a un test la dipendenza dalla quiete (waiter espliciti) invece di inseguirla con segnali parziali: deterministico batte "ridotto".
 
-## B.4 Convenzioni consolidate oggi
+## Prossimi passi
 
-- **Prova di efficacia obbligatoria per ogni gate**: un job verde non dimostra che il gate serva. Rompere → rosso → ripristinare. Se non diventa rosso, il gate è teatro.
-- **Il vettore di efficacia differisce per verticale**: restaurant → extension `rls.ts`; accountant → policy nella migration (i test HTTP sono app-filter-protected e darebbero falso-verde).
-- **Mai mergiare mai-visto-verde**: la CI va vista verde sul commit finale, non assunta.
-- **Merge eseguito da Code** (`gh pr merge <n> --squash --delete-branch`), in turno **separato** da `gh pr checks --watch`, dopo "vai" esplicito. Nessuna eccezione per docs-only.
-- **`select` esplicito, mai `include` nudo** su relazioni: `storageKey` e `email` non devono comparire nei payload. Assert sull'**assenza**, con chiavi esattamente quelle attese.
-- **Zero `fetch()` raw** in entrambi i FE — invariante ristabilita, da non rompere.
-- **Le spec vanno committate**: una spec che vive solo in chat non è locked, è effimera.
+1. **P3 — vernice A su tutto il restaurant** (dashboard inclusa, uniforme). Estetica scelta: **A · Servizio** = sistema di base (le ore), **C · Turno** = dark/KDS, **B · Sala** = layer di brand food. Le 4 leggi del design system (ADR-0083) sono la checklist di review di ogni PR visiva. Seam per-tenant previsto-e-vuoto, trigger scritto.
+2. **P4 — ritocco delle 12 primitive esistenti** (unica fase non isolabile: 79 file, 2 app), ultima, con baseline visual-regression come strumento.
+3. **Deploy design + P2** (il prossimo deploy porta seam + P2 insieme; applicare rollback-tag come passo fisso e il check permessi Super Admin come GATE se `TD-deploy-perm-reconcile-gate` è meccanizzato).
+4. **Note Spese** (5 PR specced, ri-validare la spec per drift prima di costruire), **GroqService extraction**, **AI-pilot food**, **Cassa pre-fiscale RT** (differito a cliente reale) — per il piano a lungo termine.
 
-## B.5 Nota di metodo
+## Convenzioni operative (invariate)
 
-Il frontend come **primo consumer reale** collauda la shape del backend: due micro-PR non previste (#179, #181) sono emerse dagli STOP 0 di PR-4 e PR-5, dove il FE chiedeva dati che il BE non esponeva. In entrambi i casi la scorciatoia era disponibile (UUID grezzi; agganciarsi a `/tariffe/users` gated sui costi del personale) e in entrambi ha vinto la micro-PR additiva.
+- Merge = `gh pr merge --squash --delete-branch` **da terminale Code**, dopo "vai" esplicito di Nicolò. MAI da UI. (La riga-indice stale in MEMORY.md che diceva "da UI" è stata corretta questa sessione.)
+- `gh pr create` e `gh pr merge` sono turni separati; non ripetere un comando rifiutato uguale.
+- `git add` sempre selettivo, mai `-A`.
+- STOP-gate: STOP 0 read-only → STOP 1 lockato → STOP 2 self-check con riga "impatto sull'altro verticale: verificato/N.A." per PR su superfici condivise.
+- HANDOFF e PROGRESS sono **due PR docs separate** (log vs stato di chiusura), via PR docs dedicata (`docs/...`, commit `docs(...): ...`, PR + CI verde + squash — NO push diretto, il pre-push hook ADR-0004 lo blocca).
+- L'header _Ultimo aggiornamento / Fase corrente_ di PROGRESS è stale da giugno per convenzione: allinearlo è una decisione a sé, non un effetto collaterale di altre PR.
