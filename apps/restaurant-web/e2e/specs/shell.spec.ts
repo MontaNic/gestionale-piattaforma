@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * shell.spec.ts — Smoke F1-shell UI foundation (ADR-0018 DP-5)
  *
  * 3 test happy-path:
- *   1. Shell render post-login: sidebar + topbar + welcome dashboard visibili
+ *   1. Shell render post-login: sidebar + topbar + dashboard renderizzata
  *   2. Logout via topbar user menu: clear localStorage + redirect /login
  *   3. Anonymous access route autenticata → redirect /login (AuthGate)
  *
@@ -27,8 +27,9 @@ test.describe('F1 shell render authenticated', () => {
   test('shell renders post-login with sidebar + topbar', async ({ page }) => {
     await page.goto('/t/demo/dashboard');
 
-    // Attendere fine AuthGate loading (fetch /me terminato → DashboardContent renderizzata)
-    await expect(page.getByText(/^welcome\s+/i)).toBeVisible({ timeout: 10_000 });
+    // Attendere fine AuthGate loading (fetch /me terminato → dashboard renderizzata).
+    // Sentinel = testid della radice pagina: non dipende da testo, lingua o ora.
+    await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 10_000 });
 
     // Sidebar visibile (desktop default — viewport Playwright >= md breakpoint)
     await expect(page.locator('[data-testid="sidebar"]')).toBeVisible();
@@ -45,8 +46,8 @@ test.describe('F1 shell logout via topbar', () => {
   test('logout via topbar user menu clears tokens and redirects to login', async ({ page }) => {
     await page.goto('/t/demo/dashboard');
 
-    // Attendere shell pronta (welcome visibile = AuthGate loaded)
-    await expect(page.getByText(/^welcome\s+/i)).toBeVisible({ timeout: 10_000 });
+    // Attendere shell pronta (dashboard renderizzata = AuthGate loaded)
+    await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 10_000 });
 
     // Pre-condition: token in localStorage post-storageState restore
     const tokenPre = await page.evaluate(() =>

@@ -13,8 +13,13 @@ import { test, expect } from '@playwright/test';
  * Fix: login UI inline genera JWT "usa-e-getta" che logout può invalidare
  * senza side effect su altri test. Costa ~1s extra ma test self-contained.
  *
- * Selettori empirici (apps/restaurant-web/src/app/t/[slug]/dashboard/page.tsx):
- * - Logout: <Button variant="outline">Esci</Button> (durante logout "Uscita...")
+ * Selettori:
+ * - Dashboard pronta: [data-testid="dashboard"] (radice della pagina). Il saluto
+ *   e' italiano e dipende dall'ora del giorno -> non e' un sentinel usabile.
+ * - Logout: [data-testid="logout-button"] nel menu utente della TOPBAR. Il
+ *   bottone "Esci" in-pagina non esiste piu' da quando la dashboard e' una
+ *   landing con dati (P2/PR3): il logout ha un solo path reale, quello della
+ *   shell, ed e' quello che va coperto.
  * - localStorage keys (apps/restaurant-web/src/lib/auth.ts):
  *   gestionale_access_token + gestionale_refresh_token
  */
@@ -33,7 +38,7 @@ test.describe('Logout flow demo tenant', () => {
     await page.locator('input[type="password"]').fill(password);
     await page.getByRole('button', { name: /^accedi$/i }).click();
     await page.waitForURL('/t/demo/dashboard', { timeout: 10_000 });
-    await expect(page.getByText(/^welcome\s+/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 10_000 });
 
     // Verifica tokens presenti pre-logout
     const tokensPre = await page.evaluate(() => ({
@@ -43,8 +48,9 @@ test.describe('Logout flow demo tenant', () => {
     expect(tokensPre.access).toBeTruthy();
     expect(tokensPre.refresh).toBeTruthy();
 
-    // Click logout (button "Esci")
-    await page.getByRole('button', { name: /^esci$/i }).click();
+    // Click logout dal menu utente della topbar (unico path reale)
+    await page.getByTestId('user-menu-trigger').click();
+    await page.getByTestId('logout-button').click();
 
     // Attendi redirect a login (router.replace post clearTokens)
     await page.waitForURL(/\/t\/demo\/login$/, { timeout: 5_000 });
