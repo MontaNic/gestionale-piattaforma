@@ -53,12 +53,34 @@
     --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
     --font-display: var(--font-sans);
 
-    /* --- additivi non ancora adottati --------------------------------------
-     * Nessun componente li consuma oggi → zero impatto sul rendering attuale.
-     * `--warn` è il colore forte (testo/bordo), `--warn-soft` la tinta di fondo:
-     * la coppia d'uso è `text-warn` su `bg-warn-soft`. */
-    --warn: 32.1 94.6% 43.7%;
-    --warn-soft: 48 96.5% 88.8%;
+    /* --- stati semantici ---------------------------------------------------
+     * Terna `warn` / `success` / `info`: il token nudo è il colore FORTE
+     * (testo/bordo), il `-soft` è la tinta di fondo. La coppia d'uso è sempre
+     * `text-<stato>` su `bg-<stato>-soft`, e regge in entrambi i temi perché
+     * ENTRAMBI i token si ribaltano in `.dark` (forte 600→400, soft 100→950).
+     * Valori presi dalla scala Tailwind, stessa forma già scelta per `--warn`
+     * in ADR-0083. Sostituiscono i letterali di verde/blu/ambra sparsi nei
+     * badge di stato (legge #1: zero letterali). */
+    --warn: 32.1 94.6% 43.7%; /* amber-600 */
+    --warn-soft: 48 96.5% 88.8%; /* amber-100 */
+    --success: 142.1 76.2% 36.3%; /* green-600 */
+    --success-soft: 140.6 84.2% 92.5%; /* green-100 */
+    --info: 221.2 83.2% 53.3%; /* blue-600  */
+    --info-soft: 214.3 94.6% 92.7%; /* blue-100  */
+
+    /* `destructive` NON segue quella forma, e non è una svista.
+     * `--destructive` è nato come colore di SFONDO (Button/Alert lo usano con
+     * `--destructive-foreground` sopra) e in `.dark` va più SCURO (L 60.2% →
+     * 30.6%), non più chiaro. Usarlo come testo su un fondo soffuso dà 1.61 di
+     * contrasto in dark — illeggibile. Serve quindi un foreground proprio, che
+     * si ribalta come gli altri stati (600→400). Naming allineato alla coppia
+     * `--accent-soft` / `--accent-soft-foreground` già nel seam.
+     * Coppia d'uso: `text-destructive-soft-foreground` su `bg-destructive-soft`
+     * — rende superfluo l'hack `bg-destructive/10` dei call-site, che oggi per
+     * giunta non produce alcuna trasparenza (`destructive` è mappato senza
+     * `<alpha-value>`: discrepanza nota, rimandata a P4 e NON risolta qui). */
+    --destructive-soft: 0 93.3% 94.1%; /* red-100 */
+    --destructive-soft-foreground: 0 72.2% 50.6%; /* red-600 */
   }
 
   .dark {
@@ -79,8 +101,15 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
 
-    --warn: 43.3 96.4% 56.3%;
-    --warn-soft: 20.9 91.7% 14.1%;
+    --warn: 43.3 96.4% 56.3%; /* amber-400 */
+    --warn-soft: 20.9 91.7% 14.1%; /* amber-950 */
+    --success: 141.9 69.2% 58%; /* green-400 */
+    --success-soft: 144.9 80.4% 10%; /* green-950 */
+    --info: 213.1 93.9% 67.8%; /* blue-400  */
+    --info-soft: 226.2 57% 21%; /* blue-950  */
+
+    --destructive-soft: 0 74.7% 15.5%; /* red-950 */
+    --destructive-soft-foreground: 0 90.6% 70.8%; /* red-400 */
   }
 }
 

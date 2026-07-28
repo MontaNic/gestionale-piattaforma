@@ -79,9 +79,28 @@ const preset = {
           DEFAULT: 'hsl(var(--brand) / <alpha-value>)',
           foreground: 'hsl(var(--brand-foreground) / <alpha-value>)',
         },
+        // Stati semantici. Il token nudo è il colore forte (testo/bordo), il
+        // `.soft` la tinta di fondo: `text-warn` su `bg-warn-soft`.
         warn: {
           DEFAULT: 'hsl(var(--warn) / <alpha-value>)',
           soft: 'hsl(var(--warn-soft) / <alpha-value>)',
+        },
+        success: {
+          DEFAULT: 'hsl(var(--success) / <alpha-value>)',
+          soft: 'hsl(var(--success-soft) / <alpha-value>)',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info) / <alpha-value>)',
+          soft: 'hsl(var(--info-soft) / <alpha-value>)',
+        },
+        // `destructive` esiste già sopra (colore di sfondo, senza
+        // <alpha-value>). Qui si aggiunge SOLO la coppia soffusa, che ha un
+        // foreground proprio perché `--destructive` in dark è troppo scuro per
+        // fare da testo — vedi tokens.css. Chiave separata: toccare l'entry
+        // `destructive` esistente cambierebbe la resa attuale.
+        'destructive-soft': {
+          DEFAULT: 'hsl(var(--destructive-soft) / <alpha-value>)',
+          foreground: 'hsl(var(--destructive-soft-foreground) / <alpha-value>)',
         },
       },
       borderRadius: {
