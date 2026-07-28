@@ -3621,6 +3621,64 @@ Secondo prerequisito alla finestra, dopo lo storage di PR-A. Preceduto dall'**OP
 
 ---
 
+## [2026-07-28] Design system **P2** — dashboard food reale + token di stato + `Badge` (PR #190/#191/#193, [ADR-0084](docs/architecture/ADR-0084-dashboard-stats-food.md) · [ADR-0085](docs/architecture/ADR-0085-token-stati-badge.md))
+
+**Fase P2 chiusa in 3 PR + 2 di supporto.** L'obiettivo era duplice: dare alla dashboard restaurant dei dati veri (stampava il dump dei permessi come chip grigi) e posare le primitive additive che P3/P4 adotteranno. Scope **ristretto** rispetto all'idea iniziale: `Toast` e `Table`/`Select` sono **fuori** (deferiti a P3/P4, dove hanno consumer reali); `Select` resta **native-select** — un Select Radix romperebbe 47 call-site.
+
+### PR1 — `GET /dashboard/stats` (#190, ADR-0084)
+
+**Prima query aggregata del verticale FOOD**: `restaurant-api` non aveva alcun `count`/`aggregate`/`groupBy`. Pattern clonato da accountant (ADR-0038). Il preflight ha mostrato che **2 KPI su 4 non erano servibili**: mancava sia l'aggregazione sia il **filtro data** (nessun DTO accetta un confine temporale), e gli importi nascono solo in `GET /conti/:id` (`TD-conti-list-amounts`, **non chiuso** da questa PR).
+
+4 scalari, minimali per scelta: `contiAperti`, `comandeInCorso`, `incassoOggi` (stringa 2dp, convenzione denaro food — diverge da ADR-0038 che usa `number`), `copertiOggi`.
+
+⚠️ **Due KPI sono fotografie, due sono di giornata**, e confonderli produce numeri che sembrano giusti: `contiAperti` **non** ha filtro temporale (il conto aperto ieri e mai chiuso *deve* comparire — è l'anomalia che il numero serve a segnalare); `copertiOggi` filtra su `apertoIl` e **include i conti già chiusi**, altrimenti crollerebbe a fine servizio. `incassoOggi` non filtra sullo stato del conto: `annulla` non ha guardia di saldo, quindi un conto annullato **può** avere un pagamento non stornato — quel denaro è entrato, e lo storno è la via del dominio per farlo uscire.
+
+**Gate su `report.operativo.visualizza`, permesso già esistente e food-orphan** → **zero permessi nuovi, zero riconciliazione**. Verificato **in DB dev**, non nei template del seed: `Demo Pizzeria` → Direzione ✅ + Super Admin ✅ (gli unici ruoli food istanziati). ⚠️ Trovato di lato e **non toccato**: su `Studio Ferretti` il ruolo `Direzione` **non** ha quel permesso pur avendolo il template omonimo → divergenza template↔DB preesistente, terza manifestazione del debito di propagazione.
+
+"Oggi" = giornata solare `Europe/Rome`, helper `Intl` **a due passaggi** (il secondo non è difensivo: nei giorni di cambio ora l'offset a mezzanotte differisce da quello corrente e il candidato cadrebbe **nel giorno sbagliato**). Zero dipendenze nuove. → 🆕 `TD-dashboard-service-day` (il turno che scavalca mezzanotte appartiene al servizio della sera prima).
+
+**Test**: 8 unit sul confine di giornata — **unit e non e2e** perché l'e2e non controlla "adesso" e non può esercitare i due switch DST, l'unico punto dove un confine sbaglia di un giorno intero; attese in ISO **e** come round-trip, così la verifica non rifà lo stesso calcolo. 11 e2e con dati creati **attraverso l'API**, incluso l'RBAC che conta: `comande.*`/`cassa.*` pieni ma senza `report.operativo.visualizza` → **403**.
+
+### PR2 — token di stato + primitiva `Badge` (#191, ADR-0085)
+
+Additivo puro, **nessun call-site adottato**. Completa la terna `warn`/`success`/`info` (forma unica: forte 600→400, soft 100→950 in dark, coppia d'uso `text-<stato>` su `bg-<stato>-soft`) e aggiunge la coppia soffusa per `destructive`.
+
+⚠️ **6 variabili / 12 valori, non 5: il conteggio viene dalla MISURA.** Lo scope diceva 5. `--destructive` è nato come colore di **sfondo** e in dark va più **scuro**: usarlo come testo su fondo soffuso dà **1.61** di contrasto — illeggibile. Serve un `--destructive-soft-foreground` proprio (3.95 light / 5.84 dark). Stesso criterio con cui in ADR-0083 il seam è risultato 3×2 dal diff del build: **quando una legge è quantitativa, il numero lo decide lo strumento**.
+
+**Invarianza provata sul build**, entrambe le app: `0` dichiarazioni modificate o rimosse in `:root`/`.dark`, 6+6 aggiunte, identiche sui due verticali.
+
+⚠️ **Trovato dalla verifica di invarianza, non a vista**: **Tailwind scansiona i COMMENTI** di `packages/ui` (le app hanno `packages/ui/src/**` nel `content`, e l'estrazione è sul testo grezzo). Citare un letterale per scrivere *"questo era un letterale"* lo trasforma in una regola CSS vera nel bundle di entrambe le app. → regola per il package: nei commenti i colori si descrivono a parole.
+
+### PR3 — dashboard FE restaurant (#193)
+
+Landing su cui atterrano **tutti** i ruoli → sezioni indipendenti, ciascuna dietro il proprio permesso. `Badge` trova qui la **prima cliente reale** (stato conto); i due call-site duplicati in comande/cassa **non** sono toccati (adozione ovunque = P3). `KpiCard` è **locale** a restaurant-web (promuovere `StatCard` a `packages/ui` è P3).
+
+⚠️ **Il gate sta PRIMA del fetch, non è un try/catch**: il `page-tour` fallisce su qualunque response ≥400 **a prescindere da come il JS la gestisca** — la response è già emessa. Vale anche per il fetch dei tavoli, qui gated su `tavoli.visualizza` mentre in `cassa/page.tsx` è in try/catch (là non emerge perché il tour gira da Super Admin).
+
+**DP6 — migrazione del sentinel: 5 punti, non 4.** Lo scope ne elencava 4; il quinto è **`e2e/auth.setup.ts`**, che produce lo storage state da cui dipende **ogni** spec autenticato: migrarne 4 su 5 avrebbe rotto l'intera suite dal setup. Il saluto è ora italiano **e dipende dall'ora**, quindi `/^welcome/` sarebbe verde o rosso a seconda di quando gira la CI → sentinel su `[data-testid="dashboard"]`. Logout migrato alla **topbar** (il bottone in-pagina non esiste più).
+
+**Verifica runtime reale** (dev DB `:55432`, browser vero, **due ruoli non-superuser**, con utente Cameriere temporaneo creato apposta perché nessun ruolo esistente esercitava il caso "senza `report.operativo.visualizza`"): Direzione → KPI presenti, badge `bg-info-soft`/`text-info`, 0 response ≥400, 0 pageerror. Cameriere → **sezione KPI assente e `/dashboard/stats` mai chiamato**, 0 response ≥400. Dati temporanei rimossi a fine verifica.
+
+### PR di supporto
+
+**#192 — CI Playwright senza `apt`** (chiude 🆕✅ `TD-ci-apt-external-dep`). Il job installava `psql`/`redis-tools` a runtime; una apt source `nodesource` nell'immagine ha iniziato a rispondere **403** → `exit 127`, **zero test eseguiti**, `main` rosso. Il difetto non era il 403: era che due presidi di CI **dipendevano da una risorsa di rete che il repo non governa**. Fix: usare `pg`/`ioredis`, già dipendenze del workspace e già installate. ⚠️ `docker exec` sui service container **non** era praticabile: il job gira dentro `container:` e il runner non monta il socket Docker. Sicurezza migliorata: la password non passa più per **argv** (era in chiaro sulla riga di `psql`, visibile in `ps`); `ALTER ROLE` è una utility statement → niente bind parameter, valore quotato con `escapeLiteral`.
+
+**#194 + #195 — il test single-flight e "il verde che mente".** Il merge di #193 ha reso rosso `main`: `auth-refresh-single-flight` poggiava su un'assunzione implicita — *"dopo il login la pagina è ferma"* — vera finché la dashboard era statica. Ora fa 3 fetch al mount: sono **loro** a prendere il 401 e a consumare il single-flight, e il test misura 0 refresh invece di 1. ⚠️ **Sulla PR #193 il job era verde: non era una prova, era una corsa vinta.** #194 ha ridotto la race da 3/3 a 1/3 — e `main` usciva `success` **con `1 flaky`**, che *non è verde*: il retry di Playwright maschera il primo tentativo fallito. #195 la chiude in modo deterministico: waiter delle response registrati **prima** del reload, poi attesa che le richieste `/api/` in volo scendano a zero (necessaria perché in `next dev` **StrictMode raddoppia gli effect** e `waitForResponse` risolve sulla prima response); accoppiamento ruolo↔fetch reso esplicito nell'helper.
+
+### Stato e forward
+
+**GATE**: typecheck 16/16 · lint · unit workspace · `packages/ui` 18 test · e2e `restaurant-api` 18 file / 190 test · Playwright 20/20.
+
+**Impatto altro verticale**: PR2 tocca `packages/ui` (condiviso) → **verificato = INVARIATO** sul diff del build di entrambe le app. PR1 e PR3 sono per-app → **N.A.** `packages/db`/schema/seed **non toccati** in tutta P2 → migration e propagazione permessi **N.A.** su tutte e 5 le PR.
+
+⚠️ **Nulla di P1/P2 è deployato**: in produzione girano Cassa PR1+PR2; il seam #189 e tutta P2 (#190/#191/#192/#193/#194/#195) sono **in `main` ma non in prod**.
+
+**TD aperti**: `TD-conti-list-amounts` (importi sull'index conti — P2 **non** lo chiude: aggrega, non espone il per-conto) · 🆕 `TD-dashboard-service-day` · `TD-deploy-perm-reconcile-gate` (meccanizzare il check template↔DB al deploy — **terza manifestazione** in questa sessione) · 🆕 `TD-dev-env-punta-prod` (dev e prod sullo stesso host senza barriera: l'isolamento dipende dall'attenzione nel momento, non da un vincolo — ha morso **tre volte** in sessione; la barriera giusta è che un comando di dev non *possa* raggiungere un processo di prod, non che ci si ricordi di verificare dopo) · `TD-visual-regression-net` (trigger: prima di P4) · `TD-smoke-punta-solo-a-prod`.
+
+**Forward**: **P3** — estetica A su shell/pagine restaurant + adozione di `Badge` sui 24+ `<span>` e sulle 7 mappe `STATO_*`, promozione di `StatCard` a `packages/ui`. Poi **P4**, ritocco delle 12 primitive condivise (unica fase non isolabile → ultima).
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
