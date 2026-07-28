@@ -50,6 +50,69 @@ function demoCreds(): { email: string; password: string } {
   return { email, password };
 }
 
+// =============================================================================
+// Quiete della dashboard — perché serve, e perché è deterministica
+// =============================================================================
+// Il test scade l'access token e poi naviga su /mappa aspettandosi 2 fetch
+// concorrenti in 401 e UN solo refresh. Regge su un'assunzione: che quando il
+// token viene scaduto la pagina sia FERMA. Fino a P2/PR3 era vera per caso (la
+// dashboard era una welcome statica); ora la dashboard fa fetch autenticati al
+// mount, e se sono ancora in volo sono LORO a prendere il 401 e a consumare il
+// single-flight → /mappa non vede più alcun 401 → il test misura 0 refresh.
+//
+// Primo tentativo di fix (#194): segnali DOM parziali + `networkidle` in catch.
+// Ha ridotto la race da 3/3 a 1/3, NON l'ha eliminata: `/tables` è l'unico
+// fetch senza segnale DOM osservabile, ed è l'ultimo della catena — quando il
+// networkidle scadeva in silenzio, era ancora in volo. Ridurre una race non è
+// risolverla.
+//
+// Qui la quiete non si DEDUCE da segnali parziali, si ATTENDE:
+//   1. i waiter delle response si registrano PRIMA di far ripartire i fetch
+//      (da cui il `reload()`: dopo il redirect di login sarebbero già partiti);
+//   2. poi si attende che le richieste `/api/` in volo scendano a ZERO e ci
+//      restino. Questo secondo passo NON è ridondante: in CI il web gira in
+//      `next dev` → React StrictMode invoca gli effect DUE volte, e
+//      `waitForResponse` risolve sulla PRIMA response — la seconda copia dello
+//      stesso fetch può essere ancora in volo. Copre anche qualunque fetch non
+//      elencato sotto.
+//
+// L'oggetto del test non cambia: continua a misurare un refresh su due 401
+// concorrenti emessi da /mappa.
+// =============================================================================
+
+/**
+ * I fetch autenticati che la dashboard emette PER QUESTO RUOLO. L'accoppiamento
+ * ruolo↔fetch è esplicito qui, dove il ruolo si conosce: `loginAsDemoAdmin`
+ * autentica il Super Admin demo, che ha tutti i permessi e quindi li emette
+ * tutti e tre. Un ruolo più basso ne emetterebbe meno e questa lista andrebbe
+ * derivata dai suoi permessi — non è un dettaglio da dedurre a valle.
+ * `/me` non è elencato: lo emette AuthGate, non la dashboard, ed è comunque
+ * coperto dal passo 2.
+ */
+const DASHBOARD_FETCHES_SUPER_ADMIN = ['/dashboard/stats', '/conti', '/tables'] as const;
+
+/** Attende che le richieste `/api/` in volo siano 0 per `quietMs` consecutivi. */
+async function waitForApiQuiet(
+  page: Page,
+  inFlight: () => number,
+  { quietMs = 500, timeoutMs = 15_000 } = {},
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let quietSince: number | null = null;
+  for (;;) {
+    if (inFlight() === 0) {
+      quietSince ??= Date.now();
+      if (Date.now() - quietSince >= quietMs) return;
+    } else {
+      quietSince = null;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`API ancora in volo dopo ${timeoutMs}ms (in volo: ${inFlight()})`);
+    }
+    await page.waitForTimeout(50);
+  }
+}
+
 async function loginAsDemoAdmin(page: Page): Promise<void> {
   const { email, password } = demoCreds();
   await page.goto(`/t/${SLUG}/login`);
@@ -59,22 +122,29 @@ async function loginAsDemoAdmin(page: Page): Promise<void> {
   await page.getByRole('button', { name: /^accedi$/i }).click();
   await page.waitForURL(`/t/${SLUG}/dashboard`, { timeout: 10_000 });
 
-  // ⚠️ Attendere che la dashboard si QUIETI prima di restituire il controllo.
-  // Da P2/PR3 non è più una welcome statica: al mount fa fetch autenticati
-  // propri (`/dashboard/stats`, `/conti`, `/tables`). Se il chiamante scade il
-  // token mentre quelle sono ancora in volo, sono LORO a prendere il 401 e a
-  // consumare il single-flight — e la navigazione successiva non vede più alcun
-  // 401 da rinnovare: il test misurerebbe 0 refresh invece di 1.
-  // Il fallimento è di TIMING, non deterministico: sul run della PR #193 la
-  // corsa era andata bene e il job era verde, su main no.
-  // Il segnale duro è la griglia KPI: si monta SOLO dopo che `/dashboard/stats`
-  // ha risolto (finché `stats` è null la sezione mostra il testo di loading).
-  // demo admin è Super Admin, quindi la sezione c'è di sicuro.
-  await page.getByTestId('dashboard').waitFor({ state: 'visible', timeout: 10_000 });
-  await page.getByTestId('dashboard-kpi').waitFor({ state: 'visible', timeout: 10_000 });
-  // `networkidle` copre le restanti (`/conti`, `/tables`); best-effort perché
-  // con il dev server può non quietarsi mai — il segnale duro è quello sopra.
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  // Contatore delle richieste API in volo (passo 2). Va installato PRIMA del
+  // reload, altrimenti perde le richieste che parteciperanno al conteggio.
+  let inFlight = 0;
+  const isApi = (url: string): boolean => url.includes('/api/v1/');
+  page.on('request', (r) => {
+    if (isApi(r.url())) inFlight += 1;
+  });
+  page.on('requestfinished', (r) => {
+    if (isApi(r.url())) inFlight -= 1;
+  });
+  page.on('requestfailed', (r) => {
+    if (isApi(r.url())) inFlight -= 1;
+  });
+
+  // Passo 1: waiter registrati prima che i fetch ripartano, poi reload.
+  const settled = DASHBOARD_FETCHES_SUPER_ADMIN.map((path) =>
+    page.waitForResponse((r) => r.url().includes(path), { timeout: 15_000 }),
+  );
+  await page.reload();
+  await Promise.all(settled);
+
+  // Passo 2: nessuna richiesta API residua (copre il doppio invoke StrictMode).
+  await waitForApiQuiet(page, () => inFlight);
 }
 
 interface AccessPayload {
