@@ -11,23 +11,27 @@ protected_ref='refs/heads/main'
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     if [ "$remote_ref" = "$protected_ref" ]; then
-        echo ""
-        echo "⛔ Push su '$protected_ref' bloccato dal pre-push hook locale."
-        echo ""
-        echo "GitHub Rulesets non enforced su account Free privato. Hook compensa lato locale."
-        echo "Vedi docs/architecture/ADR-0004-local-git-hooks.md per il razionale completo."
-        echo ""
-        echo "Workflow corretto:"
-        echo "  1. git checkout -b feature/nome-task"
-        echo "  2. git commit ..."
-        echo "  3. git push origin feature/nome-task"
-        echo "  4. Apri PR su GitHub, attendi CI verde, squash and merge"
-        echo ""
-        echo "I push di soli tag (refs/tags/*) e di altri branch NON sono bloccati,"
-        echo "anche quando la branch corrente e' main."
-        echo ""
-        echo "Bypass intenzionale (rarissimo, solo emergenze): git push --no-verify"
-        echo ""
+        # Il motivo del rifiuto va su stderr, come prescrive `man githooks`:
+        # cosi' sopravvive a uno stdout rediretto.
+        {
+            echo ""
+            echo "⛔ Push su '$protected_ref' bloccato dal pre-push hook locale."
+            echo ""
+            echo "GitHub Rulesets non enforced su account Free privato. Hook compensa lato locale."
+            echo "Vedi docs/architecture/ADR-0004-local-git-hooks.md per il razionale completo."
+            echo ""
+            echo "Workflow corretto:"
+            echo "  1. git checkout -b feature/nome-task"
+            echo "  2. git commit ..."
+            echo "  3. git push origin feature/nome-task"
+            echo "  4. Apri PR su GitHub, attendi CI verde, squash and merge"
+            echo ""
+            echo "I push di soli tag (refs/tags/*) e di altri branch NON sono bloccati,"
+            echo "anche quando la branch corrente e' main."
+            echo ""
+            echo "Bypass intenzionale (rarissimo, solo emergenze): git push --no-verify"
+            echo ""
+        } >&2
         exit 1
     fi
 done
