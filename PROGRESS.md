@@ -3679,6 +3679,61 @@ Landing su cui atterrano **tutti** i ruoli → sezioni indipendenti, ciascuna di
 
 ---
 
+## [2026-07-30] Deploy S21 ESEGUITO — design seam + P2 in produzione ([ADR-0086](docs/architecture/ADR-0086-rollback-point-coppia-bloccante.md))
+
+**Primo deploy con un SHA unico su tutti e 4 i servizi.** Prima di questa finestra la produzione girava su **due** revisioni diverse e la domanda "cosa gira in prod?" era rispondibile solo dalle label OCI, non da git.
+
+### Identità (in chiaro, per ricostruibilità)
+
+| | valore |
+| --- | --- |
+| **SHA deployato** | **`cf0e521`** (`cf0e521d4f8f81394c172e4a0f5366ca0be50121`) — su `accountant-api`, `accountant-web`, `restaurant-api`, `restaurant-web` |
+| SHA di partenza | `bc36e7d` (restaurant-api, restaurant-web) · `f7b5d19` (accountant-api, accountant-web) |
+| Contenuto | design seam #189 · P2 #190 / #191 / #193 · CI #192 · fix flaky #194 / #195 |
+| Dump pre-deploy | `gestionale_20260729T234520Z_pre-deploy-design-p2_cf0e521.dump` (288 134 B, `PGDMP`, sha256 `63cb7db3…680ac7a3`, `0600`) |
+| Tag immagine di rollback | `gestionale/accountant-{api,web}:rollback-pre-design-f7b5d19` · `gestionale/restaurant-{api,web}:rollback-pre-design-bc36e7d` |
+| Tag git | `deploy/s21-cf0e521`, `deploy/prod-restaurant-bc36e7d`, `deploy/prod-accountant-f7b5d19` — **creati in locale, NON pubblicati** |
+
+⚠️ **Il divieto di prune è vivo** finché questa PR non è mergiata. Dopo il cutover le 4 immagini di rollback sono `unused` per Docker: `docker image prune -a` le rimuoverebbe in silenzio, ed è l'unico presidio che le tiene in vita.
+
+⚠️ **I tag git sono solo locali** e spariscono con la macchina — è la ragione per cui gli SHA sopra sono scritti in chiaro qui: il tag è ricostruibile dalla documentazione. Causa: `TD-prepush-hook-blocca-tag`. Si è scelto di **non** usare `--no-verify`; i 4 tag si pubblicano insieme dopo il fix dell'hook.
+
+### Forma della finestra
+
+**Zero migrazioni, zero scritture su DB.** Il delta rispetto alla baseline restaurant non tocca `packages/db/prisma`; l'unica migrazione nel delta rispetto all'accountant (`add_pagamento_cassa`) era **già applicata** il 27/07. `prisma migrate status` → *«Database schema is up to date»*, 34/34 applicate, nessun checksum mismatch. Conseguenza sfruttata: **rollback puramente a livello immagine**, nessun restore DB in nessuno scenario.
+
+**Permessi invariati**: Super Admin a **60/60 su tutti e 4 i tenant** (`acme`, `demo`, `oneplatform`, `studio-demo`), verificato **pre-build e post-deploy**. Controllo più forte del conteggio: i permessi mancanti al Super Admin sono esattamente i 4 `isPortale` e nient'altro. `TD-deploy-perm-reconcile-gate` resta aperto — il gate è stato eseguito a mano.
+
+### Impatto sull'altro verticale: **verificato**
+
+`accountant-web` **consuma il seam** (`@gestionale/ui/tailwind-preset` + `@import '@gestionale/ui/src/tokens.css'`), quindi il deploy lo tocca. Confronto riga per riga dei valori HSL: i token neutri spostati in `tokens.css` sono **identici** ai precedenti. L'unico cambio di resa è la sidebar, che passa da letterali Tailwind (`bg-blue-100`) a token (`bg-accent-soft`).
+
+**Misura a runtime sul CSS realmente servito dal container**, non sul sorgente:
+
+| tema | `backgroundColor` | `color` |
+| --- | --- | --- |
+| light | `rgb(219, 234, 254)` | `rgb(30, 58, 138)` |
+| dark | `rgba(30, 58, 138, 0.3)` | `rgb(219, 234, 254)` |
+
+Quattro valori su quattro identici agli attesi (= `blue-100`/`blue-900`, la resa pre-deploy). Il caso dark reggeva perché i token sono memorizzati come **canali HSL nudi**: `hsl(var(--accent-soft)/.3)` compone l'alpha. ⚠️ La prima misura è stata un **falso allarme prodotto dalla sonda** — vedi la rettifica di metodo in HANDOFF: mutare la classe di tema a runtime dà colori derivati stantii.
+
+### Verifiche post-deploy
+
+- **Identità**: `cf0e521` ×4 sulle label OCI dei container (criterio **a prefisso**, mai uguaglianza).
+- **Salute via Caddy**, entrambi i verticali: `/api/v1/health` → `200` su apex (accountant) e su `food.` (restaurant); home → `307` verso `/t/<tenant>/login`, poi `200`.
+- **Separazione degli upstream** provata con rotte esclusive: `/note-spese` → 401 apex / 404 food; `/conti` → 401 food / 404 apex. ⚠️ `/health` e `/dashboard/stats` esistono su **entrambe** le API e non discriminano nulla.
+- **Log** dei 4 servizi, 10 minuti: nessun `error`/`fatal`/`unhandled`/`ECONN`.
+- **Verificato manualmente da Nicolò in produzione, 2026-07-30**: dashboard food con KPI valorizzati sui dati reali (`conti=6`, `pagamenti=1`, `conti_righe=12`), Badge renderizzati, sezioni role-gated; riepilogo pagamenti su un conto esistente (sola lettura); sidebar accountant in light e dark sulla pagina reale autenticata. **Esito positivo.**
+- Servizi fuori perimetro **non toccati**: `postgres`, `redis`, `caddy`, `mailpit` con uptime invariato. Nessun `caddy reload` (niente nel delta tocca la sua config).
+
+### TD
+
+🆕 `TD-prepush-hook-blocca-tag` · 🆕 `TD-engines-node-vs-dockerfile` · 🆕 `TD-caddyfile-root-placeholder` · `TD-dev-env-punta-prod` aggiornato (2 manifestazioni nuove, 5 totali) · `TD-backup-automation` rettificato (la procedura esiste ed è provata; manca il cron — ADR-0079 §205 era impreciso) · `TD-deploy-perm-reconcile-gate` confermato aperto.
+
+**Forward**: `TD-prepush-hook-blocca-tag` (piccolo, isolato, efficacia dimostrabile) **prima** di P3, poi si pubblicano i 4 tag `deploy/*`.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
