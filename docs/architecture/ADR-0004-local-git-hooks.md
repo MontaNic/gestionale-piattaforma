@@ -91,9 +91,15 @@ Ne esiste un terzo, non intenzionale ma già osservato: se `.husky/pre-push` non
 
 Nove casi, eseguiti in un repo usa-e-getta con remote bare locale, sotto lo stesso runner `sh -e` della produzione e con il file reale sotto test. `git push --dry-run` **esegue** il `pre-push` senza toccare il remote (verificato: 0 ref pubblicati), quindi la matrice è ripetibile a costo zero.
 
-ROSSO atteso e osservato: commit su `main`; force-push su `main`; delete di `main`; misto tag + `main`; misto feature branch + `main` **con `main` non come prima riga di stdin** (git ordina `refs/heads/*` prima di `refs/tags/*`, quindi è questo il caso che prova che il loop non si ferma alla prima riga).
+ROSSO atteso e osservato: commit su `main`; force-push su `main`; delete di `main`; misto tag + `main`; misto feature branch + `main`.
 
 VERDE atteso e osservato: soli tag, annotati e lightweight, da `main`; feature branch da `main`; feature branch da feature branch; stdin vuoto (exit 0, nessun output, nessun aborto da `errexit`).
+
+**Il caso che prova davvero il loop è "feature branch + `main`", e non è quello che sembrava.** La matrice era stata scritta con il misto **tag + `main`** in quel ruolo: doveva dimostrare che un fix non si ferma alla prima riga di stdin lasciando passare un push di `main` mascherato da push di tag. Non lo dimostra. **Git ordina `refs/heads/*` prima di `refs/tags/*` a prescindere dall'ordine sulla command line** (verificato: `git push origin <tag> main` produce comunque `refs/heads/main` come prima riga), quindi in un push tag+`main` il ref protetto è **sempre** il primo, e anche un fix che decidesse solo sulla prima riga passerebbe il caso. Era un gate che non poteva diventare rosso.
+
+Serve un push misto in cui il ref protetto **non** è il primo: `feature/y` + `main`, dove `refs/heads/feature/y` precede `refs/heads/main` in ordine alfabetico. Quello è il caso che il loop deve superare, ed è quello che va tenuto se la matrice viene rieseguita.
+
+Il difetto era nella premessa della prova, non nel codice provato: un ordinamento **assunto** invece che osservato. Stessa famiglia di «1 flaky non è verde» e «verifica alla fonte ≠ verifica completa della fonte» — un segnale accettato senza guardare cosa lo produceva.
 
 ## Hardening PATH per ambienti non-interactive
 
