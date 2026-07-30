@@ -4,6 +4,8 @@
 
 **Prima esecuzione**: S19, 2026-07-25, base `main` @ `f7b5d19`, migrazione `add_note_spese` (→33). I valori concreti di quell'esecuzione compaiono come esempio; sostituiscili alla prossima.
 
+**Seconda esecuzione**: S21, 2026-07-30, base `main` @ `cf0e521` (design seam #189 + P2 #190-#193). Forma diversa: **zero migrazioni e zero scritture su DB** nel delta rispetto alla baseline restaurant, quindi niente Passo 3 e niente Passo 7 — rollback puramente a livello immagine. Le aggiunte marcate _(S21)_ vengono da lì e sono tutte state esercitate.
+
 **Quando NON usare questo runbook**: se la finestra deve propagare permessi a ruoli esistenti (perché esiste un cliente reale da servire), questo runbook non basta — serve lo STOP dedicato alla propagazione, che qui è deliberatamente fuori scope.
 
 ---
@@ -14,20 +16,22 @@
 2. **Le azioni contro produzione si eseguono a mente fresca**, non a fine sessione lunga.
 3. **La spec (questo runbook) descrive; il comando eseguito decide.** Dove divergono, vince il comando. Verifica ogni decisione contro il comando reale, non contro la sua descrizione.
 4. **`GIT_SHA` esportato per tutta la finestra** — dal merge di PR-A ogni comando `compose` contro prod lo richiede (e non solo `build`: Compose interpola l'intero modello al caricamento del file, quindi `config`/`ps`/`logs`/`up` lo pretendono tutti). In una shell nuova va riesportato.
-5. **In caso di dubbio, STOP.** Un passo non fatto costa tempo; un passo fatto male su produzione costa molto di più.
+5. **Forma compose obbligatoria: sempre ENTRAMBI i file** _(S21)_ — `-f docker-compose.dev.yml -f docker-compose.prod.yml`, in quest'ordine, per **ogni** comando (`config`, `ps`, `logs`, `build`, `up`). `docker-compose.prod.yml` **non è auto-consistente**: è un overlay, e la rete `gestionale_network` è definita in `dev.yml`. Da solo fallisce già su `config` con `service "caddy" refers to undefined network gestionale_network`. Il file "dev" è in realtà il **base condiviso** e il nome mente — è una manifestazione di `TD-dev-env-punta-prod`. Qualsiasi comando scritto a memoria contro `prod.yml` da solo fallisce, o fa la cosa sbagliata in silenzio.
+6. **Confronto delle label OCI a PREFISSO, mai per uguaglianza** _(S21)_ — `case "$L" in <sha>*)`, non `[ "$L" = "<sha>" ]`. La forma di `GIT_SHA` è stata storicamente disomogenea: 40 caratteri sulle immagini di S19, short su quelle della cassa. Un confronto letterale dà un **rosso falso** su un'immagine corretta.
+7. **In caso di dubbio, STOP.** Un passo non fatto costa tempo; un passo fatto male su produzione costa molto di più.
 
 ---
 
 ## Precondizioni — tutte verdi prima di aprire la finestra
 
-| Precondizione                          | Come si verifica                                                                        | Stato S19     |
-| -------------------------------------- | --------------------------------------------------------------------------------------- | ------------- |
-| Backup con restore **provato**         | procedura OPS dump→restore effimero→diff conteggi→RLS                                   | ✅ 24/07      |
-| Migrazioni pending note e **additive** | classificazione SQL di ciascuna (no DROP, no NOT NULL su tabella popolata, no backfill) | ✅ 1 additiva |
-| Rollback point immagini                | tag + digest annotati delle immagini **in esercizio**                                   | ✅ P2         |
-| Seed fail-closed su `NODE_ENV`         | il seed aborta se `NODE_ENV` non è esplicito                                            | ✅ PR-B       |
-| Provenienza immagini                   | build fallisce senza `GIT_SHA`; label OCI `revision`                                    | ✅ PR-A       |
-| Nessuna propagazione dovuta            | caratterizzazione tenant: nessun cliente reale = propagazione differita                 | ✅ 24/07      |
+| Precondizione                          | Come si verifica                                                                                                        | Stato S19     |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------- |
+| Backup con restore **provato**         | procedura OPS dump→restore effimero→diff conteggi→RLS                                                                   | ✅ 24/07      |
+| Migrazioni pending note e **additive** | classificazione SQL di ciascuna (no DROP, no NOT NULL su tabella popolata, no backfill)                                 | ✅ 1 additiva |
+| Rollback point immagini                | coppia tag+divieto prune ([ADR-0086](architecture/ADR-0086-rollback-point-coppia-bloccante.md)) + verifica di efficacia | ✅ P2         |
+| Seed fail-closed su `NODE_ENV`         | il seed aborta se `NODE_ENV` non è esplicito                                                                            | ✅ PR-B       |
+| Provenienza immagini                   | build fallisce senza `GIT_SHA`; label OCI `revision`                                                                    | ✅ PR-A       |
+| Nessuna propagazione dovuta            | caratterizzazione tenant: nessun cliente reale = propagazione differita                                                 | ✅ 24/07      |
 
 Se una sola precondizione è ❌, la finestra non si apre.
 
@@ -79,23 +83,45 @@ head -c 5 "$OUT" | xxd            # atteso: PGDMP
 sha256sum "$OUT" | tee "${OUT}.sha256"
 ```
 
+`chmod 600` non è un dettaglio: è lo standard di fatto dei dump esistenti, e senza di esso l'umask produce `0664` — una copia completa della produzione leggibile da chiunque sull'host.
+
+**Il nome del dump è un'asserzione, non un'etichetta** _(S21)_. `pre-`/`post-` va verificato contro **l'orario reale del cutover**, non contro l'intenzione di chi lancia il comando: `pg_dump` è idempotente come comando, il nome del file no. Un `…_pre-deploy-…` prodotto dopo il cutover contiene lo stato **post**-deploy ed è indistinguibile per nome da quello legittimo: chi lo usasse per un rollback ripristinerebbe lo stato che voleva annullare, senza sapere di sbagliare. **Un falso documentale nella directory dei backup è peggio di un backup mancante.** Prima di rieseguire un dump con un nome già usato in finestra, confronta il timestamp col momento del `up -d`.
+
 `pg_dump` è read-only, snapshot MVCC consistente, nessun downtime. Il magic-bytes `PGDMP` prova il non-troncamento. Il restore effimero completo **non** si rifà in linea se la procedura è già provata e il DB è quieto; se lo si rifà per prudenza, è `docker run --rm` (**mai** `run -d` senza `--rm`: lascerebbe un volume anonimo con una copia dei dati di produzione — errore osservato in S19).
 
 **Verifica: `PGDMP` presente, sha256 salvato. Altrimenti STOP.**
 
-### Passo 2 — Tag di rollback (prima del build)
+### Passo 2 — Rollback point (prima del build) — PASSO BLOCCANTE
+
+**Il rollback point è una coppia inseparabile** (ADR-0086): (i) tag espliciti sulle immagini in esercizio, applicati **per image ID** e non per `:latest`; (ii) **divieto di prune di qualsiasi tipo** fino alla chiusura della finestra. Nessuno dei due basta da solo, e il build non parte se manca la verifica (c).
 
 ```bash
+# (a) rileva gli ID DELLE IMMAGINI IN ESERCIZIO (non :latest)
 for svc in accountant-api accountant-web restaurant-api restaurant-web; do
-  docker tag gestionale/$svc:latest gestionale/$svc:rollback-pre-<etichetta>
+  echo -n "$svc: "; docker inspect gestionale-$svc-1 \
+    --format '{{.Image}} rev={{index .Config.Labels "org.opencontainers.image.revision"}}'
 done
-# annota i DIGEST delle immagini in esercizio: sono il rollback point vero, indipendente dai tag
-for svc in accountant-api accountant-web restaurant-api restaurant-web; do
-  echo -n "$svc: "; docker inspect gestionale-$svc-1 --format '{{.Image}}'
+
+# (b) tagga PER ID rilevato, non per :latest
+docker tag <id-rilevato> gestionale/<svc>:rollback-pre-<etichetta>-<sha>
+
+# (c) VERIFICA DI EFFICACIA — obbligatoria, il build non parte senza questo output
+for t in gestionale/<svc>:rollback-pre-<etichetta>-<sha>; do
+  echo -n "$t -> "; docker inspect "$t" \
+    --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 done
 ```
 
-**Verifica che ciascun tag coincida per digest con l'immagine che il container sta _eseguendo_** — non con ciò che `:latest` indicava. Il rollback point è l'immagine in esercizio, non l'ultima buildata.
+**(c) è il gate**: la label OCI `org.opencontainers.image.revision` dell'immagine taggata deve corrispondere al suffisso del tag. Se non corrisponde, il tag è sull'immagine sbagliata — **STOP**, non correggere a intuito.
+
+**Perché servono entrambi i presidi** _(S21, giustificazione empirica)_. Sono due regimi diversi, attraversati nella stessa finestra:
+
+- **Prima del cutover** il tag è ridondante: i container in esecuzione ancorano gli image ID, che sopravvivrebbero a un prune comunque.
+- **Dopo il cutover** i container non esistono più. Il tag diventa **l'unica cosa che tiene in vita il rollback**, e il divieto di prune **l'unica cosa che protegge il tag**: per Docker quelle immagini sono ora `unused`, e `docker image prune -a` le rimuove in silenzio.
+
+**Prova empirica (S21)**: il build ha riassegnato `:latest` alle 4 immagini nuove e le 4 vecchie sono rimaste ancorate **dal solo tag**. Senza il Passo 2 sarebbero state dangling — cioè il rollback point sarebbe stato distrutto dal build stesso che lo rende necessario. La colonna "in uso" di `docker images` cade sulle immagini di rollback **subito dopo** `up -d`: è il segnale osservabile del passaggio da un regime all'altro.
+
+**Divieto di prune, esplicito**: `docker system prune`, `docker image prune -a`, `docker builder prune -a` — nessuno, per nessun motivo, fino a chiusura finestra. Se emerge pressione sullo spazio: **STOP**, e si decide fuori finestra cosa liberare **nominando le immagini una per una**. Nota che i "reclaimable" di `docker system df` includono le immagini di rollback delle finestre precedenti: un prune "di pulizia" spazza via anche quelle.
 
 ### Passo 3 — `migrate deploy` (dall'HOST) — PUNTO DI NON RITORNO
 
@@ -164,12 +190,20 @@ docker compose -f docker-compose.dev.yml -f docker-compose.prod.yml build <servi
 # non è esportato in questa shell → torna al Passo 0.
 
 for svc in <servizi>; do
-  echo -n "$svc: "
-  docker inspect gestionale/$svc:latest --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+  L=$(docker inspect gestionale/$svc:latest \
+        --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
+  case "$L" in "$GIT_SHA"*) echo "$svc: OK ($L)";; *) echo "$svc: MISMATCH ($L)";; esac
 done
+
+# il presidio è sopravvissuto al build? (attese tante righe quanti i servizi)
+docker images | grep rollback-pre-<etichetta>
 ```
 
-**Verifica: ogni label `revision` = `$GIT_SHA`. Se una sola diverge → STOP** (immagine non tracciabile, ciò che il presidio doveva impedire). Utile anche confermare che `:latest` (`.Id`) sia ora diverso dal tag `rollback-pre-<etichetta>`: prova che il build ha prodotto immagini davvero nuove.
+**Verifica: ogni label `revision` ha `$GIT_SHA` come PREFISSO** (principio 6 — non uguaglianza). **Se una sola diverge → STOP** (immagine non tracciabile, ciò che il presidio doveva impedire). Utile anche confermare che `:latest` (`.Id`) sia ora diverso dal tag `rollback-pre-<etichetta>`: prova che il build ha prodotto immagini davvero nuove.
+
+**Secondo gate, prima di toccare i container** _(S21)_: i tag di rollback devono essere **ancora tutti presenti**. Il build riassegna `:latest`, e da quel momento le immagini vecchie esistono solo grazie al tag. **Se una riga manca → STOP, non si procede al rollout**: il rollback è perso.
+
+Se il build è `--no-cache`, aprilo con un check non distruttivo dello spazio (`df -h /var/lib/docker`, `docker system df`) e **STOP sotto ~10 GB liberi**, riportando i numeri. Non liberare nulla di iniziativa: vale il divieto di prune del Passo 2.
 
 ### Passo 6 — Rollout
 
@@ -182,6 +216,20 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'
 ```
 
 Verifica che i container in esecuzione portino le immagini nuove (per digest, `.Image`, non per tag). `impatto sull'altro verticale`: se la migrazione tocca tabelle condivise (`tenants`/`users`), verifica che **entrambi** i verticali rispondano — health end-to-end via Caddy (`https://<dominio>/api/v1/health`), non solo la porta interna: un container può rispondere sulla sua porta e restare irraggiungibile dal proxy. Una home che risponde `307` è il redirect auth di Next, non un errore (una web app morta darebbe 502/timeout da Caddy).
+
+**Il routing pubblico va provato dopo OGNI ricreazione di container, e il check interno non lo prova** _(S21)_. Entrambi i verticali hanno un host pubblico: l'accountant su apex + wildcard, il food su host esatto. La config reale è `infra/caddy/conf/Caddyfile` (bind-mount ro su `/etc/caddy`) — **non** `./Caddyfile` alla root, che è un placeholder (`TD-caddyfile-root-placeholder`); leggila sempre **per intero**, mai troncata.
+
+Non basta che i due host rispondano `200`: va provata la **separazione degli upstream**, e serve una rotta **esclusiva per verticale**. Le rotte presenti su entrambe le API non discriminano nulla — `/api/v1/health` risponde identico da tutti e due, e anche `/api/v1/dashboard/stats` esiste su entrambe. Il segnale è l'**asimmetria 401/404**:
+
+```bash
+# /note-spese esiste solo su accountant-api; /conti solo su restaurant-api
+curl -s -o /dev/null -w "%{http_code}\n" https://<apex>/api/v1/note-spese   # atteso 401
+curl -s -o /dev/null -w "%{http_code}\n" https://<food>/api/v1/note-spese   # atteso 404
+curl -s -o /dev/null -w "%{http_code}\n" https://<food>/api/v1/conti        # atteso 401
+curl -s -o /dev/null -w "%{http_code}\n" https://<apex>/api/v1/conti        # atteso 404
+```
+
+`401` = la rotta esiste e il guard è attivo; `404` = upstream diverso. Le quattro risposte insieme provano che l'host esatto ha precedenza sul wildcard e che nessuno dei due verticali ricade sugli upstream dell'altro.
 
 ### Passo 7 — Seed permessi (dall'host, fail-closed)
 
@@ -215,9 +263,30 @@ docker exec gestionale_postgres psql -U postgres -d gestionale -At -c "SELECT ma
 
 Verifica applicativa: entrambi i domini rispondono. La UI della feature nuova sarà **nascosta** (nessun ruolo ha i permessi) — è il comportamento atteso di Option 2, **non** un deploy fallito.
 
+### GATE permessi — read-only, pre-build E post-deploy
+
+Va eseguito **due volte**, prima del build e dopo il rollout, e deve dare lo stesso risultato. `roles` è RLS **FORCED**: il `SET` deve stare nella **stessa sessione** della query, altrimenti il risultato è vuoto e sembra un problema di dati.
+
+```bash
+docker exec gestionale_postgres psql -U postgres -d gestionale -c "SET app.is_super_admin = 'true';
+SELECT t.slug, count(rp.permission_id)
+FROM roles r JOIN tenants t ON t.id = r.tenant_id
+LEFT JOIN role_permissions rp ON rp.role_id = r.id
+WHERE r.deleted_at IS NULL AND r.name = 'Super Admin'
+GROUP BY 1 ORDER BY 1;"
+```
+
+Atteso: **una riga per tenant, tutte a `ALL_PERMISSION_CODES`** (S21: 60 — cioè i 64 del catalogo meno i 4 `isPortale`). **Se un solo tenant diverge → STOP: non riconciliare in finestra.** La riconciliazione è un'azione a sé, con il suo STOP.
+
+Il conteggio del set nel codice si ricava dall'array `PERMISSIONS` in `packages/db/prisma/seed.ts` meno gli `isPortale: true` — **non** da `grep -c "code:"`, che sovrastima contando le occorrenze fuori dall'array. Controllo più forte del conteggio: verificare che i permessi **mancanti** al Super Admin siano esattamente gli `isPortale` e nient'altro (`NOT EXISTS` sul prodotto tenant × catalogo).
+
+Finché `TD-deploy-perm-reconcile-gate` è aperto questo gate è manuale: non esiste script in `scripts/`.
+
 ### Passo 8 — Chiusura
 
 Annota: SHA deployato, digest delle immagini **nuove** (rollback point della prossima finestra), conteggi finali, path dei backup. `git status` pulito (la finestra non modifica il repo). `compose config` valido.
+
+Il **divieto di prune resta vivo** fino alla chiusura della PR di documentazione, non fino alla fine del rollout.
 
 ---
 
@@ -232,12 +301,16 @@ Annota: SHA deployato, digest delle immagini **nuove** (rollback point della pro
 
 Principio: lo schema additivo è retrocompatibile, quindi **il rollback delle immagini non richiede il rollback dello schema**. Il restore del DB è l'ultima risorsa, non il primo gesto.
 
+**Il rollback è per-servizio** _(S21)_: si può tornare indietro sul solo `accountant-web` lasciando il resto sulla revisione nuova. Usa la forma compose completa (principio 5) e ricorda che `GIT_SHA` va riesportato al valore **del servizio che si sta ripristinando**, non a quello della finestra.
+
+Se la finestra non ha migrazioni — come S21 — il rollback è **puramente a livello immagine** e nessuna riga della tabella sopra oltre l'ultima è applicabile. Vale la pena dirlo esplicitamente in apertura di finestra: abbassa il rischio e va sfruttato.
+
 ---
 
 ## Fuori scope (per costruzione)
 
 - **Propagazione permessi ai ruoli esistenti** — ADR-0066, trigger "primo tenant non well-known via API". Finché nessun tenant di produzione ha utenti a dominio reale (verificato 01/07 e riconfermato 24/07), non c'è nessuno da servire.
-- **Automazione backup, retention, off-site** — `TD-backup-automation`: il dump della finestra è one-shot e manuale, sullo stesso disco del volume Postgres. Trigger: primo cliente reale in produzione.
+- **Automazione backup, retention, off-site** — `TD-backup-automation`: il dump della finestra è one-shot e manuale, sullo stesso disco del volume Postgres. Trigger: primo cliente reale in produzione. **Rettifica _(S21)_**: [ADR-0079](architecture/ADR-0079-storage-persistente-provenienza-immagini.md) §205 afferma «oggi non esiste alcun backup, nemmeno del DB» — è **impreciso**. La procedura esiste (Passo 1), è versionata, è provata e ha girato in S19 e S21; in `/home/deploy/backups` ci sono dump con `.sha256` a fianco. Ciò che manca è la **schedulazione**: `crontab -l` per l'utente `deploy` è vuoto, nessun `pg_dump` in `scripts/`/`.github/`/compose. Il debito reale è "backup manuale, nessun cron" — più piccolo e di natura diversa da come è scritto. (Il crontab di `root` richiede `sudo` e non è stato verificato.)
 - **Blob non coperti dal `pg_dump`** — `TD-storage-backup-blob` (ADR-0079).
 - **Migrazione di eventuali blob orfani** — `TD-storage-gc` (ADR-0079).
 - **Container come root** — `TD-container-runs-as-root` (ADR-0079).
