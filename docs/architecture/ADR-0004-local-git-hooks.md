@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-05-12
+- **Amended:** 2026-07-30 — vedi [Amendment 2026-07-30](#amendment-2026-07-30--loggetto-protetto-è-refsheadsmain). La regola del `pre-push` descritta in Decision §3 è **superata** da quella sezione.
 - **Deciders:** Nicolò (owner), Claude (AI partner)
 - **Related:** `PROJECT_BRIEF.md` §C5 (sicurezza), §C12 (convenzioni codice/Git), [ADR-0002](./ADR-0002-branching-strategy.md) (branching strategy)
 
@@ -45,6 +46,61 @@ Husky 9 attiva gli hook impostando `core.hooksPath = .husky/_` (cartella metadat
 
 L'installazione è automatica via `"prepare": "husky"` in `package.json` scripts: eseguito da `pnpm install` su clone fresco, configura i hook senza azioni manuali.
 
+## Amendment 2026-07-30 — l'oggetto protetto è `refs/heads/main`
+
+La decisione resta. Cambia l'**oggetto** del blocco `pre-push`, che la formulazione originale (Decision §3: «se la branch corrente è `main`») descriveva più largamente del bene che intende proteggere.
+
+**Regola nuova.** Il `pre-push` blocca **se e solo se** almeno una riga di stdin ha `refs/heads/main` come **remote ref**. La branch corrente è irrilevante: lo script non chiama più `git symbolic-ref`.
+
+Il razionale è invariato ed è quello di [ADR-0002](./ADR-0002-branching-strategy.md) §Consequences: _«History di `main` lineare: ogni commit su `main` corrisponde 1:1 a una PR»_. Ciò che va protetto è `refs/heads/main`, non l'atto di pushare mentre si è su `main`.
+
+### Cosa cambia in concreto
+
+|                                                | prima                                                                 | dopo         |
+| ---------------------------------------------- | --------------------------------------------------------------------- | ------------ |
+| push di commit su `main`                       | bloccato                                                              | bloccato     |
+| force-push su `main`                           | bloccato                                                              | bloccato     |
+| **delete di `main`** (`git push origin :main`) | **passava** — si fa da un'altra branch, e l'hook guardava solo `HEAD` | **bloccato** |
+| **push di soli tag** (`refs/tags/*`) da `main` | **bloccato** — il difetto che ha originato l'amendment                | passa        |
+| **push di un feature branch da `main`**        | **bloccato** (falso positivo)                                         | passa        |
+| push di un feature branch da un feature branch | passa                                                                 | passa        |
+
+I due allargamenti sono **voluti e dichiarati**, non effetti collaterali:
+
+- **Tag.** È la causa dell'amendment. `git ls-remote --tags origin` era vuoto — `origin` non ha mai ricevuto un solo tag, dal primo in poi, perché ogni `deploy/*` si crea e si pubblica da `main`. La cronologia dei deploy non era leggibile da git, e gli SHA deployati sopravvivevano solo perché scritti in chiaro in `PROGRESS.md`.
+- **Feature branch da `main`.** Un `git push origin feature/x` mentre si è fermi su `main` non tocca `refs/heads/main` e non può inquinarne la history. Bloccarlo era un costo senza contropartita.
+
+### Vincoli di forma dello script
+
+Husky invoca lo script utente con `sh -e` (vedi `.husky/_/h`), quindi `errexit` è attivo:
+
+- **nessun `read` nudo.** A EOF `read` ritorna 1 e, sotto `errexit`, aborta lo script — cioè blocca il push, in silenzio. Solo `while read -r ...; do ... done`, la cui condizione è contesto testato ed è esente. Non è teorico: git invoca il `pre-push` **anche quando non c'è nulla da pushare** (`Everything up-to-date`), con stdin vuoto — verificato;
+- **l'`exit 0` finale è obbligatorio.** Senza, l'exit status dello script sarebbe quello dell'ultimo `read`, cioè 1;
+- lo script resta POSIX puro e senza dipendenze da `pnpm`/nvm, come da §Hardening.
+
+### Canali di bypass
+
+Due, non uno. Il secondo era assente dalla stesura originale:
+
+- `git push --no-verify` — salta gli hook per quel singolo push;
+- `HUSKY=0` nell'ambiente — il runner `.husky/_/h` esce 0 prima di invocare lo script utente, **disattivando tutti e tre gli hook** finché la variabile è impostata.
+
+Ne esiste un terzo, non intenzionale ma già osservato: se `.husky/pre-push` non è presente nel working tree, il runner fa **no-op silenzioso** (`[ ! -f "$s" ] && exit 0`). È il meccanismo dell'incidente del 2026-05-12 (`git stash` degli hook ancora untracked, `PROGRESS.md`) e si riproduce ogni volta che gli hook non esistono sulla branch su cui ci si trova.
+
+### Prova di efficacia
+
+Nove casi, eseguiti in un repo usa-e-getta con remote bare locale, sotto lo stesso runner `sh -e` della produzione e con il file reale sotto test. `git push --dry-run` **esegue** il `pre-push` senza toccare il remote (verificato: 0 ref pubblicati), quindi la matrice è ripetibile a costo zero.
+
+ROSSO atteso e osservato: commit su `main`; force-push su `main`; delete di `main`; misto tag + `main`; misto feature branch + `main`.
+
+VERDE atteso e osservato: soli tag, annotati e lightweight, da `main`; feature branch da `main`; feature branch da feature branch; stdin vuoto (exit 0, nessun output, nessun aborto da `errexit`).
+
+**Il caso che prova davvero il loop è "feature branch + `main`", e non è quello che sembrava.** La matrice era stata scritta con il misto **tag + `main`** in quel ruolo: doveva dimostrare che un fix non si ferma alla prima riga di stdin lasciando passare un push di `main` mascherato da push di tag. Non lo dimostra. **Git ordina `refs/heads/*` prima di `refs/tags/*` a prescindere dall'ordine sulla command line** (verificato: `git push origin <tag> main` produce comunque `refs/heads/main` come prima riga), quindi in un push tag+`main` il ref protetto è **sempre** il primo, e anche un fix che decidesse solo sulla prima riga passerebbe il caso. Era un gate che non poteva diventare rosso.
+
+Serve un push misto in cui il ref protetto **non** è il primo: `feature/y` + `main`, dove `refs/heads/feature/y` precede `refs/heads/main` in ordine alfabetico. Quello è il caso che il loop deve superare, ed è quello che va tenuto se la matrice viene rieseguita.
+
+Il difetto era nella premessa della prova, non nel codice provato: un ordinamento **assunto** invece che osservato. Stessa famiglia di «1 flaky non è verde» e «verifica alla fonte ≠ verifica completa della fonte» — un segnale accettato senza guardare cosa lo produceva.
+
 ## Hardening PATH per ambienti non-interactive
 
 Gli hook `pre-commit` e `commit-msg` invocano `pnpm`, che vive sotto `~/.nvm/versions/node/<v>/bin/` (gestito da nvm + corepack — vedi PROGRESS.md, sezione "Sistema base"). Quando git esegue un hook, eredita il PATH del processo che ha invocato `git`. Se quel processo è una **shell interattiva** (Terminal.app, iTerm, VS Code Integrated Terminal, ecc.), `~/.bashrc` o `~/.zshrc` ha già caricato nvm e `pnpm` è nel PATH. Tutto funziona.
@@ -60,7 +116,7 @@ export NVM_DIR="$HOME/.nvm"
 
 Il check `[ -s "$NVM_DIR/nvm.sh" ]` rende il sourcing condizionale: se nvm non è installato (es. sviluppatore futuro che usa fnm/asdf/volta o pnpm installato globalmente diversamente), il hook prosegue senza errori e si affida al PATH già presente. Approccio **defensivo, non invasivo**.
 
-Il `pre-push` hook **non** ha bisogno di hardening: contiene solo builtin shell (`git symbolic-ref`, `sed`, `[`, `echo`, `exit`), tutti garantiti dal PATH POSIX minimo.
+Il `pre-push` hook **non** ha bisogno di hardening: contiene solo builtin shell (`read`, `[`, `echo`, `exit`), tutti garantiti dal PATH POSIX minimo. Dopo l'amendment 2026-07-30 non invoca nemmeno più `git`.
 
 ## Consequences
 
