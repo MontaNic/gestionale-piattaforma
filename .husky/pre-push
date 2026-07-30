@@ -1,23 +1,35 @@
 #!/usr/bin/env sh
-protected_branch='main'
-current_branch=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+# Blocca i push che toccano refs/heads/main (create, update, force, delete).
+# Decide sui ref ricevuti su stdin, non sulla branch corrente: i push di
+# refs/tags/* e di altri branch passano anche da main — vedi ADR-0004,
+# amendment 2026-07-30.
+#
+# Husky invoca questo script con `sh -e`: nessun `read` nudo (a EOF ritorna 1
+# e aborterebbe il push), solo la condizione di un `while`. L'`exit 0` finale
+# e' obbligatorio per la stessa ragione.
+protected_ref='refs/heads/main'
 
-if [ "$current_branch" = "$protected_branch" ]; then
-    echo ""
-    echo "⛔ Push diretto su '$protected_branch' bloccato dal pre-push hook locale."
-    echo ""
-    echo "GitHub Rulesets non enforced su account Free privato. Hook compensa lato locale."
-    echo "Vedi docs/architecture/ADR-0004-local-git-hooks.md per il razionale completo."
-    echo ""
-    echo "Workflow corretto:"
-    echo "  1. git checkout -b feature/nome-task"
-    echo "  2. git commit ..."
-    echo "  3. git push origin feature/nome-task"
-    echo "  4. Apri PR su GitHub, attendi CI verde, squash and merge"
-    echo ""
-    echo "Bypass intenzionale (rarissimo, solo emergenze): git push --no-verify"
-    echo ""
-    exit 1
-fi
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" = "$protected_ref" ]; then
+        echo ""
+        echo "⛔ Push su '$protected_ref' bloccato dal pre-push hook locale."
+        echo ""
+        echo "GitHub Rulesets non enforced su account Free privato. Hook compensa lato locale."
+        echo "Vedi docs/architecture/ADR-0004-local-git-hooks.md per il razionale completo."
+        echo ""
+        echo "Workflow corretto:"
+        echo "  1. git checkout -b feature/nome-task"
+        echo "  2. git commit ..."
+        echo "  3. git push origin feature/nome-task"
+        echo "  4. Apri PR su GitHub, attendi CI verde, squash and merge"
+        echo ""
+        echo "I push di soli tag (refs/tags/*) e di altri branch NON sono bloccati,"
+        echo "anche quando la branch corrente e' main."
+        echo ""
+        echo "Bypass intenzionale (rarissimo, solo emergenze): git push --no-verify"
+        echo ""
+        exit 1
+    fi
+done
 
 exit 0
