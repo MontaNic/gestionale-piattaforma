@@ -3692,11 +3692,11 @@ Landing su cui atterrano **tutti** i ruoli → sezioni indipendenti, ciascuna di
 | Contenuto | design seam #189 · P2 #190 / #191 / #193 · CI #192 · fix flaky #194 / #195 |
 | Dump pre-deploy | `gestionale_20260729T234520Z_pre-deploy-design-p2_cf0e521.dump` (288 134 B, `PGDMP`, sha256 `63cb7db3…680ac7a3`, `0600`) |
 | Tag immagine di rollback | `gestionale/accountant-{api,web}:rollback-pre-design-f7b5d19` · `gestionale/restaurant-{api,web}:rollback-pre-design-bc36e7d` |
-| Tag git | `deploy/s21-cf0e521`, `deploy/prod-restaurant-bc36e7d`, `deploy/prod-accountant-f7b5d19` — **creati in locale, NON pubblicati** |
+| Tag git | `deploy/s21-cf0e521`, `deploy/prod-restaurant-bc36e7d`, `deploy/prod-accountant-f7b5d19` — **pubblicati su `origin` il 2026-07-30** (#199), insieme a `deploy/s19-f7b5d19` della finestra precedente |
 
-⚠️ **Il divieto di prune è vivo** finché questa PR non è mergiata. Dopo il cutover le 4 immagini di rollback sono `unused` per Docker: `docker image prune -a` le rimuoverebbe in silenzio, ed è l'unico presidio che le tiene in vita.
+⚠️ **Il divieto di prune è vivo.** Dopo il cutover le 4 immagini di rollback sono `unused` per Docker: `docker image prune -a` le rimuoverebbe in silenzio, ed è l'unico presidio che le tiene in vita. **Rettifica 2026-07-30:** il marcatore scritto qui in origine («finché questa PR non è mergiata») era arbitrario e, a PR mergiata, avrebbe autorizzato un prune che distrugge il rollback point. La regola corretta — già in pratica, da formalizzare nel runbook — è la **finestra scorrevole di uno**: le immagini di rollback sopravvivono finché il deploy successivo non ne crea di nuove.
 
-⚠️ **I tag git sono solo locali** e spariscono con la macchina — è la ragione per cui gli SHA sopra sono scritti in chiaro qui: il tag è ricostruibile dalla documentazione. Causa: `TD-prepush-hook-blocca-tag`. Si è scelto di **non** usare `--no-verify`; i 4 tag si pubblicano insieme dopo il fix dell'hook.
+✅ **I tag git sono su `origin` dal 2026-07-30** (#199), pubblicati da `main` e senza `--no-verify` dopo il fix di `TD-prepush-hook-blocca-tag`. Gli SHA restano scritti in chiaro qui sopra: **cambia la ragione, non l'utilità** — non sono più l'unica copia (i tag non sono più volatili), ma una ridondanza documentale di SHA critici resta buona.
 
 ### Forma della finestra
 
@@ -3730,7 +3730,44 @@ Quattro valori su quattro identici agli attesi (= `blue-100`/`blue-900`, la resa
 
 🆕 `TD-prepush-hook-blocca-tag` · 🆕 `TD-engines-node-vs-dockerfile` · 🆕 `TD-caddyfile-root-placeholder` · `TD-dev-env-punta-prod` aggiornato (2 manifestazioni nuove, 5 totali) · `TD-backup-automation` rettificato (la procedura esiste ed è provata; manca il cron — ADR-0079 §205 era impreciso) · `TD-deploy-perm-reconcile-gate` confermato aperto.
 
-**Forward**: `TD-prepush-hook-blocca-tag` (piccolo, isolato, efficacia dimostrabile) **prima** di P3, poi si pubblicano i 4 tag `deploy/*`.
+**Forward**: `TD-prepush-hook-blocca-tag` ✅ **fatto** (#199, `bac2ada`) e i 4 tag `deploy/*` ✅ **pubblicati** — vedi l'entry sotto. Il forward passa a **`TD-deploy-perm-reconcile-gate`** (il più vecchio, tre morsi documentati, gate ancora manuale), poi **P3**.
+
+---
+
+## [2026-07-30] `TD-prepush-hook-blocca-tag` chiuso + chiusura sessione S22
+
+**Il presidio che protegge `main` era anche quello che teneva la cronologia dei deploy fuori da git.** Chiuso il debito, i 4 tag sono su `origin` e il push è stato esso stesso la prova del fix.
+
+### `TD-prepush-hook-blocca-tag` — PR #199, `bac2ada`
+
+L'hook `.husky/pre-push` decideva sulla sola `git symbolic-ref HEAD` e **ignorava i ref che riceve su stdin**: da `main` bloccava quindi anche i push di soli tag. Ora blocca **se e solo se** almeno una riga di stdin ha `refs/heads/main` come **remote ref**; la branch corrente è irrilevante.
+
+**Il fix non è simmetrico**, ed è la cosa da ricordare:
+
+- _allarga_ — i push di `refs/tags/*` e di altri branch passano anche da `main`;
+- _stringe_ — il **delete di `main`** prima **passava** (si esegue da un'altra branch, e l'hook guardava solo `HEAD`), ora è bloccato.
+
+Chi legge solo la prima metà conclude «l'hook è diventato più permissivo». La superficie protetta è cresciuta, non calata.
+
+### Amendment ad [ADR-0004](docs/architecture/ADR-0004-local-git-hooks.md)
+
+La decisione resta, se ne precisa l'**oggetto**: `refs/heads/main`, non «qualsiasi push effettuato da `main`». La formulazione originale era più larga del bene che protegge, che per [ADR-0002](docs/architecture/ADR-0002-branching-strategy.md) §Consequences è la **history lineare di `main`** — e un push di tag non può inquinarla.
+
+Documentati anche i **tre canali di bypass**, di cui due non erano scritti da nessuna parte: `git push --no-verify`, la variabile `HUSKY=0` (disattiva tutti e tre gli hook finché è impostata), e il **no-op silenzioso** del runner quando `.husky/pre-push` non è presente nel working tree — il meccanismo dell'incidente del 12/05, riprodotto per caso durante la prova.
+
+### I 4 tag `deploy/*` su `origin`
+
+Pubblicati **da `main`, senza `--no-verify`**: il push è stato esso stesso la verifica finale del debito, perché è esattamente l'operazione che l'hook vecchio bloccava.
+
+`git ls-remote --tags origin` **non è più vuoto per la prima volta nella storia del repo**: 7 righe, 4 tag, con il dereference `^{}` per i 3 annotati (`deploy/s19-f7b5d19` è lightweight e ne ha una sola). Ogni dereference confrontato con il commit noto, con l'oggetto locale e con lo SHA scritto nel nome del tag. La cronologia dei deploy è leggibile da git, non più solo da questo file.
+
+### Chiusura sessione — PR #200, `b570d21`
+
+`HANDOFF.md` riscritto per intero. **Non duplico qui il suo contenuto**: per il principio emerso in questa sessione — _lo strumento di verifica è codice non testato_ — e per le sue quattro istanze, il riferimento è [HANDOFF](docs/handoff/HANDOFF.md), sezione «Le lezioni della sessione». Vale anche per l'asimmetria che le ordina: un rosso falso costa un rollback ingiustificato, un verde falso costa un bug in produzione, ma il verde falso è quello che nessuno ricontrolla spontaneamente.
+
+### TD
+
+`TD-prepush-hook-blocca-tag` **chiuso** (#199). Chiuso di rimbalzo anche l'item di backlog «parsing stdin del pre-push per distinguere push regolari da delete», che chiedeva esattamente questo comportamento. `TD-deploy-perm-reconcile-gate` è ora il primo in coda.
 
 ---
 
