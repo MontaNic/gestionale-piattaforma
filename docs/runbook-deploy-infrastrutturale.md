@@ -268,19 +268,30 @@ Verifica applicativa: entrambi i domini rispondono. La UI della feature nuova sa
 Va eseguito **due volte**, prima del build e dopo il rollout, e deve dare lo stesso risultato. `roles` è RLS **FORCED**: il `SET` deve stare nella **stessa sessione** della query, altrimenti il risultato è vuoto e sembra un problema di dati.
 
 ```bash
-docker exec gestionale_postgres psql -U postgres -d gestionale -c "SET app.is_super_admin = 'true';
-SELECT t.slug, count(rp.permission_id)
-FROM roles r JOIN tenants t ON t.id = r.tenant_id
-LEFT JOIN role_permissions rp ON rp.role_id = r.id
-WHERE r.deleted_at IS NULL AND r.name = 'Super Admin'
-GROUP BY 1 ORDER BY 1;"
+pnpm --filter @gestionale/db check:role-perms
 ```
 
-Atteso: **una riga per tenant, tutte a `ALL_PERMISSION_CODES`** (S21: 60 — cioè i 64 del catalogo meno i 4 `isPortale`). **Se un solo tenant diverge → STOP: non riconciliare in finestra.** La riconciliazione è un'azione a sé, con il suo STOP.
+Verde = exit 0 e la riga finale che dichiara **target, ruoli esaminati e set atteso**. Rosso = exit 1 con l'elenco `tenant / ruolo / codice` e il comando di riconciliazione già pronto. **Se diverge → STOP: non riconciliare in finestra.** La riconciliazione è un'azione a sé, con il suo STOP.
 
-Il conteggio del set nel codice si ricava dall'array `PERMISSIONS` in `packages/db/prisma/seed.ts` meno gli `isPortale: true` — **non** da `grep -c "code:"`, che sovrastima contando le occorrenze fuori dall'array. Controllo più forte del conteggio: verificare che i permessi **mancanti** al Super Admin siano esattamente gli `isPortale` e nient'altro (`NOT EXISTS` sul prodotto tenant × catalogo).
+Lo script è [`packages/db/scripts/check-role-permissions-drift.ts`](../packages/db/scripts/check-role-permissions-drift.ts). Quattro controlli, tutti eseguiti e riportati (non si ferma al primo):
 
-Finché `TD-deploy-perm-reconcile-gate` è aperto questo gate è manuale: non esiste script in `scripts/`.
+|            | Cosa verifica                                                         | Esito       |
+| ---------- | --------------------------------------------------------------------- | ----------- |
+| **C1**     | catalogo DB allineato al codice (permessi, template, mapping)         | bloccante   |
+| **C1-bis** | residui in DB rimossi dal codice (il seed non ripulisce)              | informativo |
+| **C2**     | permessi del template **mancanti** ai ruoli materializzati            | bloccante   |
+| **C3**     | permessi dei ruoli **in eccesso** rispetto al template                | bloccante   |
+| **C4**     | ruoli non riconciliabili (`is_system = false`, o nome senza template) | bloccante   |
+
+Tre cose che il gate fa e che la vecchia query manuale non faceva:
+
+- **gira su tutti i ruoli, non solo `Super Admin`** — il presidio precedente non avrebbe preso né S19 né S21, entrambi su ruoli operativi;
+- **restituisce codici, non conteggi** — un totale che torna non prova che sia il set giusto;
+- **"zero ruoli esaminati" è ROSSO.** È il falso verde classico: `roles` è RLS **FORCED**, e senza `SET app.is_super_admin` sulla **stessa connessione** il result set è vuoto e ogni controllo passerebbe a vuoto. Lo script tiene `SET LOCAL` e query in un'unica transazione, e in più asserisce di aver esaminato almeno un ruolo.
+
+Il set atteso è **importato** da `packages/db/prisma/rbac-catalog.ts` (fonte di verità condivisa col seed): non ci sono totali hardcodati da tenere aggiornati a mano, e `grep -c "code:"` non serve più — sovrastimava contando le occorrenze fuori dall'array.
+
+Il gate stampa sempre il **target** (`host:porta/db`) e ne deriva i comandi che suggerisce: su questo host convivono prod (`:5432`) e dev (`:55432`). Per il DB dev: `pnpm --filter @gestionale/db check:role-perms:dev`.
 
 ### Passo 8 — Chiusura
 

@@ -136,7 +136,15 @@ Backup più recente: `gestionale_20260729T234520Z_pre-deploy-design-p2_cf0e521.d
 
 ## Registro TD (con trigger)
 
-**Prossimo in coda — `TD-deploy-perm-reconcile-gate`.** Il più vecchio e l'unico che ha già morso **tre volte** (notespese S19, cassa S20, Direzione accountant di Studio Ferretti). `db:seed:prod` non aggiorna i `role_permissions` dei ruoli **già materializzati**. Nessuno script in `scripts/` (solo `check-no-api-next-routes.sh`): la prosa in questo file è tutto ciò che esiste. In questo deploy **non ha morso** (60/60 su 4 tenant, pre-build e post-deploy) ma il gate è rimasto manuale. Trigger reale: _qualsiasi permesso aggiunto a un ruolo materializzato post-bootstrap_, non "primo tenant via API".
+**✅ CHIUSO — `TD-deploy-perm-reconcile-gate`.** Il più vecchio, aveva morso **tre volte** (notespese S19, cassa S20, `Direzione` di Studio Ferretti S21). Il gate è ora `packages/db/scripts/check-role-permissions-drift.ts` (`pnpm --filter @gestionale/db check:role-perms`), cablato nel runbook al posto della prosa, con [amendment ad ADR-0066](../architecture/ADR-0066-sync-permessi-template-tenant-differito.md).
+
+Tre cose che non si deducono dal diff:
+
+- **La deriva era viva in produzione**, non ipotetica: `studio-demo / Collaboratore` senza `notespese.gestisci` — il residuo dichiarato-e-differito di S19, rimasto lì dal 23/07. Riconciliata in un turno a sé **prima** di introdurre il gate (`role_permissions` 261→262), così il gate nasce su un verde vero. Un baseline di eccezioni sarebbe stato il primo passo verso un gate che nessuno legge.
+- **Il set atteso è derivabile dal codice per _ogni_ ruolo, non solo per il Super Admin** — tutti e 11 i template sono liste versionate. È ciò che rende il gate possibile; se `Collaboratore` e `Cliente` fossero curatele solo-DB, non sarebbero riconciliabili. Ed è **bloccante** perché i permessi di ruolo **non sono editabili dall'app** (zero consumer di `sistema.ruolo.*`): «diverso dal template» implica «sbagliato». Se nasce una UI ruoli quella proprietà cade — scritto nell'intestazione dello script, non solo nell'ADR.
+- **Il vecchio presidio del runbook non avrebbe preso né S19 né S21**: guardava solo `Super Admin` e contava. Entrambi erano su ruoli operativi, e un conteggio che torna non prova che il set sia quello giusto.
+
+Efficacia provata su **8 casi** in DB dev (`:55432`), ripetuti dopo ogni modifica al codice; il caso che conta è il **falso verde**: sabotando deliberatamente il `SET LOCAL`, C1–C4 diventano **tutti verdi** perché non c'è nulla da esaminare — solo l'asserzione "zero ruoli esaminati = rosso" lo intercetta.
 
 **Aperti — minori:**
 
@@ -146,6 +154,7 @@ Backup più recente: `gestionale_20260729T234520Z_pre-deploy-design-p2_cf0e521.d
 - `TD-backup-automation` — la procedura esiste, è versionata ed è provata (ha girato in S19 e S21; in `/home/deploy/backups` 3 dump con `.sha256`). Manca la **schedulazione**: `crontab -l` per `deploy` è vuoto, nessun `pg_dump` in `scripts/`/`.github/`/compose. La formulazione di [ADR-0079](../architecture/ADR-0079-storage-persistente-provenienza-immagini.md) §205 («non esiste alcun backup, nemmeno del DB») è **imprecisa e va rettificata**. Il `crontab` di `root` non è verificato (richiede sudo). Trigger: primo cliente reale.
 - `TD-dev-env-punta-prod` — **quinta manifestazione**: `prisma:migrate:status` ha interrogato la **produzione** perché il root `.env` punta a `127.0.0.1:5432` (il dev è su `55432`), e **nulla nella forma del comando distingue un `migrate status` read-only da un `migrate reset`**. Era voluto ed era read-only: la sicurezza è venuta dall'operatore che sapeva cosa stava lanciando — cioè il presidio è nella sua memoria. Le altre quattro: quasi-incidente DB prod, divergenza template↔DB accountant, kill di un processo dentro un container durante pulizia dev, `docker-compose.prod.yml` non auto-consistente (la rete vive in `dev.yml`, il nome mente). Check concreto: risalire al `ppid` → `containerd-shim` = container.
 - `TD-ci-e2e-testcontainers-be` — pre-sessione; verificare se resta scoperto qualcosa nella copertura comportamentale in CI.
+- `TD-seed-non-ripulisce-rimossi` — il seed è additivo/idempotente ma **non cancella**: un permesso o un mapping template rimosso dal codice resta in DB per sempre. Il gate lo rileva (C1-bis) come **informativo**, non bloccante — rimuovere un privilegio è un'azione che va decisa, non automatizzata. Trigger: prima rimozione reale di un permesso dal catalogo.
 
 **Aperti — trigger-gated:**
 
@@ -168,11 +177,10 @@ Efficacia provata su una matrice di **9 casi** in repo usa-e-getta, con lo stess
 
 ## Prossimi passi
 
-1. **`TD-deploy-perm-reconcile-gate`** — il debito permessi, scriptare il GATE. È il prossimo in coda.
-2. **P3 — vernice A su tutto il restaurant** (dashboard inclusa, uniforme). Estetica scelta: **A · Servizio** = sistema di base (le ore), **C · Turno** = dark/KDS, **B · Sala** = layer di brand food. Le 4 leggi del design system (ADR-0083) sono la checklist di review di ogni PR visiva. Seam per-tenant previsto-e-vuoto, trigger scritto.
-3. **Branding per-verticale**, poi **estrazione `GroqService`** in `@gestionale/platform`.
-4. **P4 — ritocco delle 12 primitive esistenti** (unica fase non isolabile: 79 file, 2 app), ultima, con baseline visual-regression come strumento.
-5. **Note Spese** (5 PR specced, ri-validare la spec per drift prima di costruire), **AI-pilot food**, **Cassa pre-fiscale RT** (differito a cliente reale) — per il piano a lungo termine.
+1. **P3 — vernice A su tutto il restaurant** (dashboard inclusa, uniforme). Estetica scelta: **A · Servizio** = sistema di base (le ore), **C · Turno** = dark/KDS, **B · Sala** = layer di brand food. Le 4 leggi del design system (ADR-0083) sono la checklist di review di ogni PR visiva. Seam per-tenant previsto-e-vuoto, trigger scritto.
+2. **Branding per-verticale**, poi **estrazione `GroqService`** in `@gestionale/platform`.
+3. **P4 — ritocco delle 12 primitive esistenti** (unica fase non isolabile: 79 file, 2 app), ultima, con baseline visual-regression come strumento.
+4. **Note Spese** (5 PR specced, ri-validare la spec per drift prima di costruire), **AI-pilot food**, **Cassa pre-fiscale RT** (differito a cliente reale) — per il piano a lungo termine.
 
 ## Convenzioni operative (invariate)
 
