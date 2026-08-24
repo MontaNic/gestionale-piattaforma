@@ -15,10 +15,10 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  StatCard,
 } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
 
-import { KpiCard } from '@/components/dashboard/KpiCard';
 import { listConti } from '@/lib/conti-api';
 import type { Conto, StatoConto } from '@/lib/conti-types';
 import { getDashboardStats } from '@/lib/dashboard-api';
@@ -182,10 +182,10 @@ export default function DashboardPage(): JSX.Element {
             <p className="text-sm text-muted-foreground">{t('loading')}</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi">
-              <KpiCard label={t('kpi.contiAperti')} value={String(stats.contiAperti)} />
-              <KpiCard label={t('kpi.incassoOggi')} value={formatEuro(stats.incassoOggi)} />
-              <KpiCard label={t('kpi.copertiOggi')} value={String(stats.copertiOggi)} />
-              <KpiCard label={t('kpi.comandeInCorso')} value={String(stats.comandeInCorso)} />
+              <StatCard title={t('kpi.contiAperti')} value={String(stats.contiAperti)} />
+              <StatCard title={t('kpi.incassoOggi')} value={formatEuro(stats.incassoOggi)} />
+              <StatCard title={t('kpi.copertiOggi')} value={String(stats.copertiOggi)} />
+              <StatCard title={t('kpi.comandeInCorso')} value={String(stats.comandeInCorso)} />
             </div>
           )}
         </section>
