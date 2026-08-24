@@ -6,9 +6,8 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CalendarDays } from 'lucide-react';
 
-import { Alert, AlertDescription, Button } from '@gestionale/ui';
+import { Alert, AlertDescription, Button, StatCard } from '@gestionale/ui';
 import { useAuth } from '@gestionale/auth-web';
-import { StatCard } from '@/components/dashboard/StatCard';
 import { UltimiPreventivi } from '@/components/dashboard/UltimiPreventivi';
 import { getDashboardStats } from '@/lib/dashboard-api';
 import { getScadenze } from '@/lib/scadenze-api';
