@@ -38,6 +38,10 @@ La coppia regge in entrambi i temi perché **si ribaltano entrambi i token** (fo
 100→950): non è una scelta estetica, è ciò che tiene il contrasto quando il fondo si inverte.
 Valori presi dalla scala Tailwind, stessa forma già scelta per `--warn`.
 
+> ⚠️ **Valori superati** — il gradino chiaro è **700**, non 600, dall'[emendamento
+> 2026-08-26](#emendamento-2026-08-26--la-misura-ha-guardato-un-tema-solo): in chiaro il 600 stava
+> sotto AA. La **forma** descritta qui resta valida; i valori della tabella no.
+
 ### D2 — `destructive` è l'eccezione, e il conteggio viene dalla misura
 
 Lo scope iniziale elencava **5 variabili nuove**, con `--destructive-soft` da solo. **Da solo non
@@ -80,6 +84,10 @@ Contrasti dell'intera terna, per confronto con la baseline `--warn` già in prod
 | `success`                       | 3.00  | 8.55 |
 | `info`                          | 4.24  | 5.78 |
 | `destructive-soft`              | 3.95  | 5.84 |
+
+> ⚠️ **Nessuno di questi quattro numeri in colonna `light` raggiunge AA (4.5)**, e la tabella non lo
+> dice perché confronta i quattro stati **fra loro**, non con una soglia. È il difetto corretto
+> dall'[emendamento 2026-08-26](#emendamento-2026-08-26--la-misura-ha-guardato-un-tema-solo).
 
 ⚠️ **Non risolto qui**: `destructive` è mappato nel preset **senza** `<alpha-value>`, quindi
 l'`bg-destructive/10` usato oggi nei call-site **non produce alcuna trasparenza**. Il token soft lo
@@ -166,3 +174,206 @@ reintrodotta.
    `<alpha-value>`, oggi rimandato.
 4. `Table` / `Select` / `Toast` — fuori da P2 per scelta, deferiti alla fase di adozione dove hanno
    consumer reali.
+
+---
+
+## Emendamento 2026-08-26 — la misura ha guardato un tema solo
+
+- **Stato**: Accettato
+- **Contesto PR**: **P3b-α**, precede P3b-0 (adozione dei letterali accountant). Nasce da lì: la fase di
+  adozione ha misurato anche la **baseline**, e la baseline ha smentito il target.
+- **Slice**: `packages/ui` — 4 valori in `tokens.css` + il gate di contrasto. Nessun call-site adottato.
+
+### Cosa era sbagliato
+
+Questo ADR ha misurato le coppie di stato **a mano, una volta**, e — si scopre ora — **di fatto in un
+tema solo**.
+
+Per `destructive` §D2 fece il ragionamento giusto: il gradino forte è nato per fare da **sfondo**, non
+regge come **testo**, quindi serve un foreground proprio. Quel ragionamento **non è stato
+generalizzato** a `warn` / `success` / `info`, perché per quei tre la misura si era fermata dove il
+problema non c'era. La legge #4 dice «due temi sempre», e lo strumento che doveva farla rispettare
+ne ha guardato uno.
+
+Conseguenza: i foreground **chiari** sono rimasti sotto AA per due sessioni, in produzione.
+
+| coppia, tema chiaro  | riportato in §D1/§D2 | soglia AA | esito reale |
+| -------------------- | -------------------- | --------- | ----------- |
+| `warn` su soffuso    | 2.86                 | 4.5       | ✗           |
+| `success` su soffuso | 3.00                 | 4.5       | ✗           |
+| `info` su soffuso    | 4.24                 | 4.5       | ✗           |
+| `destructive-soft`   | 3.95                 | 4.5       | ✗           |
+
+I numeri **erano scritti nell'ADR**. Nessuno li ha confrontati con una soglia: la tabella serviva a
+confrontare i quattro stati **fra loro**, non con un criterio esterno. Una misura senza soglia non è
+un criterio, è un'osservazione.
+
+### Perché è emerso solo adesso
+
+Perché P3b-0 ha misurato la **baseline** oltre al target. I letterali che i token dovevano sostituire
+(il gradino 800/900, scelto a occhio) stavano in chiaro a **6.4–8.5**; i token a **2.87–4.23**. La
+sostituzione, così com'era, avrebbe **dimezzato la leggibilità** di ogni pastiglia di stato
+dell'accountant — 32 pagine — presentandola come applicazione della legge #1.
+
+> Il target da solo non dice mai se stai migliorando. Se la sostituzione ha un "prima", il prima si
+> misura.
+
+### Dove sta questa rettifica
+
+Accanto alle **rettifiche di metodo S21–S22** (`docs/handoff/HANDOFF.md`), stessa famiglia: **verifica
+parziale presentata come completa**, come il `head -60` sul Caddyfile. Con un aggravante e
+un'attenuante.
+
+- **Aggravante**: lì il difetto stava in una conclusione riportata; qui è entrato **nei token**, cioè
+  nel file che tutto il resto consuma, ed è sopravvissuto a due ADR e a un deploy.
+- **Attenuante**: è stato trovato dal metodo giusto — misurare invece di guardare — applicato una
+  volta di più.
+
+Ed è anche un caso della **asimmetria** già registrata in HANDOFF: era un **verde falso**. Il rosso
+obbliga a guardare, il verde autorizza a smettere.
+
+### D5 — La correzione: gradino 700 in chiaro, scuro invariato
+
+| token                           | chiaro prima | chiaro ora    | scuro     |
+| ------------------------------- | ------------ | ------------- | --------- |
+| `--warn`                        | amber-600    | **amber-700** | amber-400 |
+| `--success`                     | green-600    | **green-700** | green-400 |
+| `--info`                        | blue-600     | **blue-700**  | blue-400  |
+| `--destructive-soft-foreground` | red-600      | **red-700**   | red-400   |
+
+Lo **scuro non si tocca**: lì il 400 regge (8.5–12.0) e ha sempre retto. I `-soft` non si toccano.
+
+Contrasti misurati, **prima → dopo** (chiaro / scuro):
+
+| coppia                      | prima        | dopo             |
+| --------------------------- | ------------ | ---------------- |
+| attenzione su soffuso       | 2.87 / 8.99  | **4.50** / 8.99  |
+| attenzione su fondo pagina  | 3.19 / 11.99 | **5.01** / 11.99 |
+| attenzione su card          | 3.19 / 11.99 | **5.01** / 11.99 |
+| positivo su soffuso         | 3.00 / 8.55  | **4.57** / 8.55  |
+| positivo su fondo pagina    | 3.29 / 11.47 | **5.02** / 11.47 |
+| positivo su card            | 3.29 / 11.47 | **5.02** / 11.47 |
+| informativo su soffuso      | 4.23 / 5.77  | **5.50** / 5.77  |
+| informativo su fondo pagina | 5.17 / 7.85  | **6.71** / 7.85  |
+| informativo su card         | 5.17 / 7.85  | **6.71** / 7.85  |
+| distruttivo su soffuso      | 3.95 / 5.84  | **5.29** / 5.84  |
+| distruttivo su fondo pagina | 4.83 / 7.23  | **6.46** / 7.23  |
+| distruttivo su card         | 4.83 / 7.23  | **6.46** / 7.23  |
+
+Tutte e 12 le coppie di stato sono AA in entrambi i temi. **Le tre superfici non sono un elenco a
+piacere**: `-soft` è la pastiglia (l'unica forma che §D1 avesse misurato), `--background` e `--card`
+sono le superfici che l'adozione nei call-site introduce — e che nessuno aveva mai misurato.
+
+### D6 — Il gate: la misura non è più un atto, è una proprietà
+
+`packages/ui/src/contrast.ts` (motore) + `contrast.test.ts` (il gate), dentro `pnpm test`.
+
+Estende la misura di §D1/§D2 in tre direzioni:
+
+1. **dalle coppie in isolamento alle coppie come si presentano nei call-site reali** — forte su
+   soffuso, ma anche su `--background` e su `--card`;
+2. **al seam per-verticale** — la coppia soffusa dell'accento non vive in `tokens.css`, e misurarla
+   sul solo file condiviso vorrebbe dire non misurarla. Il gate legge i `globals.css` per-app e li
+   sovrappone alla base, nell'ordine della cascata reale. Il fondo scuro è composto a opacità ridotta
+   **come lo scrive il call-site**: la coppia non è la stessa nei due temi, e trattarla come se lo
+   fosse la falserebbe;
+3. **a entrambi i temi, sempre**, che è il difetto originario reso impossibile.
+
+Quattro proprietà, ognuna contro un modo diverso di produrre un verde falso:
+
+- **rapporti pinnati** — una deriva dei valori diventa rossa, non passa;
+- **nessun silenzio sotto soglia** — una coppia sotto AA senza nota scritta è rossa; e una nota
+  rimasta su una coppia **rientrata** pure. È per questo che la correzione qui sopra è dimostrata dal
+  **diff del gate**, non argomentata: le note cadono da sole;
+- **censimento degli usi** — ogni token di stato trovato nei sorgenti (`apps/*/src` e
+  `packages/*/src`, derivati dal filesystem: un verticale nuovo entra da solo) deve appartenere a una
+  coppia dichiarata. Senza, il gate verificherebbe solo ciò che gli abbiamo detto di verificare —
+  falso verde **per costruzione**;
+- **inventario vuoto = rosso** — zero coppie o zero verticali trovati non è mai verde (stessa regola
+  del gate permessi).
+
+**Prova di efficacia** — un gate che non può diventare rosso non è un gate (S22, rettifica 3).
+Verificato rosso su tre vie, e verde di nuovo dopo ognuna:
+
+| via                                                    | esito                                   |
+| ------------------------------------------------------ | --------------------------------------- |
+| valori **pre-correzione** (2.87 / 3.00, non inventati) | rosso, con i due casi peggiori nominati |
+| deriva di un valore in `tokens.css`                    | rosso su pin **e** su nota stantia      |
+| token di stato usato in un file non dichiarato         | rosso, col punto esatto                 |
+
+La prima resta committata come test permanente: dimostra che il gate **avrebbe intercettato** il
+difetto che questa PR corregge.
+
+### D7 — `console.table`: §D5 non parlava solo di colori
+
+Il primo giro del diff del CSS **non** era invariante. La chiamata che formatta una griglia sulla
+console porta, nel proprio nome, il nome di un'utility di layout: Tailwind l'ha estratta dal testo
+grezzo del file di test e ha emesso una regola vera nel bundle di **entrambe** le app.
+
+§D5 diceva «nei commenti di `packages/ui` i colori si descrivono a parole». La regola è più larga di
+com'era scritta: **nessun identificatore, nome di API o testo di questo package può coincidere con un
+nome di utility Tailwind** — colore o no, commento o codice. Trovato dal diff, non a vista, per la
+seconda volta.
+
+### Verifica
+
+- **Gate** — 64 test verdi, valori riportati per ogni coppia e tema.
+- **CSS emesso, entrambe le app** — **4** dichiarazioni cambiate in `:root`, **0** in `.dark` (blocco
+  identico all'hash), **0** regole aggiunte o rimosse (493 accountant, 399 restaurant: invariati).
+  Nessuna regola spuria.
+- **Resa restaurant, misurata** — vedi §Impatto.
+
+### Impatto
+
+**Altro verticale: verificato — sì, si muove, ed è voluto.** È la differenza con PR0, dove
+l'invarianza era l'obiettivo: qui il cambiamento è desiderato anche di là, quindi va **misurato**, non
+assunto benigno.
+
+La dashboard restaurant mappa `aperto` → informativo e `chiuso` → positivo (`STATO_VARIANT`), quindi
+**due pastiglie su tre** cambiano il colore del testo in tema chiaro. Misurato in Chromium sul CSS
+**realmente emesso** dall'app e sulle classi lette da `badge.tsx`, con il tema impostato **nel
+sorgente della pagina e mai mutato a runtime** (S21, rettifica 1 — senza quella condizione al
+contorno la tecnica produce guasti immaginari):
+
+| variant     | tema    | prima            | dopo             | contrasto       |
+| ----------- | ------- | ---------------- | ---------------- | --------------- |
+| informativo | chiaro  | `rgb(37,99,235)` | `rgb(29,78,216)` | 4.24 → **5.49** |
+| positivo    | chiaro  | `rgb(22,163,74)` | `rgb(21,128,61)` | 3.00 → **4.57** |
+| informativo | scuro   | invariato        | invariato        | 5.78            |
+| positivo    | scuro   | invariato        | invariato        | 8.55            |
+| secondary   | ambedue | invariato        | invariato        | 16.30 / 13.98   |
+
+I valori del browser coincidono con quelli calcolati dal gate a meno della quantizzazione a 8 bit
+(5.49 vs 5.50, 13.98 vs 13.95): le due misure sono indipendenti e si confermano a vicenda.
+
+⚠️ **Limite dichiarato**: la misura è stata fatta sul CSS emesso e sulle classi reali, **non sulla
+pagina servita** (`[data-testid="dashboard-conti"]` esiste, ma serve uno stack dev montato dal
+branch). È lo stesso limite di `TD-smoke-punta-solo-a-prod` (ADR-0083): non esiste oggi un'istanza
+effimera costruita dal branch su cui puntare. Il colore di una pastiglia non dipende dal contesto di
+pagina — nessun antenato applica opacità o filtri — ma la lacuna è questa, non un'altra.
+
+- `packages/db` / schema / permessi: non toccati → migration e propagazione **N.A.**
+- Nessun call-site adottato: le 34 righe di letterali accountant restano a **P3b-0**.
+
+### Debiti registrati (preesistenti, non introdotti qui)
+
+- 🆕 **`TD-bordo-circolari-sotto-soglia`** — `apps/accountant-web/src/app/t/[slug]/portale/circolari/[id]/page.tsx:129`:
+  il bordo del box "conferma richiesta" sta a **1.43** in chiaro e **2.65** in scuro, contro la soglia
+  non-testo di 3 — **già oggi**, coi letterali. Va corretto dove il bordo avrà un token, non sanato di
+  soppiatto insieme ad altro. **Trigger**: P3b-0, quando quella riga passa ai token.
+- 🆕 **`TD-accountant-zero-copertura-e2e`** — l'accountant ha **zero e2e pre-merge**: `page-tour` punta
+  a produzione anche in locale (`PLAYWRIGHT_BASE_URL` in `.env.e2e`), non c'è un `data-testid` su
+  alcun elemento di stato, e il seed non crea mandati/circolari/note spese/comunicazioni. È il debito
+  che rende costoso verificare qualunque cambio di resa su quell'app — ed è più grande di P3b-0.
+  Parente di `TD-smoke-punta-solo-a-prod`, che è il lato infrastrutturale dello stesso problema.
+
+### Rettifiche ai paragrafi precedenti di questo ADR
+
+- **§D1** — la tabella dei valori è **superata**: il gradino chiaro è 700, non 600. La forma (nudo =
+  forte, `-soft` = fondo; entrambi si ribaltano in `.dark`) resta valida.
+- **§D2** — la conclusione resta corretta e la sua **portata era più larga di come fu scritta**: il
+  gradino forte non fa da testo, e questo vale per tutti e quattro gli stati, non solo per
+  `destructive`.
+- **§D5** — vedi §D7: la regola non riguarda solo i colori e non solo i commenti.
+- **§Verifica** — «contrasti calcolati sui valori reali della palette» era vero e **insufficiente**:
+  i valori erano reali, i temi verificati no. Da qui in avanti lo fa il gate.
