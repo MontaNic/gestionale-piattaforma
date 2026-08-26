@@ -2,7 +2,7 @@
   "name": "@gestionale/ui",
   "version": "0.0.0",
   "private": true,
-  "description": "Design system condiviso del core (ADR-0027 §D5 passo 2): componenti shadcn agnostici + utility cn. Consumato da Next via transpilePackages (source export, \"use client\" preservato).",
+  "description": "Design system condiviso del core (ADR-0027 §D5 passo 2): componenti shadcn + utility cn. Consumato da Next via transpilePackages (source export, \"use client\" preservato). Non framework-agnostico: `next` e' peer dependency (stat-card usa next/link, amendment ADR-0083).",
   "type": "module",
   "exports": {
     ".": {
@@ -39,6 +39,7 @@
     "tailwind-merge": "^2.5"
   },
   "peerDependencies": {
+    "next": "^15.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -49,6 +50,7 @@
     "@types/react-dom": "^18.3",
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
+    "next": "^15.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.2",

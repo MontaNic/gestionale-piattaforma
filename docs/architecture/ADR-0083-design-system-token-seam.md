@@ -154,3 +154,91 @@ base` directive is present``). `postcss-import` lo inlinea prima di `tailwindcss
   dell'infrastruttura di test**, non di una singola PR. **Trigger**: quando serve una smoke per-ruolo gatante in CI
   su codice non ancora deployato — allora il `baseURL` va parametrizzato su un'istanza effimera costruita dal branch.
 - ✅ **`TD-tailwind-config-dup`** — risolto da questa PR.
+
+---
+
+## Emendamento 2026-08-24 — A è il sistema di base, non una skin del restaurant
+
+- **Stato**: Accettato
+- **Contesto PR**: PR0 dell'iniziativa (promozione di `StatCard` a `packages/ui`). L'emendamento sta qui e non in un
+  documento separato perché, sotto il §Perimetro originale, PR0 sarebbe classificata P4 («unica fase non isolabile»):
+  correggere la classificazione fa parte del giustificare PR0.
+
+### Cosa era sbagliato
+
+Il §Perimetro dice due cose che **non compongono** con §2:
+
+> **P3** — applicazione dell'estetica A a shell e pagine restaurant attraverso il seam.
+> **P4** — ritocco delle 12 primitive condivise. **Unica fase non isolabile**.
+
+§2 definisce A come «sistema di base (neutri, tipografia, spaziatura, radii, accento operativo)». Di quelle cinque
+categorie, **neutri, tipografia e radii vivono nel file condiviso** (`tokens.css`), non nel seam. Il seam è 7 variabili,
+tutte di accento e brand: non può portare A. Quindi:
+
+- **A non è una skin del restaurant: è la fondazione condivisa.** Applicarla tocca **anche l'accountant**, per
+  costruzione, non per effetto collaterale.
+- **P3 non è isolabile**, e **P4 non è «l'unica» fase non isolabile.**
+
+### La prova che regge la riclassificazione
+
+È il §5 di questo stesso ADR: «la scala tipografica esplicita è estetica e arriva in **P3**». La scala tipografica
+**non ha una casa per-verticale** — `tailwind-preset.ts` la rifiuta esplicitamente («NON entra qui: è estetica, non
+seam») e il seam non ha variabili tipografiche. Non esiste un terzo posto. Se la scala arriva in P3 e l'unico posto
+dove può stare è il condiviso, allora P3 tocca il condiviso. La contraddizione era già scritta qui dentro.
+
+### L'inganno di naming
+
+`A · Servizio`, `B · Sala`, `C · Turno` sono parole del **dominio ristorante** che nominano, in due casi su tre,
+fondazione **condivisa**. Il nome ha suggerito "superficie del restaurant", e la formula in `HANDOFF.md` («vernice A su
+tutto il restaurant») ha cristallizzato la lettura sbagliata al punto da farla sopravvivere a due sessioni.
+
+Stessa famiglia di `docker-compose.dev.yml`, che è in realtà il file base: **il nome mente e nessuno rilegge il
+contenuto.** Il presidio non è ricordarsi, è che il nome e il contenuto vengano riletti insieme quando si pianifica.
+
+### Il nuovo ordine
+
+| fase      | cosa                                                                                 | blast radius            |
+| --------- | ------------------------------------------------------------------------------------ | ----------------------- |
+| **PR0**   | promozione `StatCard` a `packages/ui` (questa PR)                                    | `packages/ui` + 2 app   |
+| **P3a**   | seam restaurant: accento e brand food, `--accent-soft`, `--ring` **+ adozione**      | restaurant only         |
+| **P3b-0** | estinzione dei 94 letterali colore accountant via `Badge` + token di stato           | accountant only         |
+| **P3b**   | sistema di base: neutri, radii, scala tipografica (condivisi) + spaziatura (per-app) | **entrambi, 46 pagine** |
+
+**P3b-0 è prerequisito bloccante di P3b**, non lavoro parallelo — ADR-0085 §Roadmap è corretto di conseguenza. Motivo:
+un letterale è _per definizione_ ciò che nessun cambio di token raggiunge (è la legge #1 detta al contrario). Toccare i
+neutri con 94 letterali ancora in piedi lascerebbe 94 punti fermi mentre tutto il resto si muove — difetto **garantito
+a priori**, non rischio non coperto, e per giunta nell'app più grande (67 file, 32 pagine contro 34 e 14) e senza
+copertura e2e pre-merge (`TD-smoke-punta-solo-a-prod`).
+
+Due rettifiche di portata emerse dalla misura, che il palinsesto non nominava:
+
+1. **P3a non è uno swap di valori.** `--brand` e `--accent-soft` hanno **zero consumer** in `restaurant-web`: cambiarne
+   il valore oggi non dipinge nulla. P3a è swap **+ adozione** (login per il brand, voce di nav attiva per la tinta
+   soffusa). È markup, quindi il diff dei custom property non lo copre da solo.
+2. **P3b non è omogeneo.** La **spaziatura non ha token**: vive nelle utility dei call-site, quindi è restaurant-local
+   e non tocca l'accountant. Neutri, radii e scala tipografica sì.
+
+### `packages/ui` non è più framework-agnostico
+
+`stat-card.tsx` importa `next/link` e **`next` entra come peer + dev dependency** del package. È il primo import di
+Next in `@gestionale/ui`; il precedente nel monorepo esiste già (`@gestionale/auth-web`, `@gestionale/i18n`, stessa
+forma peer + dev).
+
+Due ragioni, e la seconda pesa più della prima:
+
+1. L'agnosticismo era una proprietà **senza consumer**: entrambe le app sono Next 15 e nessun altro pacchetto importa
+   `@gestionale/ui`. Preservarla al costo di un rischio di resa reale è il contrario di YAGNI.
+2. L'alternativa — iniettare il link dal chiamante come `ReactNode` — **rimette markup nei call-site**. Ma il motivo per
+   cui `StatCard` viene promossa è che `KpiCard` era nata gemella e divergente: una primitiva che delega parte del
+   proprio markup a chi la chiama riproduce esattamente quell'esito fra sei mesi. Si sarebbe pagato in divergenza il
+   prezzo di un aggettivo.
+
+**Trigger per riconsiderare**: la comparsa di un consumer non-Next di `@gestionale/ui`. Allora la forma giusta è il link
+iniettato, e va pagata con la disciplina di tenere allineati i call-site.
+
+Costo misurato: **3 righe di lockfile** (`next` 15.5.18 era già nello store, risolto dalle app).
+
+### Fuori legge #1, e dichiarato
+
+Il restaurant chiude P3 con `kds/page.tsx` **ancora fuori dalla legge #1**: i 16 letterali di `statoBadgeClass()` sono
+estetica **C · Turno** e restano lì finché C non ha il suo turno. Non è una dimenticanza da scoprire in review.

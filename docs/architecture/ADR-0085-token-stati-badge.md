@@ -155,8 +155,13 @@ reintrodotta.
 
 1. **PR3 (P2)** — dashboard FE restaurant: prima cliente di `Badge` e dei token di stato, sul
    contratto di ADR-0084.
-2. **Adozione** (P3/P4) — sostituzione dei 24+ `<span>` e delle 7 mappe `STATO_*`. È lì che i token
+2. **Adozione** — sostituzione dei 24+ `<span>` e delle 7 mappe `STATO_*`. È lì che i token
    ripagano: le rese divergenti collassano su una sola.
+   ⚠️ **Promosso da lavoro parallelo a PREREQUISITO BLOCCANTE** (amendment ADR-0083 2026-08-24): sul
+   lato accountant questa adozione è la fase **P3b-0**, e deve precedere P3b (il ritocco dei neutri
+   condivisi). Un letterale è per definizione ciò che nessun cambio di token raggiunge: toccare i
+   neutri con i 94 letterali accountant ancora in piedi lascerebbe 94 punti fermi mentre tutto il
+   resto si muove — difetto garantito, non rischio.
 3. **P4** — allineamento di `destructive` (e delle altre entry pre-esistenti) alla forma
    `<alpha-value>`, oggi rimandato.
 4. `Table` / `Select` / `Toast` — fuori da P2 per scelta, deferiti alla fase di adozione dove hanno

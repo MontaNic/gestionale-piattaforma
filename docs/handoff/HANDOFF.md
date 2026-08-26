@@ -177,7 +177,7 @@ Efficacia provata su una matrice di **9 casi** in repo usa-e-getta, con lo stess
 
 ## Prossimi passi
 
-1. **P3 — vernice A su tutto il restaurant** (dashboard inclusa, uniforme). Estetica scelta: **A · Servizio** = sistema di base (le ore), **C · Turno** = dark/KDS, **B · Sala** = layer di brand food. Le 4 leggi del design system (ADR-0083) sono la checklist di review di ogni PR visiva. Seam per-tenant previsto-e-vuoto, trigger scritto.
+1. **P3 — l'estetica A, che è il SISTEMA DI BASE e non una vernice sul restaurant** (amendment ADR-0083 2026-08-24: neutri, tipografia e radii vivono nel condiviso, quindi P3 tocca **anche l'accountant**; il seam per-verticale porta solo accento e brand). Ordine: **PR0** promozione `StatCard` → **P3a** seam restaurant + adozione → **P3b-0** estinzione dei 94 letterali accountant (**prerequisito bloccante**) → **P3b** sistema di base su entrambi i verticali. **C · Turno** = dark/KDS, **B · Sala** = layer di brand food. Le 4 leggi del design system (ADR-0083) sono la checklist di review di ogni PR visiva. Seam per-tenant previsto-e-vuoto, trigger scritto.
 2. **Branding per-verticale**, poi **estrazione `GroqService`** in `@gestionale/platform`.
 3. **P4 — ritocco delle 12 primitive esistenti** (unica fase non isolabile: 79 file, 2 app), ultima, con baseline visual-regression come strumento.
 4. **Note Spese** (5 PR specced, ri-validare la spec per drift prima di costruire), **AI-pilot food**, **Cassa pre-fiscale RT** (differito a cliente reale) — per il piano a lungo termine.

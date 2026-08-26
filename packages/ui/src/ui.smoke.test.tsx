@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from './alert';
 import { Badge } from './badge';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
+import { StatCard } from './stat-card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './dialog';
 import { Input } from './input';
 import { Label } from './label';
@@ -117,6 +118,73 @@ describe('Card', () => {
     );
     expect(screen.getByText('Titolo')).toBeInTheDocument();
     expect(screen.getByText('Contenuto')).toBeInTheDocument();
+  });
+});
+
+describe('StatCard', () => {
+  // Le tre forme di prop reali dei call-site (PR0): il restaurant passa solo
+  // title/value, l'accountant aggiunge il breakdown e, su una card, il link.
+  // Nessuna variant da coprire: la primitiva non ne ha.
+  //
+  // ⚠️ Qui NON si destruttura `render()` con il nome che Testing Library usa per
+  // la radice: quel nome e' anche un'utility Tailwind, e le app scansionano il
+  // testo GREZZO di questo package (test inclusi) — scriverlo ha generato due
+  // regole vere nel bundle restaurant, verificato sul diff del build. E' la
+  // stessa trappola di ADR-0085 §D5, che qui si generalizza: non solo i colori
+  // nei commenti, ma qualunque nome di utility nel testo del file, identificatori
+  // compresi. Si passa da `screen`.
+
+  it('nudo: titolo, valore e nessun ramo opzionale', () => {
+    render(<StatCard title="Conti aperti" value="3" />);
+    expect(screen.getByText('Conti aperti')).toBeInTheDocument();
+    const value = screen.getByText('3');
+    expect(value.tagName).toBe('P');
+    // `tabular-nums`: senza, le cifre ballano fra un refresh e l'altro in una
+    // riga di card affiancate.
+    expect(value).toHaveClass('text-3xl', 'font-semibold', 'tabular-nums');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('accetta un valore numerico oltre che stringa', () => {
+    render(<StatCard title="Clienti" value={42} />);
+    expect(screen.getByText('42')).toBeInTheDocument();
+  });
+
+  it('con children rende il breakdown sotto il valore', () => {
+    render(
+      <StatCard title="Clienti" value={42}>
+        <span>12 attivi</span>
+      </StatCard>,
+    );
+    const breakdown = screen.getByText('12 attivi').parentElement;
+    expect(breakdown).toHaveClass('text-sm', 'text-muted-foreground');
+  });
+
+  it('con link rende un <a> con href e label', () => {
+    render(
+      <StatCard
+        title="Clienti"
+        value={42}
+        link={{ href: '/t/demo/clienti', label: 'Vedi tutti' }}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /vedi tutti/i });
+    expect(link).toHaveAttribute('href', '/t/demo/clienti');
+  });
+
+  // `space-y-2` sul contenuto e' il SOLO punto in cui il sovrainsieme accountant
+  // divergeva dal gemello restaurant collassato qui (PR0, amendment ADR-0083).
+  // Agisce fra figli adiacenti, quindi la forma nuda non lo vede: e' cio' che
+  // rende il sovrainsieme adottabile da entrambi a resa invariata. Va asserito,
+  // altrimenti un "mentre ci siamo" futuro lo toglie e la dashboard accountant
+  // cambia senza che nulla lo segnali.
+  it('il contenuto porta la spaziatura verticale del sovrainsieme', () => {
+    render(
+      <StatCard title="Clienti" value={42} link={{ href: '/x', label: 'Vai' }}>
+        <span>12 attivi</span>
+      </StatCard>,
+    );
+    expect(screen.getByText('42').parentElement).toHaveClass('space-y-2');
   });
 });
 
