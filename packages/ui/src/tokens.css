@@ -57,15 +57,21 @@
      * Terna `warn` / `success` / `info`: il token nudo è il colore FORTE
      * (testo/bordo), il `-soft` è la tinta di fondo. La coppia d'uso è sempre
      * `text-<stato>` su `bg-<stato>-soft`, e regge in entrambi i temi perché
-     * ENTRAMBI i token si ribaltano in `.dark` (forte 600→400, soft 100→950).
-     * Valori presi dalla scala Tailwind, stessa forma già scelta per `--warn`
-     * in ADR-0083. Sostituiscono i letterali di verde/blu/ambra sparsi nei
-     * badge di stato (legge #1: zero letterali). */
-    --warn: 32.1 94.6% 43.7%; /* amber-600 */
+     * ENTRAMBI i token si ribaltano in `.dark` (forte 700→400, soft 100→950).
+     * Valori presi dalla scala Tailwind. Sostituiscono i letterali di
+     * verde/blu/ambra sparsi nei badge di stato (legge #1: zero letterali).
+     *
+     * Il gradino chiaro è 700, non 600: ADR-0085 aveva scelto 600 e verificato
+     * il solo tema scuro, dove regge (8.5–9.0). In chiaro le stesse coppie
+     * stavano a 2.87 / 3.00 / 4.23 — sotto AA, e più deboli dei letterali che
+     * dovevano sostituire. Il 600 è il gradino di bordi e icone, non di un
+     * testo su fondo chiaro. Ora la misura è automatica e in entrambi i temi:
+     * `contrast.test.ts` (amendment ADR-0085). */
+    --warn: 26 90.5% 37.1%; /* amber-700 */
     --warn-soft: 48 96.5% 88.8%; /* amber-100 */
-    --success: 142.1 76.2% 36.3%; /* green-600 */
+    --success: 142.4 71.8% 29.2%; /* green-700 */
     --success-soft: 140.6 84.2% 92.5%; /* green-100 */
-    --info: 221.2 83.2% 53.3%; /* blue-600  */
+    --info: 224.3 76.3% 48%; /* blue-700  */
     --info-soft: 214.3 94.6% 92.7%; /* blue-100  */
 
     /* `destructive` NON segue quella forma, e non è una svista.
@@ -73,14 +79,14 @@
      * `--destructive-foreground` sopra) e in `.dark` va più SCURO (L 60.2% →
      * 30.6%), non più chiaro. Usarlo come testo su un fondo soffuso dà 1.61 di
      * contrasto in dark — illeggibile. Serve quindi un foreground proprio, che
-     * si ribalta come gli altri stati (600→400). Naming allineato alla coppia
+     * si ribalta come gli altri stati (700→400). Naming allineato alla coppia
      * `--accent-soft` / `--accent-soft-foreground` già nel seam.
      * Coppia d'uso: `text-destructive-soft-foreground` su `bg-destructive-soft`
      * — rende superfluo l'hack `bg-destructive/10` dei call-site, che oggi per
      * giunta non produce alcuna trasparenza (`destructive` è mappato senza
      * `<alpha-value>`: discrepanza nota, rimandata a P4 e NON risolta qui). */
     --destructive-soft: 0 93.3% 94.1%; /* red-100 */
-    --destructive-soft-foreground: 0 72.2% 50.6%; /* red-600 */
+    --destructive-soft-foreground: 0 73.7% 41.8%; /* red-700 */
   }
 
   .dark {

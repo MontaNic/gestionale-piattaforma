@@ -81,9 +81,7 @@ const PAIRS: DeclaredPair[] = [
     bg: soft('warn'),
     kind: 'text',
     usi: ['packages/ui/src/badge.tsx'],
-    atteso: { root: 2.87, dark: 8.99 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 4.5, dark: 8.99 },
   },
   {
     id: 'attenzione · forte su fondo pagina',
@@ -91,9 +89,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'background' },
     kind: 'text',
     usi: [],
-    atteso: { root: 3.19, dark: 11.99 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 5.01, dark: 11.99 },
   },
   {
     id: 'attenzione · forte su superficie card',
@@ -101,9 +97,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'card' },
     kind: 'text',
     usi: [],
-    atteso: { root: 3.19, dark: 11.99 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 5.01, dark: 11.99 },
   },
   // --- stato positivo --------------------------------------------------------
   {
@@ -112,9 +106,7 @@ const PAIRS: DeclaredPair[] = [
     bg: soft('success'),
     kind: 'text',
     usi: ['packages/ui/src/badge.tsx'],
-    atteso: { root: 3.0, dark: 8.55 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 4.57, dark: 8.55 },
   },
   {
     id: 'positivo · forte su fondo pagina',
@@ -122,9 +114,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'background' },
     kind: 'text',
     usi: [],
-    atteso: { root: 3.29, dark: 11.47 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 5.02, dark: 11.47 },
   },
   {
     id: 'positivo · forte su superficie card',
@@ -132,9 +122,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'card' },
     kind: 'text',
     usi: [],
-    atteso: { root: 3.29, dark: 11.47 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 5.02, dark: 11.47 },
   },
   // --- stato informativo -----------------------------------------------------
   {
@@ -143,9 +131,7 @@ const PAIRS: DeclaredPair[] = [
     bg: soft('info'),
     kind: 'text',
     usi: ['packages/ui/src/badge.tsx'],
-    atteso: { root: 4.23, dark: 5.77 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 5.5, dark: 5.77 },
   },
   {
     id: 'informativo · forte su fondo pagina',
@@ -153,7 +139,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'background' },
     kind: 'text',
     usi: [],
-    atteso: { root: 5.17, dark: 7.85 },
+    atteso: { root: 6.71, dark: 7.85 },
   },
   {
     id: 'informativo · forte su superficie card',
@@ -161,7 +147,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'card' },
     kind: 'text',
     usi: [],
-    atteso: { root: 5.17, dark: 7.85 },
+    atteso: { root: 6.71, dark: 7.85 },
   },
   // --- stato distruttivo -----------------------------------------------------
   {
@@ -170,9 +156,7 @@ const PAIRS: DeclaredPair[] = [
     bg: soft('destructive'),
     kind: 'text',
     usi: ['packages/ui/src/badge.tsx'],
-    atteso: { root: 3.95, dark: 5.84 },
-    sottoSoglia:
-      'difetto reale, non una soglia da negoziare: ADR-0085 scelse come foreground il gradino FORTE, che serve a bordi e icone e non a fare da testo, e lo verifico’ in tema scuro — dove regge. In chiaro non regge. Corretto dalla commit successiva (gradino 700).',
+    atteso: { root: 5.29, dark: 5.84 },
   },
   {
     id: 'distruttivo · forte su fondo pagina',
@@ -180,7 +164,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'background' },
     kind: 'text',
     usi: [],
-    atteso: { root: 4.83, dark: 7.23 },
+    atteso: { root: 6.46, dark: 7.23 },
   },
   {
     id: 'distruttivo · forte su superficie card',
@@ -188,7 +172,7 @@ const PAIRS: DeclaredPair[] = [
     bg: { token: 'card' },
     kind: 'text',
     usi: [],
-    atteso: { root: 4.83, dark: 7.23 },
+    atteso: { root: 6.46, dark: 7.23 },
   },
   // --- neutri consumati dalle stesse pastiglie -------------------------------
   {
@@ -362,5 +346,12 @@ describe('prova di efficacia del gate', () => {
     // I due casi peggiori, nominati: sono i numeri che hanno motivato la PR.
     expect(ratio(PAIRS[0] as DeclaredPair, 'root', guasto)).toBe(2.87);
     expect(ratio(PAIRS[3] as DeclaredPair, 'root', guasto)).toBe(3.0);
+  });
+
+  it('sui valori correnti le stesse coppie tornano verdi', () => {
+    const bocciate = PAIRS.filter((p) => !p.app)
+      .filter((p) => p.sottoSoglia === undefined)
+      .filter((p) => peggiore(p) < AA[p.kind]);
+    expect(bocciate.map((p) => `${p.id} → ${peggiore(p)}`)).toEqual([]);
   });
 });
