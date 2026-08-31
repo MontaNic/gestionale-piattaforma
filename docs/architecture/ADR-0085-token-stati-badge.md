@@ -377,3 +377,168 @@ pagina — nessun antenato applica opacità o filtri — ma la lacuna è questa,
 - **§D5** — vedi §D7: la regola non riguarda solo i colori e non solo i commenti.
 - **§Verifica** — «contrasti calcolati sui valori reali della palette» era vero e **insufficiente**:
   i valori erano reali, i temi verificati no. Da qui in avanti lo fa il gate.
+
+---
+
+## Emendamento 2026-08-26 (2) — P3b-0: adozione nei call-site accountant
+
+- **Stato**: Accettato
+- **Contesto PR**: **P3b-0**, prerequisito bloccante di P3b (amendment ADR-0083 2026-08-24). Segue P3b-α,
+  che ha corretto i foreground e posato il gate — l'adozione arriva **sopra token gia' corretti**, non prima.
+- **Slice**: `apps/accountant-web` (16 file) + le dichiarazioni nel gate. Nessun valore di token toccato.
+
+### Cosa e' stato fatto
+
+**94 occorrenze su 34 righe** di letterali colore Tailwind sostituite dai token di stato. Restano **3
+occorrenze**, dichiarate qui sotto. L'unita' di intervento e' la **riga**, non l'occorrenza: sulle mappe
+nessuna riga era interamente invariante, e spezzarla avrebbe prodotto righe mezze tokenizzate.
+
+Le **rese divergenti collassano su una sola**. Prima lo stesso stato aveva scritture diverse a seconda
+del file: il verde in scuro a due opacita' (30% e 40%), `annullato` una volta su `gray` letterale e una
+volta sul token neutro, il gradino del testo 800 o 900 senza criterio.
+
+### D8 — Il gate ha smesso di essere teorico
+
+L'emendamento precedente (§D6) aveva costruito il censimento degli usi ma **non aveva ancora nulla da
+censire** nei call-site: `apps/accountant-web` non usava un solo token di stato. Con questa PR ha smesso
+di essere una precauzione:
+
+- alla prima esecuzione dopo le sostituzioni il gate e' diventato **rosso su 52 usi non coperti**,
+  col punto esatto (file, riga, utility). Non e' un aneddoto: e' la dimostrazione che il ramo
+  "coppia usata nel codice ma assente dall'inventario" funziona su codice vero, e non solo sul caso
+  di prova iniettato;
+- otto coppie che erano dichiarate **a vuoto** (`usi: []`) hanno ora i file che le consumano;
+- una coppia **nuova**: `--foreground` su `--background` (19.99 / 19.09), che serve al giorno corrente
+  del calendario.
+
+⚠️ **Limite dichiarato**: il censimento copre solo il vocabolario di STATO. I **neutri**
+(`--foreground`, `--muted`, `--muted-foreground`, `--background`) non sono censiti: le tre righe che
+finiscono sui neutri sono **misurate ma non gatate**. Chiuderlo significa allargare il vocabolario, e
+allargarlo oggi produrrebbe centinaia di usi preesistenti da dichiarare in blocco — che e' lavoro di
+P3b, dove i neutri si toccano davvero.
+
+### D9 — Le 3 eccezioni decorative
+
+Restano letterali le **3 occorrenze di `CalendarioMese.tsx:107`** — la cella selezionata del
+calendario delle note spese:
+
+| occorrenza               | ruolo                            |
+| ------------------------ | -------------------------------- |
+| bordo blu 500            | contorno della cella selezionata |
+| fondo blu 50 (chiaro)    | tinta della cella selezionata    |
+| fondo blu 900/30 (scuro) | la stessa, in tema scuro         |
+
+**Perche' nessun token va bene**, e non e' pigrizia:
+
+- **l'accento e' escluso dalla legge #2** — `--primary` / `--accent-soft` sono riservati al
+  significato (denaro, azioni terminali, stato attivo della navigazione). "Questo giorno e'
+  selezionato in un calendario" non e' quello;
+- **uno stato semantico sarebbe una bugia** — `info` significa "informativo" nel vocabolario di
+  dominio. Usarlo per una selezione lo svuota: il giorno dopo `text-info` non vuol dire piu' niente,
+  ed e' esattamente il modo in cui un design system muore;
+- **inventare un token decorativo violerebbe la legge #1 al contrario** — un token nato per un solo
+  call-site non e' un token, e' un letterale con un nome.
+
+La risposta naturale arriva quando il sistema di base prende forma e i neutri hanno una scala:
+una selezione si dice con una **superficie**, non con un colore. **Trigger: P3b.**
+
+`CalendarioMese:116` ("oggi") **non** e' in questa lista: e' andato su `--foreground`, enfasi neutra.
+Il giorno corrente si distingue per peso, non per tinta — col grassetto gia' presente il segnale
+resta, e il contrasto sale da 6.70/11.08 a 19.99/19.09.
+
+### D10 — I 4 hex colori-dato sono fuori dalla legge #1, per costruzione
+
+| file                    | valore                                     |
+| ----------------------- | ------------------------------------------ |
+| `CategoriaForm.tsx:34`  | default del selettore di colore categoria  |
+| `catalogo/page.tsx:93`  | default del colore categoria (stato React) |
+| `catalogo/page.tsx:186` | lo stesso, al reset del form               |
+| `scadenze/page.tsx:347` | fallback quando la categoria non ha colore |
+
+Sono **default e fallback di un colore scelto dall'utente e persistito in DB**, resi via `style={{}}`.
+Nessun token li raggiunge **per definizione**: il valore vero arriva dal database a runtime, e il
+letterale e' solo cio' che si mostra quando quel valore manca.
+
+**Non sono una violazione della legge #1.** La legge #1 dice che il _design_ passa dai token; questi
+non sono design, sono **dati**. Confonderli produrrebbe la conclusione sbagliata — "tokenizzali" —
+che significherebbe togliere all'utente la scelta del colore. Vanno **detti**, non sanati.
+
+### D11 — Il collasso in `Badge` resta aperto
+
+Le 8 mappe restano `Record<Enum, string>` di classi, non `Record<Enum, BadgeProps['variant']>`.
+Adottare la primitiva ora porterebbe **geometria**, non solo colore: `inline`/`inline-block` →
+`inline-flex` su 6 call-site, `font-medium` imposto su 2, e toccherebbe 2 voci `respinta` che sono
+gia' su token e quindi non hanno niente da guadagnare.
+
+E' **cambio di layout su pagine con zero copertura e2e e zero dati di seed** — cioe' proprio le
+condizioni in cui non si vede quello che si rompe. E non blocca P3b: un token adottato e' raggiunto
+dal cambio dei neutri, che la pastiglia sia un `<span>` o un `Badge`.
+
+Costo accettato: le 8 mappe verranno riscritte due volte. Sono 8 punti, e la seconda riscrittura
+avvera' con la primitiva gia' provata da altri call-site. Resta §Roadmap punto 2.
+
+### Verifica
+
+**Classificazione ricalcolata** contro i token post-P3b-α (le classi di ieri erano calcolate sul
+gradino 600 e non valevano piu'): su 32 righe classificate — **17 peggiorano** in entrambi i temi,
+**8 miste**, **4 invarianti**, **3 migliorano**.
+
+Il calo e' strutturale e voluto: i letterali `-800`/`-900` su `-100` erano coppie sovra-contrastate
+scelte una per una, il token e' una scelta sola e misurata. **Tutte le righe che calano restano sopra
+AA tranne una**, ed e' dichiarata:
+
+| riga                    | prima                              | dopo                  | nota                                         |
+| ----------------------- | ---------------------------------- | --------------------- | -------------------------------------------- |
+| pastiglie di stato (14) | 6.37–8.49 chiaro · 11.6–15.7 scuro | 4.50–5.50 · 5.77–8.99 | sopra AA in entrambi                         |
+| `mandati:32 annullato`  | 8.33 / 8.33                        | **4.34** / 5.70       | **sotto AA in chiaro** — vedi sotto          |
+| 4 voci senza `dark:`    | 6.37–7.15 in un tema solo          | 8.55–8.99 in scuro    | il token **corregge un difetto**             |
+| `comunicazioni/[id]:37` | 19.27 / **1.01**                   | 18.25 / 13.95         | il difetto piu' grosso trovato dall'adozione |
+
+**`mandati:32 annullato`** e' il caso peggiore: `bg-gray-200 text-gray-700` (letterale `gray`, mentre
+i neutri del sistema sono `slate`) → `--muted` / `--muted-foreground`, che sta a **4.34** in chiaro.
+La coppia era gia' nel gate con nota e trigger P3b — e' il neutro ereditato da shadcn, non introdotto
+dal design system — ma **da qui non e' piu' teorica**: ha un consumer su una pagina reale. La nota nel
+gate e' aggiornata di conseguenza. Alzarla qui significherebbe cambiare i neutri di entrambi i
+verticali fuori dalla fase che li possiede.
+
+**CSS emesso** — `restaurant-web` **byte-identico** (`cmp` a zero): e' l'app che non deve muoversi, ed
+e' quella che rivela le regole spurie. Su `accountant-web`:
+
+|                                |                       |
+| ------------------------------ | --------------------- |
+| selettori rimossi              | **39**                |
+| di cui NON letterali di colore | **0**                 |
+| selettori aggiunti             | **1** (`border-warn`) |
+| regole comuni **modificate**   | **0**                 |
+
+Le utility su token erano gia' nel bundle (`badge.tsx` e' nel `content` di Tailwind): l'adozione ne
+aggiunge una sola. Le 3 regole delle decorative sono ancora emesse, come dev'essere.
+
+**Totalita' delle mappe** — provata togliendo una voce: `error TS2741: Property 'annullato' is missing
+in type ... but required in type 'Record<StatoMandato, string>'`. Un enum non coperto e' un errore di
+compilazione, non un `undefined` a runtime.
+
+**Censimento residuo** — 3 occorrenze, tutte su `CalendarioMese:107`, piu' i 4 hex colori-dato. Zero
+altro. E' il gate che dimostra che **P3b puo' procedere**.
+
+### `TD-accountant-zero-copertura-e2e` — dettaglio verificato
+
+Registrato nell'emendamento precedente. Verificato a `7f011b5`, con i dettagli che ne fissano la
+portata: `apps/accountant-web/.env.e2e` contiene `PLAYWRIGHT_BASE_URL=https://studiodesk.cloud`, e
+`playwright.smoke.config.ts` ha lo **stesso default in codice** — quindi anche in locale, anche senza
+`.env.e2e`, lo smoke misura **la produzione**, mai il branch. Non c'e' un `data-testid` su alcun
+elemento di stato, e il seed non crea mandati, circolari, note spese o comunicazioni: le pagine
+ridipinte da questa PR sono, in sviluppo, **vuote**.
+
+E' il debito che rende costoso verificare qualunque cambio di resa su quest'app, ed e' piu' grande di
+P3b-0. Parente di `TD-smoke-punta-solo-a-prod` (ADR-0083), che e' il lato infrastrutturale.
+
+⚠️ Conseguenza diretta su questa PR: **nessuna verifica runtime**. La resa e' provata dalla misura
+(gate) e dal diff del CSS, non dagli occhi su una pagina con dati.
+
+### Impatto
+
+- **Altro verticale: verificato — INVARIATO.** CSS di `restaurant-web` byte-identico. E' il verso
+  opposto di P3b-α, dove il movimento era voluto: qui l'accountant si muove e il restaurant no.
+- `packages/db` / schema / permessi: non toccati → migration e propagazione **N.A.**
+- `packages/ui`: toccato solo l'inventario del gate. Nessun valore di token, nessun componente.

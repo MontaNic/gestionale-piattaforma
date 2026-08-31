@@ -28,8 +28,8 @@ import type {
 
 const STATO_BADGE: Record<CircolareStato, string> = {
   bozza: 'bg-muted text-muted-foreground',
-  pubblicata: 'bg-green-100 text-green-800',
-  archiviata: 'bg-amber-100 text-amber-800',
+  pubblicata: 'bg-success-soft text-success',
+  archiviata: 'bg-warn-soft text-warn',
 };
 
 export default function CircolareDetailPage(): JSX.Element {

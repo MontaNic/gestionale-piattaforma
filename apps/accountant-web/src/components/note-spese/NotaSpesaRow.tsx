@@ -16,8 +16,8 @@ import { allegatiMancanti } from '@/lib/note-spese-types';
 
 const STATO_CLASS: Record<StatoNotaSpesa, string> = {
   bozza: 'bg-muted text-muted-foreground',
-  inviata: 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100',
-  approvata: 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-100',
+  inviata: 'bg-info-soft text-info',
+  approvata: 'bg-success-soft text-success',
   respinta: 'bg-destructive/10 text-destructive',
 };
 
@@ -62,7 +62,7 @@ export function NotaSpesaRow({
         </span>
       )}
       {mancanti.length > 0 && (
-        <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+        <span className="flex items-center gap-1 text-xs text-warn">
           <TriangleAlert className="h-3.5 w-3.5" aria-hidden="true" />
           {mancanti.map((m) => t(`tipoAllegato.${m}`)).join(', ')}
         </span>

@@ -80,7 +80,19 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'warn' },
     bg: soft('warn'),
     kind: 'text',
-    usi: ['packages/ui/src/badge.tsx'],
+    usi: [
+      'packages/ui/src/badge.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/mandati/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/report/margine/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/circolari/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/circolari/[id]/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/scadenze/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/comunicazioni/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/portale/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/portale/circolari/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/portale/circolari/[id]/page.tsx',
+      'apps/accountant-web/src/components/note-spese/NotaSpesaForm.tsx',
+    ],
     atteso: { root: 4.5, dark: 8.99 },
   },
   {
@@ -88,7 +100,13 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'warn' },
     bg: { token: 'background' },
     kind: 'text',
-    usi: [],
+    usi: [
+      'apps/accountant-web/src/components/note-spese/NotaSpesaRow.tsx',
+      'apps/accountant-web/src/components/note-spese/NotaSpesaForm.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/approvazione-spese/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/report/margine/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/portale/circolari/[id]/page.tsx',
+    ],
     atteso: { root: 5.01, dark: 11.99 },
   },
   {
@@ -105,7 +123,15 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'success' },
     bg: soft('success'),
     kind: 'text',
-    usi: ['packages/ui/src/badge.tsx'],
+    usi: [
+      'packages/ui/src/badge.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/mandati/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/report/margine/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/circolari/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/circolari/[id]/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/approvazione-spese/page.tsx',
+      'apps/accountant-web/src/components/note-spese/NotaSpesaRow.tsx',
+    ],
     atteso: { root: 4.57, dark: 8.55 },
   },
   {
@@ -113,7 +139,10 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'success' },
     bg: { token: 'background' },
     kind: 'text',
-    usi: [],
+    usi: [
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/report/margine/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/portale/circolari/[id]/page.tsx',
+    ],
     atteso: { root: 5.02, dark: 11.47 },
   },
   {
@@ -130,7 +159,15 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'info' },
     bg: soft('info'),
     kind: 'text',
-    usi: ['packages/ui/src/badge.tsx'],
+    usi: [
+      'packages/ui/src/badge.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/mandati/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/report/margine/page.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/approvazione-spese/page.tsx',
+      'apps/accountant-web/src/components/note-spese/NotaSpesaRow.tsx',
+      'apps/accountant-web/src/components/preventivi/PreventiviSection.tsx',
+      'apps/accountant-web/src/components/dashboard/UltimiPreventivi.tsx',
+    ],
     atteso: { root: 5.5, dark: 5.77 },
   },
   {
@@ -163,7 +200,7 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'destructive-soft-foreground' },
     bg: { token: 'background' },
     kind: 'text',
-    usi: [],
+    usi: ['apps/accountant-web/src/app/t/[slug]/(authenticated)/report/margine/page.tsx'],
     atteso: { root: 6.46, dark: 7.23 },
   },
   {
@@ -180,10 +217,21 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'muted-foreground' },
     bg: { token: 'muted' },
     kind: 'text',
-    usi: ['packages/ui/src/badge.tsx'],
+    usi: [
+      'packages/ui/src/badge.tsx',
+      'apps/accountant-web/src/app/t/[slug]/(authenticated)/mandati/page.tsx',
+    ],
     atteso: { root: 4.34, dark: 5.7 },
     sottoSoglia:
-      'coppia neutra ereditata da shadcn, non introdotta dal design system: 4.34 contro 4.5, in chiaro. Vive nei neutri condivisi, che sono materia di P3b — alzarla qui vorrebbe dire cambiare i neutri di entrambi i verticali fuori dalla fase che li possiede. Trigger: P3b.',
+      '⚠️ DIFETTO ATTIVO, non latente. La coppia neutra ereditata da shadcn sta a 4.34 contro 4.5 in ' +
+      'chiaro, e da P3b-0 ha un CONSUMER REALE: lo stato `annullato` dei mandati, che ci arriva da una ' +
+      'coppia letterale che stava a 8.33 in entrambi i temi. Fino a P3b-0 era una coppia senza call-site ' +
+      'applicativi e la nota poteva dire "difetto del sistema, si vedra’"; ora c’e’ una pagina che lo ' +
+      'rende, e il debito ha una vittima con un nome — ' +
+      'apps/accountant-web/.../mandati/page.tsx, la voce `annullato`. ' +
+      'NON e’ alzabile qui: e’ un neutro CONDIVISO, e cambiarlo muoverebbe anche il restaurant fuori ' +
+      'dalla fase che possiede i neutri. Trigger: P3b — e quando P3b arriva questa NON e’ una voce di ' +
+      'lista fra tante, e’ l’unica coppia sotto soglia che qualcuno vede davvero.',
   },
   {
     id: 'neutro · variant secondary',
@@ -198,8 +246,16 @@ const PAIRS: DeclaredPair[] = [
     fg: { token: 'foreground' },
     bg: { token: 'muted' },
     kind: 'text',
-    usi: [],
+    usi: ['apps/accountant-web/src/app/t/[slug]/(authenticated)/comunicazioni/[id]/page.tsx'],
     atteso: { root: 18.25, dark: 13.95 },
+  },
+  {
+    id: 'neutro · testo corrente su fondo pagina',
+    fg: { token: 'foreground' },
+    bg: { token: 'background' },
+    kind: 'text',
+    usi: ['apps/accountant-web/src/components/note-spese/CalendarioMese.tsx'],
+    atteso: { root: 19.99, dark: 19.09 },
   },
   // --- seam per-verticale ----------------------------------------------------
   // In scuro il call-site consuma il fondo a opacita' ridotta: la coppia NON e'

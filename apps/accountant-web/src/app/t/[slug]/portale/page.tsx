@@ -175,7 +175,7 @@ export default function PortaleHomePage(): JSX.Element {
                       >
                         <span className="flex-1 font-medium">{c.titolo}</span>
                         {c.richiedeConferma && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
                             Conferma richiesta
                           </span>
                         )}

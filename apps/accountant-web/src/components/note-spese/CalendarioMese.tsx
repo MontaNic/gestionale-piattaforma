@@ -113,7 +113,7 @@ export function CalendarioMese({
               <span
                 className={[
                   'text-xs',
-                  isToday ? 'font-bold text-blue-700 dark:text-blue-300' : 'text-muted-foreground',
+                  isToday ? 'font-bold text-foreground' : 'text-muted-foreground',
                 ].join(' ')}
               >
                 {c.numero}
