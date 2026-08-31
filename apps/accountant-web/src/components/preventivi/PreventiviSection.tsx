@@ -28,7 +28,7 @@ const STATO_BADGE: Record<StatoPreventivo, string> = {
   inviato: 'bg-secondary text-secondary-foreground',
   accettato: 'bg-secondary text-secondary-foreground',
   rifiutato: 'bg-muted text-muted-foreground',
-  convertito: 'bg-blue-100 text-blue-800',
+  convertito: 'bg-info-soft text-info',
 };
 
 interface PreventiviSectionProps {

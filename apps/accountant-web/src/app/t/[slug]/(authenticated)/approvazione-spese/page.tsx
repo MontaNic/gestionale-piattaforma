@@ -46,8 +46,8 @@ const SELECT =
 
 const STATO_CLASS: Record<StatoNotaSpesa, string> = {
   bozza: 'bg-muted text-muted-foreground',
-  inviata: 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100',
-  approvata: 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-100',
+  inviata: 'bg-info-soft text-info',
+  approvata: 'bg-success-soft text-success',
   respinta: 'bg-destructive/10 text-destructive',
 };
 

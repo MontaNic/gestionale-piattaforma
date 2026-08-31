@@ -33,9 +33,9 @@ import type { StatoMandato } from '@/lib/mandati-api';
 // =============================================================================
 
 const STATO_BADGE: Record<StatoMandato, string> = {
-  in_corso: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  sospeso: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  concluso: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  in_corso: 'bg-info-soft text-info',
+  sospeso: 'bg-warn-soft text-warn',
+  concluso: 'bg-success-soft text-success',
   annullato: 'bg-muted text-muted-foreground',
 };
 
