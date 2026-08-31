@@ -223,11 +223,15 @@ const PAIRS: DeclaredPair[] = [
     ],
     atteso: { root: 4.34, dark: 5.7 },
     sottoSoglia:
-      'coppia neutra ereditata da shadcn, non introdotta dal design system: 4.34 contro 4.5, in chiaro. ' +
-      'Vive nei neutri condivisi, che sono materia di P3b — alzarla qui vorrebbe dire cambiare i neutri ' +
-      'di entrambi i verticali fuori dalla fase che li possiede. Trigger: P3b. ' +
-      '⚠️ Da P3b-0 NON e’ piu’ teorica: lo stato `annullato` dei mandati la usa su una pagina reale, e ci ' +
-      'arriva da una coppia che stava a 8.33 in entrambi i temi. E’ il caso peggiore dell’adozione.',
+      '⚠️ DIFETTO ATTIVO, non latente. La coppia neutra ereditata da shadcn sta a 4.34 contro 4.5 in ' +
+      'chiaro, e da P3b-0 ha un CONSUMER REALE: lo stato `annullato` dei mandati, che ci arriva da una ' +
+      'coppia letterale che stava a 8.33 in entrambi i temi. Fino a P3b-0 era una coppia senza call-site ' +
+      'applicativi e la nota poteva dire "difetto del sistema, si vedra’"; ora c’e’ una pagina che lo ' +
+      'rende, e il debito ha una vittima con un nome — ' +
+      'apps/accountant-web/.../mandati/page.tsx, la voce `annullato`. ' +
+      'NON e’ alzabile qui: e’ un neutro CONDIVISO, e cambiarlo muoverebbe anche il restaurant fuori ' +
+      'dalla fase che possiede i neutri. Trigger: P3b — e quando P3b arriva questa NON e’ una voce di ' +
+      'lista fra tante, e’ l’unica coppia sotto soglia che qualcuno vede davvero.',
   },
   {
     id: 'neutro · variant secondary',
