@@ -94,9 +94,10 @@ services:
       # ogni recreate (perdita gia' avvenuta il 10/07). Vedi ADR-0079.
       STORAGE_LOCAL_ROOT: /var/lib/gestionale/storage
     volumes:
-      # Unico servizio con storage persistente: solo accountant-api importa
-      # StorageModule (documenti, comunicazioni, note-spese). restaurant-api NON
-      # lo usa -> nessun volume di sua competenza. Verificato in ADR-0079.
+      # Unico servizio con storage persistente: importa StorageModule per gli
+      # allegati (documenti, comunicazioni, note spese). Il volume serve perche'
+      # il layer scrivibile del container viene distrutto a ogni recreate
+      # (perdita gia' avvenuta il 10/07). Vedi ADR-0079.
       - storage_data:/var/lib/gestionale/storage
     depends_on:
       postgres:
@@ -129,73 +130,6 @@ services:
       HOSTNAME: '0.0.0.0'
     depends_on:
       - accountant-api
-    networks:
-      - gestionale_network
-
-  # ── Verticale ristorazione (food.studiodesk.cloud) ──────────────────────────
-  # Stesso pattern dei servizi accountant: porte interne 3004/3005 NON pubblicate
-  # sull'host (solo Caddy le raggiunge per service name sulla gestionale_network).
-  restaurant-api:
-    build:
-      context: .
-      dockerfile: apps/restaurant-api/Dockerfile
-      # Provenienza fail-closed: impedisce che un'immagine di produzione nasca
-      # senza il commit che la origina. Stessa forma di ${DATABASE_URL_DOCKER:?...}.
-      #
-      # RAGGIO: Compose interpola l'INTERO modello al caricamento del file, quindi
-      # questo :? blocca OGNI comando compose (config/ps/logs/up/restart), non solo
-      # build. Voluto ma non gratuito -> il messaggio deve dare entrambi i gesti:
-      # l'export per build/deploy e la scorciatoia per la sola lettura. Vedi ADR-0079.
-      args:
-        GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
-    image: gestionale/restaurant-api
-    restart: unless-stopped
-    # JWT/Throttle/Lockout/SMTP + GROQ_API_KEY dal .env (AI futura eredita da qui);
-    # override sotto per le var host-specific (service name dentro la rete).
-    env_file:
-      - .env
-    environment:
-      PORT: '3004'
-      REDIS_HOST: redis
-      SMTP_HOST: mailpit
-      SMTP_PORT: '1025'
-      # DATABASE_URL/DIRECT_URL del .env puntano a 127.0.0.1 (host); nel container
-      # servono le varianti host=postgres (stesse credenziali+encoding).
-      DATABASE_URL: ${DATABASE_URL_DOCKER:?DATABASE_URL_DOCKER mancante in .env (variante host=postgres)}
-      DIRECT_URL: ${DIRECT_URL_DOCKER:?DIRECT_URL_DOCKER mancante in .env (variante host=postgres)}
-      # Same-origin (routing path-based /api/* su food.studiodesk.cloud) -> CORS di
-      # fatto non scatta; valore di sicurezza per eventuali richieste cross-origin.
-      CORS_ORIGIN: https://food.studiodesk.cloud
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - gestionale_network
-
-  restaurant-web:
-    build:
-      context: .
-      dockerfile: apps/restaurant-web/Dockerfile
-      # Provenienza fail-closed: impedisce che un'immagine di produzione nasca
-      # senza il commit che la origina. Stessa forma di ${DATABASE_URL_DOCKER:?...}.
-      #
-      # RAGGIO: Compose interpola l'INTERO modello al caricamento del file, quindi
-      # questo :? blocca OGNI comando compose (config/ps/logs/up/restart), non solo
-      # build. Voluto ma non gratuito -> il messaggio deve dare entrambi i gesti:
-      # l'export per build/deploy e la scorciatoia per la sola lettura. Vedi ADR-0079.
-      args:
-        GIT_SHA: '${GIT_SHA:?GIT_SHA non impostata. Per build e deploy: esporta GIT_SHA con git rev-parse HEAD. Per i soli comandi di lettura (ps, logs, config): basta GIT_SHA=unknown}'
-    image: gestionale/restaurant-web
-    restart: unless-stopped
-    # Next standalone (server.js) legge PORT/HOSTNAME a runtime. HOSTNAME 0.0.0.0
-    # obbligatorio in container. NEXT_PUBLIC_API_URL=/api/v1 è inlined a build-time.
-    environment:
-      PORT: '3005'
-      HOSTNAME: '0.0.0.0'
-    depends_on:
-      - restaurant-api
     networks:
       - gestionale_network
 
