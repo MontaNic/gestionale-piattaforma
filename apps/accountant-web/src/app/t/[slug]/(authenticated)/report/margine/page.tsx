@@ -45,8 +45,8 @@ function eur(n: number): string {
 
 function margineClass(m: number | null): string {
   if (m === null) return 'text-muted-foreground';
-  if (m > 0) return 'text-green-600 dark:text-green-400';
-  if (m < 0) return 'text-red-600 dark:text-red-400';
+  if (m > 0) return 'text-success';
+  if (m < 0) return 'text-destructive-soft-foreground';
   return 'text-foreground';
 }
 
@@ -146,7 +146,7 @@ export default function ReportMarginePage(): JSX.Element {
 
       {!isLoading && coperturaParziale && (
         <Alert>
-          <AlertDescription className="text-amber-700 dark:text-amber-300">
+          <AlertDescription className="text-warn">
             {t('ai.copertura', { conPrestazioni, totali: totaliMandati })}
           </AlertDescription>
         </Alert>

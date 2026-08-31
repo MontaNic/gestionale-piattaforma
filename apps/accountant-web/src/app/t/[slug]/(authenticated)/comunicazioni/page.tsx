@@ -212,7 +212,7 @@ export default function ComunicazioniPage(): JSX.Element {
                         'rounded-full px-2 py-0.5 text-xs font-medium',
                         c.operatoreAssegnatoId
                           ? 'bg-secondary text-secondary-foreground'
-                          : 'bg-amber-100 text-amber-800',
+                          : 'bg-warn-soft text-warn',
                       )}
                     >
                       {c.operatoreAssegnatoId ? t('assegnata') : t('daPrendere')}

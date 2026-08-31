@@ -34,7 +34,7 @@ import type { ComMessaggio, ComunicazioneThread } from '@/lib/comunicazioni-type
 // =============================================================================
 
 function lateClass(lato: ComMessaggio['lato']): string {
-  if (lato === 'interno') return 'mx-auto max-w-[85%] bg-amber-50 border-amber-200';
+  if (lato === 'interno') return 'mx-auto max-w-[85%] bg-muted';
   if (lato === 'studio') return 'ml-auto max-w-[80%] bg-primary/5 border-primary/20';
   return 'mr-auto max-w-[80%] bg-muted/40';
 }

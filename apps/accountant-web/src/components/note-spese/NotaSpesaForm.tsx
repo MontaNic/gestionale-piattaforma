@@ -222,7 +222,7 @@ export function NotaSpesaForm({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium">{t(`tipoAllegato.${tipo}`)}</span>
           {richiesto && !esistente && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
+            <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs text-warn">
               {t('allegatoRichiesto')}
             </span>
           )}
@@ -414,9 +414,7 @@ export function NotaSpesaForm({
             onChange={(e) => setDistanzaKm(e.target.value)}
           />
           {/* Soft-warning §4.6/D4: nessun blocco, il BE non valida. */}
-          {kmFuoriContesto && (
-            <span className="text-xs text-amber-700 dark:text-amber-400">{t('warnKm')}</span>
-          )}
+          {kmFuoriContesto && <span className="text-xs text-warn">{t('warnKm')}</span>}
         </label>
         <label className="flex items-center gap-2 pt-6 text-sm">
           <input

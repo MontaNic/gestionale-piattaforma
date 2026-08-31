@@ -121,15 +121,13 @@ export default function PortaleCircolareDetailPage(): JSX.Element {
 
       {circolare.richiedeConferma &&
         (circolare.confermata ? (
-          <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+          <p className="flex items-center gap-2 text-sm text-success">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             Hai confermato la lettura di questa circolare.
           </p>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-            <p className="text-sm text-amber-800 dark:text-amber-300">
-              Questa circolare richiede una conferma di lettura.
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warn bg-warn-soft p-3">
+            <p className="text-sm text-warn">Questa circolare richiede una conferma di lettura.</p>
             <Button size="sm" disabled={isConfirming} onClick={() => void handleConferma()}>
               {isConfirming ? 'Conferma…' : 'Conferma lettura'}
             </Button>

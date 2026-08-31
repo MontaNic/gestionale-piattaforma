@@ -359,7 +359,7 @@ export default function ScadenzePage(): JSX.Element {
                             badge === 'scaduta'
                               ? 'bg-destructive/10 text-destructive'
                               : badge === 'oggi'
-                                ? 'bg-amber-100 text-amber-800'
+                                ? 'bg-warn-soft text-warn'
                                 : 'bg-secondary text-secondary-foreground',
                           )}
                         >

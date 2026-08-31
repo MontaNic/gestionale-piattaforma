@@ -62,7 +62,7 @@ export function NotaSpesaRow({
         </span>
       )}
       {mancanti.length > 0 && (
-        <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+        <span className="flex items-center gap-1 text-xs text-warn">
           <TriangleAlert className="h-3.5 w-3.5" aria-hidden="true" />
           {mancanti.map((m) => t(`tipoAllegato.${m}`)).join(', ')}
         </span>
