@@ -60,18 +60,33 @@ jobs:
         # Workspace senza spec files passano via --passWithNoTests.
         run: pnpm test
 
-  e2e-playwright:
-    name: E2E tests (Playwright Chromium)
+  seed-rls-core:
+    name: Seed + RLS core (Postgres reale · gestionale_app)
     needs: [checks]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # TD-4 sessione 10 — E2E foundation.
-    # Container Playwright (mcr.microsoft.com/playwright:v1.60.0-jammy) ha
-    # browser + OS deps preinstallati: evita `playwright install --with-deps`
-    # (~2-3 min). Pinned alla stessa versione del client (apps/restaurant-web/package.json
-    # @playwright/test 1.60.0); aggiornare in coppia per evitare API drift.
-    container:
-      image: mcr.microsoft.com/playwright:v1.60.0-jammy
+    timeout-minutes: 15
+    # Ri-alloggio di DUE presidi che vivevano dentro il job `e2e-playwright`
+    # (rimosso insieme al verticale restaurant) e che non sono restaurant-specifici:
+    #
+    #  1. `db:seed` su Postgres reale — l'UNICA esecuzione del seed in CI. Senza,
+    #     una rottura del seed non viene più intercettata da nulla.
+    #  2. `smoke:rls-core` — l'unico presidio che esercita la RLS DB-level sulle
+    #     tabelle CORE (tenants/sedi/users/roles/user_roles/audit_logs) come
+    #     `gestionale_app` NOSUPERUSER/NOBYPASSRLS. I job `e2e-rls-domain-*`
+    #     coprono il DOMINIO, non il core: non sono un sostituto.
+    #
+    # Perché un job a sé e non due step dentro `checks`: `checks` è il gate veloce
+    # (lint/typecheck/format/vitest, nessun `services:`) e attaccargli un Postgres
+    # ne allungherebbe OGNI run, incluso quello di una PR di sola documentazione.
+    # Il pattern "un job per presidio, needs: [checks]" è già quello degli altri
+    # tre job e2e di questo file.
+    #
+    # Gira su `ubuntu-latest` e NON dentro `container:` → i service container si
+    # raggiungono su `localhost` via il mapping `ports:`, NON per service name.
+    # È la differenza rispetto al job Playwright rimosso, che girava DENTRO il
+    # container Playwright e per questo usava `postgres:5432`.
+    #
+    # Nessun Redis, nessun Mailpit: né il seed né lo smoke li toccano.
 
     services:
       postgres:
@@ -80,62 +95,22 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-postgres-superuser-test-only
           POSTGRES_DB: gestionale_test
+        ports:
+          - '5432:5432'
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
 
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
-      mailpit:
-        image: axllent/mailpit:v1.30
-        options: >-
-          --health-cmd "wget --no-verbose --spider --tries=1 http://localhost:8025/api/v1/info || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
     env:
-      # Hostname services: dentro container action, services raggiungibili
-      # via service name (NOT localhost). Vedi docs GitHub Actions
-      # "Running jobs in a container — communicate with services".
-      # NB: dev locale usa 127.0.0.1 (port binding host). In CI = service name.
-      DIRECT_URL: postgresql://postgres:ci-postgres-superuser-test-only@postgres:5432/gestionale_test?schema=public
+      # `localhost` (non `postgres`): vedi la nota sul mapping `ports:` sopra.
+      # Il DB si chiama `gestionale_test`, quindi il guard anti-prod-da-host
+      # (`assert-safe-db-target`, che protegge `{127.0.0.1|localhost}:5432/gestionale`)
+      # non scatta: il match è su host:porta:DB e il nome non coincide.
+      DIRECT_URL: postgresql://postgres:ci-postgres-superuser-test-only@localhost:5432/gestionale_test?schema=public
       POSTGRES_PASSWORD: ci-postgres-superuser-test-only
       APP_DB_PASSWORD: ci-app-role-test-only-not-a-real-secret
-      JWT_SECRET: ci-jwt-secret-test-only-32-chars-min-not-real
-      CORS_ORIGIN: http://localhost:3001
-      REDIS_HOST: redis
-      REDIS_PORT: '6379'
-      SMTP_HOST: mailpit
-      SMTP_PORT: '1025'
-      SMTP_USER: ''
-      SMTP_PASS: ''
-      SMTP_FROM: no-reply@gestionale.local
-      SMTP_SECURE: 'false'
-      THROTTLE_DEFAULT_TTL_MS: '60000'
-      THROTTLE_DEFAULT_LIMIT: '60'
-      THROTTLE_AUTH_TTL_MS: '60000'
-      # TD-BE Sub-2: bump 5 → 100 per Playwright suite. Le auth.setup.ts +
-      # specs cumulano > 5 login (multi-tenant fixture demo+acme + auth spec
-      # negative cases) entro 60s → cascading 429 da rate limit causava flake
-      # intermittent (6/9 → 9/9 PASS). Backend default (.env) resta 5 (prod
-      # safety). Throttler legge env, no code change backend richiesto.
-      THROTTLE_AUTH_LIMIT: '100'
-      THROTTLE_TENANT_CREATE_TTL_MS: '3600000'
-      THROTTLE_TENANT_CREATE_LIMIT: '3'
-      THROTTLE_AUTH_PIN_TTL_MS: '60000'
-      THROTTLE_AUTH_PIN_LIMIT: '10'
-      LOCKOUT_THRESHOLD: '10'
-      LOCKOUT_WINDOW_MS: '900000'
-      LOCKOUT_DURATION_MS: '900000'
 
     steps:
       - name: Checkout
@@ -143,7 +118,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        # version letta dal campo `packageManager` di package.json (pnpm@9.15.0)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -155,13 +129,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Write root .env for CI
-        # Dotenv-cli (pnpm scripts api/db dev) carica .env da root via path
-        # fisso `../../.env`. Più semplice override-via-job-env: creiamo .env
-        # qui una volta sola, riusato da prisma + api dev. DATABASE_URL viene
-        # riscritto post-rotate password (vedi step successivo).
-        # NB: heredoc `<<'EOF'` quoted = no shell expansion. Le ${{ env.X }}
-        # sono GitHub Actions expressions, risolte PRIMA che heredoc venga
-        # eseguito dalla shell. Pattern intenzionale per chiarezza.
+        # Gli script di `packages/db` caricano il `.env` di root via path fisso
+        # (`dotenv -e ../../.env`): il file va creato, non basta la env di job.
+        # Minimale di proposito — qui non gira nessuna API: solo le variabili DB.
+        # `DATABASE_URL` nasce uguale a `DIRECT_URL` (superuser) perché serve alle
+        # migration; viene riscritta sul role applicativo dopo il rotate.
         run: |
           cat > .env <<'EOF'
           POSTGRES_USER=postgres
@@ -170,77 +142,35 @@ jobs:
           APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
           DIRECT_URL=${{ env.DIRECT_URL }}
           DATABASE_URL=${{ env.DIRECT_URL }}
-          REDIS_HOST=${{ env.REDIS_HOST }}
-          REDIS_PORT=${{ env.REDIS_PORT }}
-          JWT_SECRET=${{ env.JWT_SECRET }}
-          CORS_ORIGIN=${{ env.CORS_ORIGIN }}
-          SMTP_HOST=${{ env.SMTP_HOST }}
-          SMTP_PORT=${{ env.SMTP_PORT }}
-          SMTP_USER=
-          SMTP_PASS=
-          SMTP_FROM=${{ env.SMTP_FROM }}
-          SMTP_SECURE=false
-          THROTTLE_DEFAULT_TTL_MS=${{ env.THROTTLE_DEFAULT_TTL_MS }}
-          THROTTLE_DEFAULT_LIMIT=${{ env.THROTTLE_DEFAULT_LIMIT }}
-          THROTTLE_AUTH_TTL_MS=${{ env.THROTTLE_AUTH_TTL_MS }}
-          THROTTLE_AUTH_LIMIT=${{ env.THROTTLE_AUTH_LIMIT }}
-          THROTTLE_TENANT_CREATE_TTL_MS=${{ env.THROTTLE_TENANT_CREATE_TTL_MS }}
-          THROTTLE_TENANT_CREATE_LIMIT=${{ env.THROTTLE_TENANT_CREATE_LIMIT }}
-          THROTTLE_AUTH_PIN_TTL_MS=${{ env.THROTTLE_AUTH_PIN_TTL_MS }}
-          THROTTLE_AUTH_PIN_LIMIT=${{ env.THROTTLE_AUTH_PIN_LIMIT }}
-          LOCKOUT_THRESHOLD=${{ env.LOCKOUT_THRESHOLD }}
-          LOCKOUT_WINDOW_MS=${{ env.LOCKOUT_WINDOW_MS }}
-          LOCKOUT_DURATION_MS=${{ env.LOCKOUT_DURATION_MS }}
-          EOF
-
-      - name: Write apps/restaurant-web/.env.e2e for Playwright credentials
-        # Playwright auth.setup.ts legge .env.e2e via dotenv (vedi
-        # apps/restaurant-web/playwright.config.ts). Credenziali matchano seed dev
-        # (packages/db/prisma/seed.ts tenant demo + acme).
-        run: |
-          cat > apps/restaurant-web/.env.e2e <<'EOF'
-          E2E_DEMO_EMAIL=admin@demo.local
-          E2E_DEMO_PASSWORD=Admin123!
-          E2E_ACME_EMAIL=manager@acme.local
-          E2E_ACME_PASSWORD=Manager123!
-          E2E_DIREZIONE_EMAIL=direzione@demo.local
-          E2E_DIREZIONE_PASSWORD=Direzione123!
           EOF
 
       - name: Generate Prisma client
         run: pnpm --filter @gestionale/db exec prisma generate
 
       - name: Run Prisma migrations
-        # `migrate deploy` (non `migrate dev`) — CI è non-interactive, applica
-        # solo migration esistenti committate. Crea schema + role gestionale_app
-        # con password PLACEHOLDER (ruotata sotto).
+        # `migrate deploy` (non `dev`): CI non-interattiva, applica solo le
+        # migration committate. Crea lo schema + il role `gestionale_app` con
+        # password PLACEHOLDER, ruotata dallo step successivo.
         run: pnpm --filter @gestionale/db prisma:migrate:deploy
 
       - name: Rotate gestionale_app role password
-        # Migration 20260513002159 crea role con PLACEHOLDER password che
-        # DEVE essere ruotato (vedi commento header migration.sql).
-        # In dev/prod questo step è eseguito manualmente o via deploy pipeline.
+        # La migration 20260513002159 crea il role con una password PLACEHOLDER
+        # che DEVE essere ruotata (vedi header di quella migration.sql).
         #
-        # ⚠️ NIENTE `apt-get install postgresql-client` qui (TD-ci-apt-external-dep).
-        # L'immagine del job porta una apt source `nodesource` che ha iniziato a
-        # rispondere 403: `apt-get update` falliva → `psql: not found` → exit 127,
-        # con ZERO test eseguiti. Un presidio di CI non può dipendere da una
-        # risorsa di rete che il repo non controlla.
-        # Si usa `pg`, già dipendenza del workspace e già installata dallo step
-        # `pnpm install` sopra: nessuna rete, nessun tool da procurarsi.
-        # (`docker exec` sul service container non è una via: il job gira dentro
-        # `container:` e in quel caso il runner non monta il socket Docker.)
+        # ⚠️ NIENTE `apt-get install postgresql-client` (TD-ci-apt-external-dep):
+        # un presidio di CI non può dipendere da una risorsa di rete che il repo
+        # non controlla. Si usa `pg`, già dipendenza del workspace e già
+        # installata dallo step `pnpm install`.
         #
-        # La password NON passa per argv: prima era in chiaro sulla riga di
-        # `psql -c "ALTER ROLE ... PASSWORD '...'"`, che il runner echeggia nel
-        # log ed è visibile in `ps`. Ora si legge dalla env di JOB già esistente,
-        # e NON si dichiara alcuna env di step: un alias tipo `PGPASSWORD:` la
-        # farebbe ristampare una seconda volta nel preambolo `env:` dello step.
-        # La connessione riusa `DIRECT_URL` (unica fonte di verità, e il runner
-        # ne maschera le credenziali nel log).
+        # `working-directory` è `apps/accountant-api` — era `apps/restaurant-api`
+        # nel job rimosso; `pg` è dipendenza di entrambe, e l'accountant resta.
+        #
+        # La password NON passa per argv (il runner echeggia la riga nel log ed è
+        # visibile in `ps`): si legge dalla env di JOB, e non si dichiara alcuna
+        # env di step (un alias `PGPASSWORD:` la ristamperebbe nel preambolo).
         # `ALTER ROLE` è una utility statement e non accetta bind parameter → il
         # valore va interpolato, ma quotato con `escapeLiteral` del driver.
-        working-directory: apps/restaurant-api
+        working-directory: apps/accountant-api
         run: |
           node -e '
             const { Client } = require("pg");
@@ -253,185 +183,23 @@ jobs:
           '
 
       - name: Update .env with real DATABASE_URL (post-rotate)
-        # Backend usa DATABASE_URL = gestionale_app role (NOSUPERUSER, RLS
-        # enforced). Re-encode password URL-safe se contiene char speciali
-        # (qui safe: solo lowercase + hyphen).
+        # Lo smoke DEVE connettersi come `gestionale_app` (NOSUPERUSER, RLS
+        # applicata): se restasse sul superuser lo scenario S0 fallirebbe — ed è
+        # esattamente il suo scopo, impedire un verde cieco.
         run: |
           ENC_PWD=$(node -e "console.log(encodeURIComponent(process.env.APP_DB_PASSWORD))")
-          sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://gestionale_app:${ENC_PWD}@postgres:5432/gestionale_test?schema=public|" .env
+          sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://gestionale_app:${ENC_PWD}@localhost:5432/gestionale_test?schema=public|" .env
 
-      - name: Seed database (tenant demo + acme)
+      - name: Seed database
+        # Presidio (1). `db:seed` forza NODE_ENV=development → il ramo dev-data
+        # gira (guard fail-closed di ADR-0080).
         run: pnpm --filter @gestionale/db db:seed
 
       - name: RLS core-only enforcement (gestionale_app, non-superuser)
-        # Prerequisito passo 8 (ADR-0027 §D4 / ADR-0026 §D5): unico test che esercita
-        # la RLS DB-level reale (gira come gestionale_app NOSUPERUSER; il superuser
-        # bypassa RLS anche con FORCE). DATABASE_URL = gestionale_app gia' nel .env
-        # post-rotate (step sopra). Non-distruttivo (read seed + write-block respinto).
-        # Exit != 0 -> step rompe = falla di isolamento reale rilevata.
+        # Presidio (2). Non-distruttivo: legge i dati del seed e verifica che gli
+        # INSERT cross-tenant vengano RESPINTI (nulla persiste sul PASS path).
+        # Exit != 0 → falla di isolamento reale, non un test da riprovare.
         run: pnpm --filter @gestionale/db smoke:rls-core
-
-      - name: Build workspace packages (db + shared + platform + auth)
-        # api dev richiede i dual-package built per risolvere i workspace import
-        # a runtime (dist/). Questo job avvia l'api via `pnpm dev` diretto, NON
-        # via `turbo run test:e2e`, quindi il `dependsOn: ["^build"]` di Turbo
-        # NON scatta qui: il build va esplicitato. @gestionale/shared (ADR-0027
-        # §D5 passo 3), @gestionale/platform (passo 6) e @gestionale/auth (passo 7)
-        # si aggiungono a @gestionale/db. auth dipende da db/shared/platform → in coda.
-        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
-
-      - name: Start API server (background)
-        # ts-node-dev background; PID salvato per cleanup.
-        # nohup + redirect log per debug post-mortem se test FAIL.
-        #
-        # DB target in CI = service Postgres (postgres:5432/gestionale_test), NON il
-        # DB dev host (.env.devdb -> 127.0.0.1:55432). Lo script `dev` della API
-        # carica `.env.devdb` per primo (dev-by-default, Sub-B) e vincerebbe sul
-        # `.env` root: qui esportiamo DATABASE_URL come env REALE, che per
-        # precedenza dotenv-cli vince su qualunque file `-e` (override esplicito).
-        # Solo DATABASE_URL (runtime + guard); DIRECT_URL non serve a runtime
-        # (migrate only). Valore dal `.env` post-rotate (step "Update .env").
-        run: |
-          mkdir -p /tmp/ci-logs
-          export DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | cut -d= -f2-)"
-          cd apps/restaurant-api
-          nohup pnpm dev > /tmp/ci-logs/api.log 2>&1 &
-          echo $! > /tmp/ci-logs/api.pid
-
-      - name: Start Web server (background)
-        run: |
-          cd apps/restaurant-web
-          nohup pnpm dev > /tmp/ci-logs/web.log 2>&1 &
-          echo $! > /tmp/ci-logs/web.pid
-
-      - name: Wait for API healthy
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:3000/api/v1/health > /dev/null 2>&1; then
-              echo "API ready after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::API did not become healthy in 60s"
-          cat /tmp/ci-logs/api.log
-          exit 1
-
-      - name: Wait for Web healthy
-        run: |
-          for i in $(seq 1 60); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 || echo 000)
-            if [ "$CODE" = "307" ] || [ "$CODE" = "200" ]; then
-              echo "Web ready after ${i}s (HTTP $CODE)"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Web did not become healthy in 60s"
-          cat /tmp/ci-logs/web.log
-          exit 1
-
-      - name: Reset Redis (anti rate-limit accumulation)
-        # Empirical STOP 3 sessione 10: rate limit B1 (5 login fail/min) può
-        # accumularsi tra setup login + auth-login fail test in workers
-        # paralleli. FLUSHDB pre-test garantisce contatori puliti.
-        # Il container Playwright Jammy NON ha redis-tools preinstallato
-        # (rivelato dal primo CI run della PR #25, exit 127). La risposta di
-        # allora fu `apt-get install redis-tools` — che ha retto finché la rete
-        # ha retto, poi è caduta con il 403 di nodesource (TD-ci-apt-external-dep,
-        # vedi lo step di rotate password). Ora si usa `ioredis`, già dipendenza
-        # del workspace e già installata: stesso FLUSHDB, zero rete esterna.
-        working-directory: apps/restaurant-api
-        run: |
-          node -e '
-            const M = require("ioredis");
-            const Redis = M.default ?? M;
-            const c = new Redis({
-              host: process.env.REDIS_HOST,
-              port: Number(process.env.REDIS_PORT),
-              maxRetriesPerRequest: 1,
-            });
-            c.flushdb()
-              .then(() => c.quit())
-              .then(() => { console.log("Redis: FLUSHDB eseguito"); process.exit(0); })
-              .catch((e) => { console.error("FLUSHDB fallito:", e.message); process.exit(1); });
-          '
-
-      - name: Run Playwright E2E (Chromium)
-        working-directory: apps/restaurant-web
-        run: pnpm test:e2e:ci
-
-      - name: Stop dev servers (cleanup)
-        if: always()
-        run: |
-          [ -f /tmp/ci-logs/api.pid ] && kill "$(cat /tmp/ci-logs/api.pid)" 2>/dev/null || true
-          [ -f /tmp/ci-logs/web.pid ] && kill "$(cat /tmp/ci-logs/web.pid)" 2>/dev/null || true
-
-      - name: Upload Playwright HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ github.run_id }}
-          path: apps/restaurant-web/playwright-report/
-          retention-days: 7
-
-      - name: Upload test-results (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-${{ github.run_id }}
-          path: apps/restaurant-web/test-results/
-          retention-days: 3
-
-      - name: Upload dev server logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dev-server-logs-${{ github.run_id }}
-          path: /tmp/ci-logs/
-          retention-days: 3
-
-  e2e-rls-domain:
-    name: E2E domain RLS (testcontainers · gestionale_app)
-    needs: [checks]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # TD-ci-e2e-testcontainers-be Fase 1: i 3 spec che asseriscono l'isolamento
-    # tenant DB-level come `gestionale_app` (NOBYPASSRLS) girano in CI → una
-    # regressione di policy RLS sul DOMINIO (comande/conti) rompe la CI invece di
-    # passare inosservata. Testcontainers avvia Postgres+Redis propri → NON usa i
-    # `services` del job Playwright (DP-2). Gira su ubuntu-latest (Docker host):
-    # niente Docker-in-Docker (che romperebbe dentro il container Playwright).
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm --filter @gestionale/db exec prisma generate
-
-      - name: Build workspace packages (db + shared + platform + auth)
-        # test:e2e:rls avvia vitest diretto (non turbo) → `dependsOn: ["^build"]`
-        # non scatta; gli spec importano @gestionale/* da dist/ (soft-delete-rls
-        # boota AppModule → auth/platform/shared). Stesso set del job Playwright.
-        run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
-
-      - name: Run domain RLS e2e (Testcontainers, gestionale_app NOBYPASSRLS)
-        # SOLO i 3 spec RLS dominio (selezione esplicita nello script test:e2e:rls).
-        # Ogni spec avvia i propri Postgres+Redis; migrate deploy crea gestionale_app
-        # (password placeholder); setup via superuser, assert via app-role (toAppRoleUrl).
-        run: pnpm --filter @gestionale/restaurant-api test:e2e:rls
 
   e2e-accountant-web-blob:
     name: E2E accountant-web blob (route-mocked)
@@ -439,10 +207,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # TD-ci-e2e-accountant-web-fe: la spec blob-auth-refresh.spec.ts esisteva ma
-    # non era CI-gata (il job Playwright esegue solo restaurant-web). E' route-mocked
-    # (page.route() simula 401 + /auth/refresh) → NESSUN backend, NESSUN DB, solo
-    # `next dev` isolato su :3013. Job additivo, NON tocca il job restaurant-web.
+    # non era CI-gata (l'unico job Playwright del file eseguiva solo restaurant-web,
+    # rimosso col verticale). E' route-mocked (page.route() simula 401 +
+    # /auth/refresh) → NESSUN backend, NESSUN DB, solo `next dev` isolato su :3013.
     # Container Playwright pinned = stessa versione del client (@playwright/test 1.60.0).
+    #
+    # ⚠️ Dopo la rimozione del restaurant questa e' l'UNICA spec Playwright in CI, ed
+    # e' mockata: nessun job apre piu' un browser vero contro un backend vero.
+    # Vedi TD-ci-e2e-accountant-api.
     container:
       image: mcr.microsoft.com/playwright:v1.60.0-jammy
     steps:
@@ -483,13 +255,14 @@ jobs:
     needs: [checks]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Gemello di e2e-rls-domain (restaurant): porta in CI lo spec RLS DB-level del
-    # verticale ACCOUNTANT (rls-isolation.e2e-spec.ts, anagrafica ADR-0035) come
-    # `gestionale_app` (NOBYPASSRLS) → una regressione di policy RLS su tabelle
-    # accountant rompe la CI. Prerequisito per Note Spese (i cui modelli avranno
-    # tenant_id + RLS FORCE). Testcontainers dedicati (DP-1, no service-DB), su
-    # ubuntu-latest (Docker host) fuori dal container Playwright. NON copre le altre
-    # ~17 spec comportamentali accountant (resta TD-ci-e2e-accountant-api).
+    # Porta in CI gli spec RLS DB-level del verticale ACCOUNTANT (rls-isolation +
+    # note-spese-rls-isolation) come `gestionale_app` (NOBYPASSRLS) → una regressione
+    # di policy RLS su tabelle accountant rompe la CI. Testcontainers dedicati
+    # (DP-1, no service-DB), su ubuntu-latest (Docker host).
+    # Nato come gemello di `e2e-rls-domain` (restaurant), rimosso col verticale:
+    # da allora e' l'unico gate RLS di DOMINIO. Il core lo copre `seed-rls-core`.
+    # NON copre le altre 23 spec e2e comportamentali di accountant-api
+    # (resta TD-ci-e2e-accountant-api, oggi il primo debito di copertura del repo).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -511,7 +284,7 @@ jobs:
 
       - name: Build workspace packages (db + shared + platform + auth)
         # test:e2e:rls avvia vitest diretto (no turbo ^build); rls-isolation boota
-        # AppModule → auth/platform/shared. Stesso set del gate restaurant.
+        # AppModule → auth/platform/shared.
         run: pnpm --filter @gestionale/db --filter @gestionale/shared --filter @gestionale/platform --filter @gestionale/auth build
 
       - name: Run accountant domain RLS e2e (Testcontainers, gestionale_app NOBYPASSRLS)
