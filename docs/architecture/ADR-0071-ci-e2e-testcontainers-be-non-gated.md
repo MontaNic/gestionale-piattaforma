@@ -67,3 +67,67 @@ Anche la **e2e di `accountant-api`** (20 spec, inclusi i path documenti/comunica
 ### Adiacente FE — chiuso
 
 **`TD-ci-e2e-accountant-web-fe`** chiuso: nuovo job additivo `e2e-accountant-web-blob` esegue `blob-auth-refresh.spec.ts` (route-mocked, `next dev` :3013, no BE/DB). Escluso `page-tour.spec.ts` (richiede infra full-stack accountant).
+
+## Update 2026-08-31 — rimozione del verticale restaurant (PR1/6): cosa resta in CI
+
+La rimozione del verticale ristorazione porta via i due job che eseguivano la sua
+e2e (`e2e-playwright` e `e2e-rls-domain`). Le conseguenze sulla copertura non sono
+una scoperta: sono **una conseguenza accettata**, e vanno lette qui.
+
+### La Fase 2 non è più residua: è decaduta
+
+La «Fase 2 — copertura comportamentale completa restaurant-api (13 spec, ~136
+test), trigger `globalSetup` condiviso» descritta sopra **non ha più oggetto**. Le
+spec di cui parlava spariscono con il workspace. Il trigger `globalSetup` resta
+valido, ma per il solo boundary accountant.
+
+### `TD-ci-e2e-accountant-api` — i numeri, non l'aggettivo
+
+`apps/accountant-api` ha **25 spec e2e**. In CI ne girano **2**, entrambe nel job
+`e2e-rls-domain-accountant` via il selettore `test:e2e:rls`:
+
+- `rls-isolation.e2e-spec.ts` (anagrafica, ADR-0035)
+- `note-spese-rls-isolation.e2e-spec.ts`
+
+Restano quindi **23 spec e2e comportamentali fuori dalla CI** — CRUD, report,
+portale, IDOR `documenti-download-isolation`, state machine note spese. Il numero
+citato sopra («~17», «20 spec») è precedente a Note Spese e va letto come storico.
+
+Il tier sale da MEDIO ad **ALTO**, e non perché il debito sia cresciuto: è
+cresciuto il suo peso relativo. Il recupero **non richiede di scrivere test**,
+richiede di cablare quelli che già esistono — è il primo candidato dopo la
+rimozione.
+
+### Cosa resta davvero, dopo PR1
+
+| Presidio                 | Job                         | Cosa esercita                                  |
+| ------------------------ | --------------------------- | ---------------------------------------------- |
+| unit + typecheck + lint  | `checks`                    | tutto il workspace                             |
+| seed su Postgres reale   | `seed-rls-core` (nuovo)     | che il seed non si rompa                       |
+| RLS DB-level **core**    | `seed-rls-core` (nuovo)     | tenants/sedi/users/roles/user_roles/audit_logs |
+| RLS DB-level **dominio** | `e2e-rls-domain-accountant` | 2 spec accountant, Testcontainers              |
+| FE auth-refresh su blob  | `e2e-accountant-web-blob`   | 1 spec **route-mocked**: nessun BE, nessun DB  |
+
+**La frase da non addolcire: dopo questa PR nessun job di CI apre più un browser
+vero contro un backend vero.** Il job `e2e-playwright` era l'unico che avviava API
+
+- Web + Postgres + Redis + Mailpit e ci navigava sopra. L'unico strumento che
+  percorre l'accountant end-to-end — `page-tour.spec.ts` — **non è in CI e punta
+  alla produzione** (`TD-smoke-punta-solo-a-prod`): è un gate post-deploy, non
+  pre-merge.
+
+### I due presidi ri-alloggiati (non spostati)
+
+`smoke:rls-core` e lo step `db:seed` vivevano **dentro** `e2e-playwright` pur non
+essendo restaurant-specifici: sarebbero spariti in silenzio insieme al job — il
+modo esatto in cui un presidio si perde. Sono ora nel job `seed-rls-core`, che
+gira su `ubuntu-latest` con il solo servizio Postgres (niente Redis né Mailpit:
+nessuno dei due li tocca) e raggiunge il DB su `localhost` via mapping `ports:`,
+non per service name — differenza necessaria fuori da `container:`.
+
+`smoke-rls-core.ts` è stato **ripuntato** da `demo`/`acme` (tenant food) a
+`studio-demo`/`oneplatform`. **Prova di efficacia** (non teatro), su un Postgres
+usa-e-getta seedato da zero: come `gestionale_app` → **9/9 PASS**; con la stessa
+suite su connessione superuser (RLS bypassata) → **exit 1**, con S0/S1/S2/S3
+rossi e S4/S5 che riportano `GAP` avendo davvero persistito le righe cross-tenant.
+Il presidio ripuntato sa ancora diventare rosso.

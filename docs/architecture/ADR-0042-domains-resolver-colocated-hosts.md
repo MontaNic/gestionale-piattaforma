@@ -110,3 +110,46 @@ Così un `git clone` + deploy su host pulito **senza** lo snippet non rompe: il 
 - Caddyfile committato: config gestionale + `import colocated.*.caddy` + fallback.
 - Verifica config valida: `docker exec gestionale_caddy caddy validate --config /etc/caddy/Caddyfile` (NB: passa anche con glob vuoto).
 - Verifica che i co-locati siano caricati: probe HTTP sui 3 host (atteso `401`, non `200`).
+
+## Update 2026-08-31 — `food.studiodesk.cloud` diventa un redirect (PR1/6)
+
+Con la rimozione del verticale ristorazione non c'è più alcun upstream dietro
+`food.studiodesk.cloud`. Il site block **non è stato cancellato**: è stato
+sostituito da un `redir https://studiodesk.cloud{uri} permanent`.
+
+Cancellarlo sarebbe stato peggio che lasciarlo rotto. Il DNS ha un **wildcard `A`
+su `*.studiodesk.cloud`** che deve restare (serve i tenant dell'accountant),
+quindi non esiste un record `food` da rimuovere: senza site block l'host
+ricadrebbe sul wildcard e verrebbe servito da `accountant-web`. E `accountant-web`
+**non fallisce** su un host che non conosce — il suo routing tenant è path-based
+(`/t/<slug>/...`) e `middleware.ts` non legge mai l'`Host`: `GET /` risponde 200 e
+reindirizza al login di `studio-demo`, sotto l'hostname sbagliato. **Uno stato che
+risponde è peggio di un errore.**
+
+Il blocco è collocato **prima** del wildcard nel file. Caddy ordina per
+specificità e l'host esatto vincerebbe comunque — verificato con `caddy adapt`,
+che genera `[0] host=[food.studiodesk.cloud] → static_response` e
+`[1] host=[studiodesk.cloud, *.studiodesk.cloud] → reverse_proxy` — ma tenere
+l'ordine di precedenza anche nel file evita che una lettura veloce concluda il
+contrario. Conservati il blocco `tls` esplicito (un site block per host esatto fa
+partire la gestione del certificato per quel nome; DNS-01 dietro Cloudflare è più
+affidabile di HTTP-01/TLS-ALPN, e il certificato è già nel volume `caddy_data`) e
+l'header HSTS.
+
+### 🆕 `TD-dns-wildcard-accountant` — tier BASSO, registrato non risolto
+
+Il wildcard DNS fa sì che **qualunque** sottodominio di `studiodesk.cloud` risolva
+e arrivi all'accountant, che risponde 200 su ogni hostname inventato
+reindirizzando al login del tenant di default. Non è una falla di isolamento (il
+tenant si decide dal path, non dall'host, e RLS/RBAC restano interi) ma è una
+superficie che nessuno ha scelto: espone la stessa applicazione sotto infiniti
+nomi, e rende impossibile distinguere «host previsto» da «host qualsiasi».
+
+Emerso mentre si decideva il destino di `food.` — è la ragione per cui quel
+redirect è necessario. **Non risolto qui di proposito**: la risposta sta nel
+Caddyfile (un site block esplicito per gli host previsti + un fallback che chiude
+gli altri) oppure nel middleware, ed è una decisione di modello dei domini, non
+una riga da infilare in una PR di rimozione.
+
+**Trigger:** il primo tenant reale servito su un proprio sottodominio, oppure la
+prima volta che serve distinguere gli host previsti dal resto.
