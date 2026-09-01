@@ -10,7 +10,7 @@
 // scrivere nulla → il catalogo sta qui, dato puro, zero side-effect, zero
 // import di `../src/index` (nessun client Prisma istanziato).
 //
-// L'alternativa era hardcodare i totali (64 permessi / 267 mapping) nel gate:
+// L'alternativa era hardcodare i totali (44 permessi / 154 mapping) nel gate:
 // un presidio da aggiornare a mano ad ogni feature con permessi nuovi, cioè
 // esattamente il fallimento che il gate esiste per chiudere.
 //
@@ -20,10 +20,13 @@
 // =============================================================================
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Permission catalog (64 atomici, di cui 4 isPortale)
+// 1. Permission catalog (44 atomici, di cui 4 isPortale)
 // ─────────────────────────────────────────────────────────────────────────────
 // Categoria = primo segmento prima del primo punto.
-// isPreF2 = true per feature [PRE F2] ancora non attive (magazzino.*, ai.*).
+// isPreF2 = true per feature [PRE F2] ancora non attive. Oggi NESSUN permesso
+// lo porta: i tre che l'avevano (magazzino.* e ai.assistant.usa) erano del
+// verticale food e sono usciti con esso. Il campo resta perché è la forma con
+// cui si dichiara un permesso non ancora attivo, e la colonna DB esiste.
 // ─────────────────────────────────────────────────────────────────────────────
 export interface PermissionSeed {
   code: string;
@@ -100,13 +103,6 @@ export const PERMISSIONS: PermissionSeed[] = [
     description: 'Invito di clienti al portale (onboarding utenti-portale)',
     category: 'anagrafica',
   },
-
-  // menu.* (5)
-  { code: 'menu.categoria.gestisci', description: 'Gestione categorie menu', category: 'menu' },
-  { code: 'menu.piatto.crea', description: 'Creazione piatti/articoli', category: 'menu' },
-  { code: 'menu.piatto.modifica', description: 'Modifica piatti/articoli', category: 'menu' },
-  { code: 'menu.prezzo.modifica', description: 'Modifica prezzi e listini', category: 'menu' },
-  { code: 'menu.visualizza', description: 'Visualizzazione menu', category: 'menu' },
 
   // preventivi.* (2) — verticale accountant (STOP-e1)
   {
@@ -244,55 +240,6 @@ export const PERMISSIONS: PermissionSeed[] = [
     category: 'notespese',
   },
 
-  // comande.* (5)
-  { code: 'comande.crea', description: 'Creazione comande', category: 'comande' },
-  {
-    code: 'comande.modifica',
-    description: 'Modifica comande non ancora inviate',
-    category: 'comande',
-  },
-  { code: 'comande.elimina', description: 'Eliminazione/storno comande', category: 'comande' },
-  { code: 'comande.visualizza', description: 'Visualizzazione comande', category: 'comande' },
-  { code: 'comande.stato.cambia', description: 'Cambio stato (cucina/bar)', category: 'comande' },
-
-  // cassa.* (5) — Cassa pre-fiscale (ADR-0081 D5)
-  // `cassa.scontrino.emetti` e `cassa.chiusura.giornaliera` restano ORFANI di
-  // proposito: il primo è riservato al blocco RT/certificazione fiscale (differito
-  // fino a cliente reale), il secondo alla sessione cassa / Z-report
-  // (TD-cassa-chiusura-giornaliera, ADR-0081 D6). Enforced in PR1:
-  // `cassa.pagamento.registra`, `cassa.storno.esegui`, `cassa.visualizza`.
-  { code: 'cassa.scontrino.emetti', description: 'Emissione scontrino fiscale', category: 'cassa' },
-  {
-    code: 'cassa.pagamento.registra',
-    description: 'Registrazione pagamenti sul conto',
-    category: 'cassa',
-  },
-  { code: 'cassa.storno.esegui', description: 'Esecuzione storni cassa', category: 'cassa' },
-  {
-    code: 'cassa.chiusura.giornaliera',
-    description: 'Chiusura cassa giornaliera',
-    category: 'cassa',
-  },
-  { code: 'cassa.visualizza', description: 'Visualizzazione movimenti cassa', category: 'cassa' },
-
-  // tavoli.* (2) — F2 Mappa sala (ADR-0058)
-  { code: 'tavoli.visualizza', description: 'Visualizzazione mappa tavoli', category: 'tavoli' },
-  { code: 'tavoli.gestisci', description: 'Gestione tavoli e mappa sala', category: 'tavoli' },
-
-  // magazzino.* (2) — [PRE F2]
-  {
-    code: 'magazzino.articolo.gestisci',
-    description: 'Gestione articoli magazzino',
-    category: 'magazzino',
-    isPreF2: true,
-  },
-  {
-    code: 'magazzino.movimento.crea',
-    description: 'Creazione movimenti magazzino',
-    category: 'magazzino',
-    isPreF2: true,
-  },
-
   // report.* (3)
   {
     code: 'report.fatturato.visualizza',
@@ -305,9 +252,6 @@ export const PERMISSIONS: PermissionSeed[] = [
     category: 'report',
   },
   { code: 'report.export', description: 'Export report in formati esterni', category: 'report' },
-
-  // ai.* (1) — [PRE F2]
-  { code: 'ai.assistant.usa', description: 'Uso AI Assistant', category: 'ai', isPreF2: true },
 
   // portale.* (1) — [livello 2 — portale cliente, ADR-0046 §6]
   // Cliente-facing: consumer reale nel task Documenti read-only. Seedato forward
@@ -377,80 +321,6 @@ export const ROLE_TEMPLATES: RoleTemplateSeed[] = [
     description: 'Configurazione sede + RBAC locale. No config tenant globale.',
     // Tutti tranne sistema.tenant.gestisci (riservato al Super Admin).
     permissionCodes: ALL_PERMISSION_CODES.filter((c) => c !== 'sistema.tenant.gestisci'),
-  },
-  {
-    name: 'Direzione',
-    description: 'Report, anagrafica, menu, cassa, AI. No config tecnica sistema.',
-    permissionCodes: [
-      'sistema.audit.visualizza',
-      'anagrafica.cliente.crea',
-      'anagrafica.cliente.modifica',
-      'anagrafica.cliente.visualizza',
-      'anagrafica.cliente.elimina',
-      'anagrafica.fornitore.gestisci',
-      'menu.categoria.gestisci',
-      'menu.piatto.crea',
-      'menu.piatto.modifica',
-      'menu.prezzo.modifica',
-      'menu.visualizza',
-      'tavoli.visualizza',
-      'tavoli.gestisci',
-      'preventivi.visualizza',
-      'preventivi.gestisci',
-      'comande.crea',
-      'comande.modifica',
-      'comande.elimina',
-      'comande.visualizza',
-      'cassa.scontrino.emetti',
-      'cassa.pagamento.registra',
-      'cassa.storno.esegui',
-      'cassa.chiusura.giornaliera',
-      'cassa.visualizza',
-      'report.fatturato.visualizza',
-      'report.operativo.visualizza',
-      'report.export',
-      'magazzino.articolo.gestisci',
-      'magazzino.movimento.crea',
-      'ai.assistant.usa',
-      // Note Spese (PR-2): Direzione gestisce le proprie + legge tutte + approva.
-      'notespese.gestisci',
-      'notespese.leggi_tutte',
-      'notespese.approva',
-    ],
-  },
-  {
-    name: 'Cassiere',
-    description: 'Operatore POS: tavoli, cassa, comande di tutti. No report fatturato.',
-    permissionCodes: [
-      'menu.visualizza',
-      'comande.crea',
-      'comande.modifica',
-      'comande.elimina',
-      'comande.visualizza',
-      'cassa.scontrino.emetti',
-      'cassa.pagamento.registra',
-      'cassa.storno.esegui',
-      'cassa.chiusura.giornaliera',
-      'cassa.visualizza',
-      'tavoli.visualizza',
-      'report.operativo.visualizza',
-    ],
-  },
-  {
-    name: 'Cameriere',
-    description: 'Cameriere smartphone: comande proprie + mappa tavoli. No cassa, no report.',
-    permissionCodes: [
-      'menu.visualizza',
-      'tavoli.visualizza',
-      'comande.crea',
-      'comande.modifica',
-      'comande.visualizza',
-    ],
-  },
-  {
-    name: 'Cucina/Bar',
-    description: 'KDS read-only + cambio stato comande. Nessuna altra azione.',
-    permissionCodes: ['menu.visualizza', 'comande.visualizza', 'comande.stato.cambia'],
   },
 
   // ── Verticale commercialisti / StudioDesk (4 ruoli) ──────────────────────
