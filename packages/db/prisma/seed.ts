@@ -210,226 +210,11 @@ async function seedDevTenant(
     console.log(`  user_roles: ${userInfo.email} -> Super Admin (tenant-wide) already exists`);
   }
 
-  // Il seed DOMINIO (F1 Menu) è orchestrato come fase separata in main()
-  // (ADR-0027 §D5 passo 8b-1: confine core/dominio). `seedDevTenant` resta
-  // responsabile del solo CORE del tenant e ritorna gli id necessari alla fase
-  // dominio top-level.
+  // `seedDevTenant` è responsabile del solo CORE del tenant (ADR-0027 §D5 passo
+  // 8b-1: confine core/dominio) e ritorna gli id. La fase dominio che consumava
+  // `tenantSlug` era il seed food (F1 Menu / F2 Tavoli), rimossa col verticale;
+  // il confine resta perché è la forma con cui un dominio nuovo si aggiunge.
   return { tenantId: tenant.id, tenantSlug: tenantInfo.slug };
-}
-
-interface ArticleSeed {
-  name: string;
-  descriptionShort: string;
-  basePrice: string;
-  vatPercent: number;
-  categoryName: 'Antipasti' | 'Primi' | 'Pizze';
-  printDepartment: 'cucina' | 'pizzeria' | 'bar';
-  portata: 'antipasto' | 'primo' | 'secondo' | 'contorno' | 'dolce' | 'bevanda' | 'nessuna';
-  allergens: string[];
-  dietaryTags: string[];
-  preparationTimeMinutes: number;
-  sortOrder: number;
-}
-
-// 5 articoli dimostrativi (2 antipasti + 1 primo + 2 pizze).
-const DEMO_ARTICLES: ArticleSeed[] = [
-  {
-    name: 'Bruschetta al pomodoro',
-    descriptionShort: 'Pane tostato, pomodoro fresco, basilico',
-    basePrice: '6.50',
-    vatPercent: 10,
-    categoryName: 'Antipasti',
-    printDepartment: 'cucina',
-    portata: 'antipasto',
-    allergens: ['cereali_glutine'],
-    dietaryTags: ['vegetariano', 'vegano'],
-    preparationTimeMinutes: 5,
-    sortOrder: 0,
-  },
-  {
-    name: 'Tartare di manzo',
-    descriptionShort: 'Manzo battuto al coltello, tuorlo, capperi',
-    basePrice: '14.00',
-    vatPercent: 10,
-    categoryName: 'Antipasti',
-    printDepartment: 'cucina',
-    portata: 'antipasto',
-    allergens: ['uova'],
-    dietaryTags: [],
-    preparationTimeMinutes: 8,
-    sortOrder: 1,
-  },
-  {
-    name: 'Spaghetti alla carbonara',
-    descriptionShort: 'Guanciale, uova, pecorino romano, pepe',
-    basePrice: '12.00',
-    vatPercent: 10,
-    categoryName: 'Primi',
-    printDepartment: 'cucina',
-    portata: 'primo',
-    allergens: ['cereali_glutine', 'uova', 'latte'],
-    dietaryTags: [],
-    preparationTimeMinutes: 12,
-    sortOrder: 0,
-  },
-  {
-    name: 'Pizza Margherita',
-    descriptionShort: 'Pomodoro, fior di latte, basilico',
-    basePrice: '8.00',
-    vatPercent: 10,
-    categoryName: 'Pizze',
-    printDepartment: 'pizzeria',
-    portata: 'secondo',
-    allergens: ['cereali_glutine', 'latte'],
-    dietaryTags: ['vegetariano'],
-    preparationTimeMinutes: 7,
-    sortOrder: 0,
-  },
-  {
-    name: 'Pizza Diavola',
-    descriptionShort: 'Pomodoro, fior di latte, salame piccante',
-    basePrice: '10.00',
-    vatPercent: 10,
-    categoryName: 'Pizze',
-    printDepartment: 'pizzeria',
-    portata: 'secondo',
-    allergens: ['cereali_glutine', 'latte'],
-    dietaryTags: ['piccante'],
-    preparationTimeMinutes: 7,
-    sortOrder: 1,
-  },
-];
-
-async function seedDevMenu(tenantId: string, tenantSlug: string): Promise<void> {
-  // ── 7.1 Menu "Pranzo"
-  // TD-BZ (ADR-0023): rimosso il @@unique compound → Prisma non genera più la
-  // WhereUniqueInput `tenantId_name` necessaria a `upsert`. Idempotenza via
-  // find-then-create/update sulla chiave naturale (tenantId+name) — stesso
-  // pattern dei pre-check dei service; il client esteso esclude i soft-deleted.
-  const menuData = {
-    description: 'Menu pranzo dimostrativo (sessione 17)',
-    isActive: true,
-  };
-  const existingMenu = await prisma.menu.findFirst({ where: { tenantId, name: 'Pranzo' } });
-  const menu = existingMenu
-    ? await prisma.menu.update({ where: { id: existingMenu.id }, data: menuData })
-    : await prisma.menu.create({
-        data: { id: id(), tenantId, name: 'Pranzo', sortOrder: 0, ...menuData },
-      });
-  console.log(`  Menu 'Pranzo' (${tenantSlug}): ${menu.id}`);
-
-  // ── 7.2 Categorie (Antipasti, Primi, Pizze)
-  const categoryDefs: Array<{ name: 'Antipasti' | 'Primi' | 'Pizze'; sortOrder: number }> = [
-    { name: 'Antipasti', sortOrder: 0 },
-    { name: 'Primi', sortOrder: 1 },
-    { name: 'Pizze', sortOrder: 2 },
-  ];
-
-  const categoryByName = new Map<string, { id: string }>();
-  for (const c of categoryDefs) {
-    // TD-BZ (ADR-0023): find-then-create/update — vedi nota § 7.1.
-    const existingCat = await prisma.menuCategory.findFirst({
-      where: { tenantId, menuId: menu.id, name: c.name },
-    });
-    const cat = existingCat
-      ? await prisma.menuCategory.update({
-          where: { id: existingCat.id },
-          data: { sortOrder: c.sortOrder },
-        })
-      : await prisma.menuCategory.create({
-          data: { id: id(), tenantId, menuId: menu.id, name: c.name, sortOrder: c.sortOrder },
-        });
-    categoryByName.set(c.name, { id: cat.id });
-  }
-  console.log(`  Categorie (${tenantSlug}): ${categoryByName.size}`);
-
-  // ── 7.3 Articoli (5)
-  const articleByName = new Map<string, { id: string; basePrice: string }>();
-  const channelsAll: ('cassa' | 'menu_online' | 'asporto' | 'delivery')[] = [
-    'cassa',
-    'menu_online',
-    'asporto',
-    'delivery',
-  ];
-
-  for (const a of DEMO_ARTICLES) {
-    const category = categoryByName.get(a.categoryName);
-    if (!category) throw new Error(`Category missing: ${a.categoryName}`);
-
-    // TD-BZ (ADR-0023): find-then-create/update — vedi nota § 7.1. I campi
-    // condivisi create/update vivono in `articleData`; `id`/relazioni/name/
-    // availability sono solo del create.
-    const articleData = {
-      descriptionShort: a.descriptionShort,
-      basePrice: a.basePrice,
-      vatPercent: a.vatPercent,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      allergens: a.allergens as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      dietaryTags: a.dietaryTags as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      printDepartment: a.printDepartment as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      portata: a.portata as any,
-      preparationTimeMinutes: a.preparationTimeMinutes,
-      sortOrder: a.sortOrder,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      channelVisibility: channelsAll as any,
-    };
-    const existingArticle = await prisma.article.findFirst({
-      where: { tenantId, categoryId: category.id, name: a.name },
-    });
-    const article = existingArticle
-      ? await prisma.article.update({ where: { id: existingArticle.id }, data: articleData })
-      : await prisma.article.create({
-          data: {
-            id: id(),
-            tenantId,
-            categoryId: category.id,
-            name: a.name,
-            availability: 'in_carta',
-            ...articleData,
-          },
-        });
-    articleByName.set(a.name, { id: article.id, basePrice: a.basePrice });
-  }
-  console.log(`  Articoli (${tenantSlug}): ${articleByName.size}`);
-
-  // ── 7.4 PriceList "Base"
-  // TD-BZ (ADR-0023): find-then-create/update — vedi nota § 7.1.
-  const priceListData = {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    channels: channelsAll as any,
-    isActive: true,
-  };
-  const existingPriceList = await prisma.priceList.findFirst({
-    where: { tenantId, name: 'Base' },
-  });
-  const priceList = existingPriceList
-    ? await prisma.priceList.update({ where: { id: existingPriceList.id }, data: priceListData })
-    : await prisma.priceList.create({
-        data: { id: id(), tenantId, name: 'Base', priority: 0, ...priceListData },
-      });
-  console.log(`  PriceList 'Base' (${tenantSlug}): ${priceList.id}`);
-
-  // ── 7.5 ArticlePrice (5) — price == basePrice
-  let articlePriceCount = 0;
-  for (const [name, art] of articleByName) {
-    await prisma.articlePrice.upsert({
-      where: { articleId_priceListId: { articleId: art.id, priceListId: priceList.id } },
-      create: {
-        id: id(),
-        tenantId,
-        articleId: art.id,
-        priceListId: priceList.id,
-        price: art.basePrice,
-      },
-      update: { price: art.basePrice },
-    });
-    articlePriceCount++;
-    void name;
-  }
-  console.log(`  ArticlePrices (${tenantSlug}): ${articlePriceCount}`);
 }
 
 // Aziende demo per il verticale commercialisti (STOP-c2 ADR-0032). Idempotente
@@ -780,106 +565,6 @@ async function seedDevCollaboratore(tenantId: string): Promise<void> {
   } else {
     console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) already exists`);
   }
-}
-
-// Utente non-superuser per il tenant food `demo` (ADR-0064): sblocca i test di
-// gating runtime di `tavoli.*` — in particolare l'e2e drag-persist FE-5 e lo
-// smoke per-ruolo (ADR-0059) — che `admin@demo.local` (Super Admin) non esercita
-// mai. Clona il template "Direzione" (food, possiede tavoli.visualizza +
-// tavoli.gestisci) in un ruolo tenant-wide e assegna l'utente. Stesso impianto
-// idempotente di seedDevCollaboratore: find-then-create su email+tenantId, ruolo
-// (tenantId+name), mapping (roleId+permissionId), assignment tenant-wide (sedeId NULL).
-async function seedDevDirezione(tenantId: string): Promise<void> {
-  const ROLE_NAME = 'Direzione';
-  const EMAIL = 'direzione@demo.local';
-
-  // 1. Template "Direzione" + i suoi permessi (seedati a monte in main()).
-  const tpl = await prisma.systemRoleTemplate.findUnique({ where: { name: ROLE_NAME } });
-  if (!tpl) throw new Error(`System template '${ROLE_NAME}' missing`);
-  const tplPermissions = await prisma.systemRoleTemplatePermission.findMany({
-    where: { templateId: tpl.id },
-  });
-
-  // 2. User con password argon2id (find-then-create su tenantId+email).
-  const passwordHash = await argon2.hash('Direzione123!', { type: argon2.argon2id });
-  const user = await prisma.user.upsert({
-    where: { tenantId_email: { tenantId, email: EMAIL } },
-    create: {
-      id: id(),
-      tenantId,
-      email: EMAIL,
-      passwordHash,
-      firstName: 'Direzione',
-      lastName: 'Demo',
-      isActive: true,
-    },
-    update: { passwordHash, isActive: true },
-  });
-  console.log(`  User '${EMAIL}': ${user.id}`);
-
-  // 3. Role "Direzione" tenant-scoped (clone dal template). TD-BZ (ADR-0023):
-  // find-then-create/update sulla chiave naturale (tenantId+name), come Super Admin.
-  const roleData = { description: tpl.description, isSystem: true };
-  const existingRole = await prisma.role.findFirst({ where: { tenantId, name: ROLE_NAME } });
-  const role = existingRole
-    ? await prisma.role.update({ where: { id: existingRole.id }, data: roleData })
-    : await prisma.role.create({
-        data: { id: id(), tenantId, name: ROLE_NAME, ...roleData },
-      });
-  console.log(`  Role '${ROLE_NAME}' (demo): ${role.id}`);
-
-  // 4. Copia mappings template -> role_permissions.
-  let rolePermCreated = 0;
-  let rolePermSkipped = 0;
-  for (const tp of tplPermissions) {
-    const existing = await prisma.rolePermission.findUnique({
-      where: { roleId_permissionId: { roleId: role.id, permissionId: tp.permissionId } },
-    });
-    if (existing) {
-      rolePermSkipped++;
-    } else {
-      await prisma.rolePermission.create({
-        data: { roleId: role.id, permissionId: tp.permissionId },
-      });
-      rolePermCreated++;
-    }
-  }
-  console.log(
-    `  role_permissions (${ROLE_NAME} demo): ${rolePermCreated} created, ${rolePermSkipped} re-affirmed`,
-  );
-
-  // 5. Assignment user -> Direzione tenant-wide (sede_id NULL).
-  const existingAssignment = await prisma.userRole.findFirst({
-    where: { userId: user.id, roleId: role.id, sedeId: null },
-  });
-  if (!existingAssignment) {
-    await prisma.userRole.create({
-      data: { id: id(), userId: user.id, roleId: role.id, sedeId: null },
-    });
-    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) created`);
-  } else {
-    console.log(`  user_roles: ${EMAIL} -> ${ROLE_NAME} (tenant-wide) already exists`);
-  }
-}
-
-// Tavoli demo per il tenant food `demo` (ADR-0064): target draggabile stabile per
-// l'e2e drag-persist FE-5 (la mappa sala richiede ≥1 tavolo). Idempotente sulla
-// chiave naturale (tenantId + numero): find-then-create, nessun duplicato a doppia
-// esecuzione. Coordinate iniziali distinte così il drag ha una posizione nota.
-async function seedDevTavoli(tenantId: string): Promise<void> {
-  const demo: Array<{ numero: string; capienza: number; posX: number; posY: number }> = [
-    { numero: '1', capienza: 4, posX: 40, posY: 40 },
-    { numero: '2', capienza: 2, posX: 200, posY: 40 },
-  ];
-
-  let created = 0;
-  for (const tv of demo) {
-    const existing = await prisma.tavolo.findFirst({ where: { tenantId, numero: tv.numero } });
-    if (existing) continue;
-    await prisma.tavolo.create({ data: { id: id(), tenantId, ...tv } });
-    created++;
-  }
-  console.log(`  ✓ tavoli demo: ${created} created (${demo.length} total)`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1489,47 +1174,9 @@ async function main(): Promise<void> {
       where: { templateId: superAdminTpl.id },
     });
 
-    const demo = await seedDevTenant({
-      tenant: { slug: 'demo', name: 'Demo Pizzeria' },
-      sede: {
-        name: 'Sede Principale',
-        address: 'Via Roma 1',
-        city: 'Milano',
-        postalCode: '20100',
-      },
-      user: {
-        email: 'admin@demo.local',
-        password: 'Admin123!',
-        firstName: 'Admin',
-        lastName: 'Demo',
-      },
-      superAdminTplId: superAdminTpl.id,
-      superAdminTplDescription: superAdminTpl.description,
-      tplPermissions,
-    });
-
-    const acme = await seedDevTenant({
-      tenant: { slug: 'acme', name: 'Pizzeria Acme' },
-      sede: {
-        name: 'Sede Centro',
-        address: 'Via Garibaldi 1',
-        city: 'Roma',
-        postalCode: '00100',
-      },
-      user: {
-        email: 'manager@acme.local',
-        password: 'Manager123!',
-        firstName: 'Manager',
-        lastName: 'Acme',
-      },
-      superAdminTplId: superAdminTpl.id,
-      superAdminTplDescription: superAdminTpl.description,
-      tplPermissions,
-    });
-
-    // Tenant dedicato al 2° verticale (commercialisti / StudioDesk, STOP-b).
-    // Isola lo skeleton accountant-api dalla ristorazione: NESSUN seedDevMenu
-    // (zero dominio). Idempotente come demo/acme.
+    // Tenant applicativo dello studio (commercialisti / StudioDesk, STOP-b).
+    // Nato per isolare lo skeleton accountant-api dalla ristorazione; rimosso il
+    // verticale food, è il solo tenant applicativo del seed. Idempotente.
     const studio = await seedDevTenant({
       // Identità pubblica demo (ADR-0049): landing /t/studio-demo.
       tenant: {
@@ -1589,25 +1236,6 @@ async function main(): Promise<void> {
       tplPermissions,
     });
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Fase DOMINIO (verticale ristorazione, F1 Menu — ADR-0019 / ADR-0027 §D5
-    // passo 8b-1): estratta dal core del tenant e orchestrata qui al top-level.
-    // Menu "Pranzo" + 3 categorie + 5 articoli + 1 PriceList "Base" + 5
-    // ArticlePrice per ciascun tenant dev. Gira nello stesso system context
-    // ereditato da withSystemContext(main). Dev-only come il resto del seed dev.
-    // ─────────────────────────────────────────────────────────────────────────
-    console.log('Dev data — dominio (F1 Menu):');
-    await seedDevMenu(demo.tenantId, demo.tenantSlug);
-    await seedDevMenu(acme.tenantId, acme.tenantSlug);
-
-    // F2 Tavoli (ADR-0058) + utente per-ruolo food (ADR-0064): utente Direzione
-    // non-super (tavoli.gestisci) + tavoli demo sul tenant `demo`, per l'e2e
-    // drag-persist FE-5 e lo smoke per-ruolo (ADR-0059). NON tocca seedDevTenant
-    // né i ruoli Super Admin: aggiunto esplicitamente accanto ad admin@demo.local.
-    console.log('Dev data — dominio (F2 Tavoli, utente Direzione):');
-    await seedDevDirezione(demo.tenantId);
-    await seedDevTavoli(demo.tenantId);
-
     console.log('');
   } else {
     console.log(`Dev data: SKIPPED (NODE_ENV=${SEED_NODE_ENV})\n`);
@@ -1622,9 +1250,6 @@ async function main(): Promise<void> {
   console.log(`  Total mappings:        ${mapTotal}`);
   if (allowsDevData(SEED_NODE_ENV)) {
     console.log(`  Dev tenants:`);
-    console.log(`    - demo  (admin@demo.local / Admin123!)`);
-    console.log(`        + direzione@demo.local (ruolo Direzione, non-super — tavoli.gestisci)`);
-    console.log(`    - acme  (manager@acme.local / Manager123!)`);
     console.log(`    - studio-demo  (admin@studio.local / Studio123!)`);
     console.log(`        + collaboratore@studio.local / Collaboratore123! (ruolo Collaboratore)`);
     console.log(`        + cliente@studio-demo.local / Cliente123! (portale cliente → AZ001)`);
