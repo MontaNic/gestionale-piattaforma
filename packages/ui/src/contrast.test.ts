@@ -270,15 +270,6 @@ const PAIRS: DeclaredPair[] = [
     usi: ['apps/accountant-web/src/components/shell/Sidebar.tsx'],
     atteso: { root: 8.48, dark: 14.36 },
   },
-  {
-    id: 'seam restaurant · tinta soffusa dell’accento (nessun consumer)',
-    fg: { token: 'accent-soft-foreground' },
-    bg: { token: 'accent-soft' },
-    kind: 'text',
-    app: 'restaurant-web',
-    usi: [],
-    atteso: { root: 16.3, dark: 13.95 },
-  },
 ];
 
 const base = parseTokenSheet();
