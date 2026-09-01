@@ -234,7 +234,7 @@ export function workspaceRoot(from: string = dirname(fileURLToPath(import.meta.u
 /**
  * Tutte le cartelle sorgente scansionate da Tailwind: `apps/<x>/src` e
  * `packages/<x>/src`. Derivate dal filesystem e non elencate a mano, cosi' un
- * verticale nuovo entra nel gate senza che nessuno se ne ricordi.
+ * app nuova entra nel gate senza che nessuno se ne ricordi.
  */
 export function sourceRoots(root: string = workspaceRoot()): string[] {
   const out: string[] = [];
@@ -303,14 +303,14 @@ export function scanStateTokenUsages(
   return usages;
 }
 
-// --- seam per-verticale ------------------------------------------------------
-// La coppia soffusa dell'accento NON vive in `tokens.css`: e' seam, e ogni
-// verticale la definisce nel proprio `globals.css`. Misurarla sul solo file
+// --- livello per-app ---------------------------------------------------------
+// La coppia soffusa dell'accento NON vive in `tokens.css`: e' per-app, e ogni
+// app la definisce nel proprio `globals.css`. Misurarla sul solo file
 // condiviso vorrebbe dire non misurarla affatto — il gate legge quindi anche i
 // blocchi per-app e li sovrappone alla base, che e' l'ordine della cascata
 // reale (`@import` di tokens.css, poi il blocco seam).
 
-/** Nome dei verticali che hanno un `globals.css` con blocco seam. */
+/** Nome delle app che hanno un `globals.css` con blocco per-app. */
 export function appNames(root: string = workspaceRoot()): string[] {
   const out: string[] = [];
   for (const name of readdirSync(join(root, 'apps'))) {
@@ -321,7 +321,7 @@ export function appNames(root: string = workspaceRoot()): string[] {
       /* workspace senza foglio di stile globale (le API) */
     }
   }
-  if (out.length === 0) throw new Error('nessun verticale con globals.css: gate cieco');
+  if (out.length === 0) throw new Error('nessuna app con globals.css: gate cieco');
   return out;
 }
 

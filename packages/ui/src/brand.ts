@@ -1,9 +1,10 @@
-// brand.ts — Descrittore di brand per-verticale (ADR-0061).
+// brand.ts — Descrittore di brand per-app (ADR-0061).
 // =============================================================================
-// Il verticale (restaurant vs accountant) è STRUTTURALE/build-time: ogni app web
-// fornisce la PROPRIA istanza `BrandConfig` (es. apps/<app>/src/lib/brand.tsx),
-// conforme a questo tipo. Nessuna app importa il brand di un'altra → aggiungere
-// un verticale = nuova istanza, non clonare login/metadata.
+// Il brand è STRUTTURALE/build-time: ogni app web fornisce la PROPRIA istanza
+// `BrandConfig` (es. apps/<app>/src/lib/brand.tsx), conforme a questo tipo.
+// Nessuna app importa il brand di un'altra → aggiungere un'app = nuova
+// istanza, non clonare login/metadata. Oggi l'app è una sola: il tipo resta
+// perché è anche il punto d'innesto del branding per-tenant.
 //
 // Fuori scope per design:
 // - NIENTE colori: la palette resta nei `globals.css` per-app (dimensione V già
@@ -15,11 +16,11 @@
 import type { ComponentType, SVGProps } from 'react';
 
 export interface BrandConfig {
-  /** Nome prodotto del verticale (proper noun, NON tradotto). Es. "StudioDesk". */
+  /** Nome prodotto dell'app (proper noun, NON tradotto). Es. "StudioDesk". */
   productName: string;
 
   /**
-   * Wordmark del verticale come componente SVG. DEVE rendere in light e dark:
+   * Wordmark dell'app come componente SVG. DEVE rendere in light e dark:
    * usa `currentColor` (eredita il colore testo del contenitore), mai colori
    * fissi che spariscono su un tema. Sostituibile con un asset reale conforme.
    */
@@ -28,6 +29,6 @@ export interface BrandConfig {
   /** Path pubblico del favicon (servito da Next via file-convention `app/icon`). */
   favicon: string;
 
-  /** Tagline opzionale del verticale. */
+  /** Tagline opzionale dell'app. */
   tagline?: string;
 }

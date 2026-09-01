@@ -6,7 +6,7 @@ import { cn } from './utils';
 // =============================================================================
 // badge.tsx — pastiglia di stato (ADR-0084 §PR2)
 // =============================================================================
-// Sostituisce i 24+ `<span>` pastiglia inline sparsi nei due verticali, e le 7
+// Sostituisce i 24+ `<span>` pastiglia inline censiti nelle app, e le 7
 // mappe `STATO_BADGE`/`STATO_CLASS` che ne duplicavano il vocabolario di colore
 // con rese divergenti (lo stesso verde in dark a due opacità diverse, lo stato
 // "annullato" una volta su grigio letterale e una volta sul token neutro).
@@ -21,8 +21,10 @@ import { cn } from './utils';
 // dal testo GREZZO del file. Un letterale citato in un commento diventa una
 // regola CSS vera nel bundle di entrambe le app — verificato sul diff del build.
 //
-// `size="lg"` è la taglia del KDS, l'unica che divergeva dalla base: la board
-// si legge da lontano.
+// `size="lg"` era la taglia del KDS, l'unica che divergeva dalla base: la board
+// si leggeva da lontano. Il KDS è rimosso con il verticale food, quindi la
+// variante oggi non ha call-site applicativo — resta perché descrive un caso
+// d'uso reale, non perché serva a qualcuno adesso (TD-badge-size-lg-senza-consumer).
 //
 // Server-safe di proposito (nessun `'use client'`): è un `<span>` senza stato
 // né handler, e nessun altro file del barrel porta la direttiva.

@@ -20,7 +20,7 @@ import {
 // — di fatto in un tema solo. Da qui in avanti la misura e' automatica e ha
 // quattro proprieta' che la tabella dell'ADR non aveva:
 //
-//  1. legge i valori VERI da `tokens.css` e dai blocchi seam per-verticale,
+//  1. legge i valori VERI da `tokens.css` e dai blocchi per-app,
 //     quindi nessuna coppia resta fuori perche' vive in un altro file;
 //  2. i rapporti sono PINNATI: una deriva dei token diventa rossa invece di
 //     passare inosservata;
@@ -49,7 +49,7 @@ interface DeclaredPair {
   /** fondo del tema scuro, quando il call-site lo scrive diverso */
   bgDark?: Layer;
   kind: PairKind;
-  /** verticale di cui usare il seam; assente = solo i token condivisi */
+  /** app di cui usare il livello per-app; assente = solo i token condivisi */
   app?: string;
   /** file (relativi alla radice del workspace) in cui la coppia e' usata */
   usi: string[];
@@ -229,7 +229,7 @@ const PAIRS: DeclaredPair[] = [
       'applicativi e la nota poteva dire "difetto del sistema, si vedra’"; ora c’e’ una pagina che lo ' +
       'rende, e il debito ha una vittima con un nome — ' +
       'apps/accountant-web/.../mandati/page.tsx, la voce `annullato`. ' +
-      'NON e’ alzabile qui: e’ un neutro CONDIVISO, e cambiarlo muoverebbe anche il restaurant fuori ' +
+      'NON e’ alzabile qui: e’ un neutro CONDIVISO, e cambiarlo muoverebbe l’intera base fuori ' +
       'dalla fase che possiede i neutri. Trigger: P3b — e quando P3b arriva questa NON e’ una voce di ' +
       'lista fra tante, e’ l’unica coppia sotto soglia che qualcuno vede davvero.',
   },
@@ -257,7 +257,7 @@ const PAIRS: DeclaredPair[] = [
     usi: ['apps/accountant-web/src/components/note-spese/CalendarioMese.tsx'],
     atteso: { root: 19.99, dark: 19.09 },
   },
-  // --- seam per-verticale ----------------------------------------------------
+  // --- livello per-app -------------------------------------------------------
   // In scuro il call-site consuma il fondo a opacita' ridotta: la coppia NON e'
   // la stessa nei due temi, e misurarla come se lo fosse la falserebbe.
   {
@@ -269,15 +269,6 @@ const PAIRS: DeclaredPair[] = [
     app: 'accountant-web',
     usi: ['apps/accountant-web/src/components/shell/Sidebar.tsx'],
     atteso: { root: 8.48, dark: 14.36 },
-  },
-  {
-    id: 'seam restaurant · tinta soffusa dell’accento (nessun consumer)',
-    fg: { token: 'accent-soft-foreground' },
-    bg: { token: 'accent-soft' },
-    kind: 'text',
-    app: 'restaurant-web',
-    usi: [],
-    atteso: { root: 16.3, dark: 13.95 },
   },
 ];
 
@@ -326,7 +317,7 @@ describe('coppie di token — gate', () => {
     expect(sheets.size).toBeGreaterThan(0);
   });
 
-  it('ogni verticale trovato su disco ha una coppia di seam dichiarata', () => {
+  it('ogni app trovata su disco ha una coppia per-app dichiarata', () => {
     const conSeam = new Set(PAIRS.map((p) => p.app).filter(Boolean));
     expect([...sheets.keys()].filter((a) => !conSeam.has(a))).toEqual([]);
   });

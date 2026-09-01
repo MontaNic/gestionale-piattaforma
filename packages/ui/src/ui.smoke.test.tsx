@@ -122,14 +122,14 @@ describe('Card', () => {
 });
 
 describe('StatCard', () => {
-  // Le tre forme di prop reali dei call-site (PR0): il restaurant passa solo
+  // Le tre forme di prop reali dei call-site (PR0): la forma nuda passa solo
   // title/value, l'accountant aggiunge il breakdown e, su una card, il link.
   // Nessuna variant da coprire: la primitiva non ne ha.
   //
   // ⚠️ Qui NON si destruttura `render()` con il nome che Testing Library usa per
   // la radice: quel nome e' anche un'utility Tailwind, e le app scansionano il
   // testo GREZZO di questo package (test inclusi) — scriverlo ha generato due
-  // regole vere nel bundle restaurant, verificato sul diff del build. E' la
+  // regole vere in un bundle di app, verificato sul diff del build. E' la
   // stessa trappola di ADR-0085 §D5, che qui si generalizza: non solo i colori
   // nei commenti, ma qualunque nome di utility nel testo del file, identificatori
   // compresi. Si passa da `screen`.
@@ -173,7 +173,7 @@ describe('StatCard', () => {
   });
 
   // `space-y-2` sul contenuto e' il SOLO punto in cui il sovrainsieme accountant
-  // divergeva dal gemello restaurant collassato qui (PR0, amendment ADR-0083).
+  // divergeva dal gemello ridotto collassato qui (PR0, amendment ADR-0083).
   // Agisce fra figli adiacenti, quindi la forma nuda non lo vede: e' cio' che
   // rende il sovrainsieme adottabile da entrambi a resa invariata. Va asserito,
   // altrimenti un "mentre ci siamo" futuro lo toglie e la dashboard accountant
