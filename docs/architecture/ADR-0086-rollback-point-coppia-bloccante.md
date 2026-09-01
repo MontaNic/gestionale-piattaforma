@@ -68,3 +68,61 @@ Nota collaterale che rafforza la decisione: i "reclaimable" di `docker system df
 
 - Automazione del passo (script che tagga, verifica e blocca il build): il gate resta manuale, coerente con `TD-deploy-perm-reconcile-gate` che è nella stessa condizione.
 - Politica di retention delle immagini di rollback delle finestre chiuse.
+
+---
+
+## Emendamento 2026-09-01 — anche il **build di verifica** è dentro la regola
+
+L'ADR è scritto attorno alla **finestra di deploy**: «prima del build», «fino alla chiusura della finestra». Formulato così, lascia scoperto il caso che si è poi verificato — un build che non appartiene a nessuna finestra.
+
+### Cosa è successo
+
+Nella Fase 3 di PR2 (rimozione del verticale restaurant) il piano chiedeva, giustamente, di **costruire** le due app superstiti invece di dedurne la salute da `typecheck` e `test`: il compose è cambiato in PR1, e solo un build lo dimostra. Il comando era un `docker compose build accountant-api accountant-web` eseguito sull'host — che è anche l'host di produzione.
+
+`docker-compose.prod.yml` dichiara `image: gestionale/accountant-api` **senza tag**: `GIT_SHA` è un build _arg_, non entra nel nome dell'immagine. Il build ha quindi fatto esattamente ciò che l'ADR descrive per la Fase 3 di un deploy — riassegnare `:latest` — ma **senza la Fase 1 che lo precede**. Le due immagini che i container di produzione stavano usando hanno perso il loro unico riferimento e sono sparite dal registro locale: né taggate né dangling.
+
+Conseguenze reali, misurate:
+
+- **I container non sono stati toccati** e non hanno mai smesso di servire (`/api/v1/health` → 200 durante tutto l'episodio). Reggono i propri layer.
+- **`:latest` ha però iniziato a puntare a codice non mergiato.** Da quel momento un `docker compose up -d` per qualsiasi motivo — un riavvio dell'host, un intervento non correlato — avrebbe portato la produzione al codice di una PR aperta. Non un rischio teorico: la condizione dell'host.
+
+### La rete che ha salvato il recupero esisteva per caso
+
+La provenienza del deploy vivo è stata ricostruita **da un'altra immagine**: `gestionale/restaurant-api:latest`, nata dallo stesso build del 30/07, porta `org.opencontainers.image.revision=cf0e521`. Il gemello ha fatto da testimone.
+
+Va notato che **quel testimone sparisce con PR2**: rimosso il verticale, `accountant-api` e `accountant-web` sono le uniche immagini dell'applicazione, e nessun'altra immagine registra più il commit del deploy in corso. La stessa disattenzione, ripetuta dopo PR2, non sarebbe recuperabile allo stesso modo.
+
+### Rimedio applicato (2026-09-01, turno dedicato)
+
+Ricostruzione da un worktree sul commit del deploy vivo, senza toccare i container:
+
+```bash
+git worktree add /tmp/prod-cf0e521 cf0e521
+cd /tmp/prod-cf0e521 && export GIT_SHA=cf0e521
+docker compose -p gestionale --env-file <repo>/.env \
+  -f docker-compose.dev.yml -f docker-compose.prod.yml \
+  build accountant-api accountant-web
+```
+
+Verifica di efficacia nella forma già prescritta al punto 3 — la label deve corrispondere a prefisso:
+
+| immagine                           | `org.opencontainers.image.revision` |
+| ---------------------------------- | ----------------------------------- |
+| `gestionale/accountant-api:latest` | `cf0e521` ✅                        |
+| `gestionale/accountant-web:latest` | `cf0e521` ✅                        |
+
+Poi il presidio che mancava, e che è il punto dell'ADR: `docker tag … :rollback-pre-pr2-cf0e521` su entrambe, **così `:latest` smette di essere l'unica cosa che le tiene in vita**. Nessun `up -d`, nessun prune, container `Up 4 weeks` invariati.
+
+### Estensione della decisione
+
+**Il punto 1 (tag per image ID dei container in esecuzione) e il punto 3 (verifica di efficacia sulla label OCI) valgono per ogni `docker compose build` eseguito sull'host di produzione, non solo per quelli dentro una finestra di deploy.** Un build di verifica è indistinguibile da un build di deploy dal punto di vista del registro locale: riassegna gli stessi tag e orfana le stesse immagini. La riga che mancava nel piano di PR2 era una sola:
+
+```bash
+docker tag <image-id-del-container-in-esecuzione> gestionale/accountant-api:rollback-pre-<feature>
+```
+
+### 🆕 `TD-compose-image-tag-immutabile` — tier MEDIO, registrato non risolto
+
+La causa strutturale non è la disattenzione: è che `docker-compose.prod.yml` nomina le immagini **senza tag**, quindi `:latest` è al tempo stesso il riferimento che il deploy sposta e l'unica cosa che ancora l'immagine in esercizio. Finché è così, il presidio manuale è l'unica difesa e ogni build è un'occasione di perderla.
+
+Forma candidata: `image: gestionale/accountant-api:${GIT_SHA}`, con `:latest` come alias mosso esplicitamente al cutover. Tocca il runbook, il deploy e il rollback insieme — **registrato, non risolto qui**.
