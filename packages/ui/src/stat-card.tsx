@@ -10,19 +10,21 @@ import { Card, CardContent, CardHeader, CardTitle } from './card';
 // stat-card.tsx — card KPI condivisa (PR0 del restyling, ADR-0083 amendment)
 // =============================================================================
 // Promossa da `apps/accountant-web/src/components/dashboard/StatCard.tsx`, dove
-// viveva dal STOP-dash1 (ADR-0038). Il restaurant ne aveva un gemello ridotto
-// (`KpiCard`, P2/PR3) nato locale di proposito: i due collassano qui.
+// viveva dal STOP-dash1 (ADR-0038). Il verticale food ne aveva un gemello
+// ridotto (`KpiCard`, P2/PR3) nato locale di proposito: i due sono collassati
+// qui in PR0, e il gemello e' poi sparito con il verticale.
 //
 // La promozione e' un SOVRAINSIEME preservato alla lettera, non un'armonia
 // negoziata: la divergenza misurata era sottoinsieme/sovrainsieme puro (il
-// gemello restaurant non aveva ne' breakdown ne' link, e non metteva la
-// spaziatura verticale sul contenuto). Vince il sovrainsieme, senza ritocchi:
-// questa PR e' a resa invariata su entrambe le app, e ogni "mentre ci siamo"
-// sul markup sarebbe un difetto travestito da miglioria.
+// gemello ridotto non aveva ne' breakdown ne' link, e non metteva la
+// spaziatura verticale sul contenuto). Vinse il sovrainsieme, senza ritocchi.
+// Oggi il call-site e' uno solo, ma la forma resta quella collassata: e'
+// quello che rende la primitiva riusabile senza rinegoziarla.
 //
-// `space-y-2` sul contenuto agisce solo FRA figli adiacenti: il restaurant
-// passa un figlio solo, quindi non lo tocca. E' il motivo per cui il
-// sovrainsieme e' adottabile da entrambi senza diff visivo.
+// `space-y-2` sul contenuto agisce solo FRA figli adiacenti: un call-site che
+// passa un figlio solo non lo tocca. E' il motivo per cui il sovrainsieme era
+// adottabile da entrambi i gemelli senza diff visivo, e per cui resta neutro
+// per qualunque call-site futuro.
 //
 // `tabular-nums` sul valore: senza, le cifre a larghezza variabile fanno
 // "ballare" i numeri fra un refresh e l'altro in una riga di card affiancate.

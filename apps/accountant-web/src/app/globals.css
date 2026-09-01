@@ -1,6 +1,6 @@
-/* Base condivisa del design system (ADR-0083): neutri, superfici, tipografia,
+/* Base condivisa del design system (ADR-0088): neutri, superfici, tipografia,
  * radius, token additivi + le regole base su `*` e `body`. Va importata PRIMA
- * del blocco seam sotto, che ne sovrascrive le variabili per-verticale. */
+ * del blocco per-app sotto, che ne sovrascrive alcune variabili. */
 @import '@gestionale/ui/src/tokens.css';
 
 @tailwind base;
@@ -8,11 +8,12 @@
 @tailwind utilities;
 
 /* =============================================================================
- * SEAM per-verticale — accountant (ADR-0083)
+ * LIVELLO PER-APP — accountant (ADR-0088)
  * =============================================================================
- * Qui vive SOLO ciò che diverge dall'altro verticale. Tutto il resto (neutri,
- * superfici, radius, tipografia) è condiviso e arriva da tokens.css: aggiungere
- * un token qui significa dichiarare che i due verticali devono differire.
+ * Qui vive SOLO ciò che è dell'app. Tutto il resto (neutri, superfici, radius,
+ * tipografia) è condiviso e arriva da tokens.css: aggiungere un token qui
+ * significa dichiarare che NON appartiene al sistema. Con un'app sola la
+ * guardia non è più il confronto fra due verticali: è questa domanda.
  *
  * Accountant = blu (evolvibile). `--brand` nasce uguale a `--primary`: la
  * separazione dei due ruoli (accento operativo vs prima impressione) è

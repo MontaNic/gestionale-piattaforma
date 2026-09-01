@@ -1,23 +1,29 @@
 /* =============================================================================
- * tokens.css — token semantici condivisi del design system (ADR-0083).
+ * tokens.css — token semantici condivisi del design system (ADR-0088).
  * =============================================================================
- * Questo file è la BASE condivisa dai due verticali: neutri, superfici,
+ * Questo file è la BASE condivisa da tutte le app: neutri, superfici,
  * tipografia, radius, e i token additivi non ancora adottati. È importato dai
- * `globals.css` per-app PRIMA del blocco seam, che sovrascrive per-verticale.
+ * `globals.css` per-app PRIMA del blocco per-app, che ne sovrascrive una parte.
  *
- * Le 4 leggi (ADR-0083):
+ * Le 4 leggi (invariate da ADR-0083, riportate in ADR-0088):
  *  1. Zero letterali nei componenti — ogni colore/radius passa da un token.
  *  2. L'accento è riservato al significato (denaro, azioni terminali).
  *  3. Mai contrasto massimo — `--foreground` ≠ #000, `--background` ≠ #fff.
  *  4. Due temi sempre — ogni token ha la sua controparte `.dark`.
  *
- * SEAM per-verticale (NON definito qui, vive nei globals.css per-app):
+ * LIVELLO PER-APP (NON definito qui, vive nei globals.css per-app):
  *   --primary / --primary-foreground   accento operativo
  *   --ring                             focus ring (segue l'accento)
  *   --accent-soft / --accent-soft-fg   tinta soffusa dell'accento (stati attivi)
  *   --brand / --brand-foreground       prima impressione (login, wordmark)
  *
- * SEAM per-tenant: previsto, oggi VUOTO (YAGNI). Quando un tenant chiederà il
+ * Con una sola app il livello non separa più due prodotti, e la domanda che fa
+ * da guardia cambia: non «i due verticali devono differire?» ma «questo token
+ * è dell'app o è del sistema?». Resta perché è il meccanismo su cui si innesta
+ * il livello per-tenant: collassarlo in questo file oggi vorrebbe dire
+ * ricostruirlo al primo tenant che chiede il proprio branding.
+ *
+ * LIVELLO PER-TENANT: previsto, oggi VUOTO (YAGNI). Quando un tenant chiederà il
  * branding proprio, l'override runtime di `--primary`/`--brand` per sottodominio
  * entra come terzo livello di cascata dopo questo file e il blocco per-app.
  * Nessun componente va toccato: è uno swap di valori.
