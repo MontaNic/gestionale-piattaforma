@@ -293,10 +293,10 @@ export const PERMISSIONS: PermissionSeed[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. System role templates (11 ruoli: mix ristorazione + commercialisti + condivisi).
-//    NB: isDefault=true su TUTTI → il bootstrap API li clona tutti, cross-verticale
-//    (un tenant restaurant riceve anche i ruoli studio e viceversa). Oggi la curatela
-//    per-verticale vive solo qui nel seed imperativo. Vedi TD-bootstrap-verticale (ADR-0060).
+// 2. System role templates (7 ruoli: studio + piattaforma + portale cliente).
+//    isDefault=true su TUTTI → il bootstrap API li clona tutti. Non è più un
+//    problema: con un verticale solo non esiste un "verticale sbagliato" da cui
+//    ereditare ruoli (TD-bootstrap-verticale chiuso per costruzione, ADR-0060).
 // ─────────────────────────────────────────────────────────────────────────────
 export interface RoleTemplateSeed {
   name: string;

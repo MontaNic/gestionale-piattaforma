@@ -114,13 +114,15 @@ export class TenantsService {
         },
       });
 
-      // 2.6 Clone di TUTTI i system_role_templates con isDefault=true (oggi 11)
+      // 2.6 Clone di TUTTI i system_role_templates con isDefault=true (oggi 7)
       // → roles tenant-scoped + copia mapping system_role_template_permissions
       // → role_permissions. Letti dinamicamente.
-      // ⚠️ TD-bootstrap-verticale (ADR-0060): isDefault è globale, non per-verticale →
-      // un tenant creato qui riceve anche i ruoli del verticale sbagliato (es. un
-      // tenant restaurant ottiene Socio/Praticante/Segreteria). Latente finché nessun
-      // tenant nasce via API; matura con la nozione di verticale first-class (#4).
+      // ✅ TD-bootstrap-verticale (ADR-0060) CHIUSO per costruzione: il debito era
+      // che `isDefault` è globale e non per-verticale, quindi un tenant nato qui
+      // riceveva anche i ruoli del verticale sbagliato. Con un verticale solo non
+      // esiste più un verticale sbagliato: i 7 template sono tutti dello studio.
+      // Se un secondo verticale tornasse, il debito torna con lui — la causa-radice
+      // (nessuna dimensione `verticale` nei dati) non è stata risolta, è decaduta.
       const templates = await tx.systemRoleTemplate.findMany({
         where: { isDefault: true },
         include: { permissions: true },
