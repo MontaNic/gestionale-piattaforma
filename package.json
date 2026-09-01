@@ -2,7 +2,7 @@
   "name": "gestionale",
   "version": "0.0.0",
   "private": true,
-  "description": "Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per la ristorazione.",
+  "description": "Piattaforma SaaS modulare multi-tenant, AI-native ed estensibile per studi professionali.",
   "type": "module",
   "engines": {
     "node": ">=20.18.0 <21",
@@ -17,8 +17,7 @@
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "smoke:accountant": "pnpm --filter @gestionale/accountant-web test:e2e:smoke",
-    "smoke:restaurant": "pnpm --filter @gestionale/restaurant-web test:e2e:smoke",
-    "smoke": "pnpm smoke:accountant && pnpm smoke:restaurant",
+    "smoke": "pnpm smoke:accountant",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "devdb:up": "docker compose -f docker-compose.devdb.yml up -d --wait",
