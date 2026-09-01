@@ -9,13 +9,26 @@
 // Scope: SOLO tabelle core multi-tenant (tenants, sedi, users, roles,
 // user_roles, audit_logs). Nessuna tabella di dominio (menu/articoli/...).
 //
-// Non-distruttivo: read sui dati del seed (demo + acme) + write-block
-// (insert cross-tenant DEVE essere respinto → non persiste). Idempotente:
-// re-run infinito senza side-effect (sul PASS path nessuna riga scritta).
-// Safe da girare in CI subito dopo `db:seed`, prima del Playwright.
+// Non-distruttivo: read sui dati del seed (studio-demo + oneplatform) +
+// write-block (insert cross-tenant DEVE essere respinto → non persiste).
+// Idempotente: re-run infinito senza side-effect (sul PASS path nessuna riga
+// scritta). Safe da girare in CI subito dopo `db:seed`.
+//
+// ⚠️ La coppia di tenant era `demo` + `acme` (verticale ristorazione), rimossi
+// con il verticale stesso. Ora è `studio-demo` (il tenant accountant, la forma
+// più ricca: 3 utenti / 3 ruoli) + `oneplatform` (tenant di piattaforma,
+// minimale: 1 utente / 1 ruolo). La coppia serve solo a dare DUE tenant fra cui
+// verificare l'isolamento: il dominio dei due è irrilevante per questo test,
+// che tocca esclusivamente tabelle CORE.
+//
+// ⚠️ I conteggi ESATTI di S1/S2 descrivono un DB **appena seedato** — cioè la
+// casa di questo presidio, il job CI `seed-rls-core`, che gira `db:seed` su un
+// Postgres vuoto subito prima. Su un DB vissuto (dev con utenti creati a mano,
+// prod) i conteggi divergono e S1/S2 falliscono: è una proprietà nota e
+// precedente a questa modifica, non una regressione introdotta qui.
 //
 // Connessione: `createPrismaClient()` legge `DATABASE_URL` dall'ambiente. In CI
-// (job e2e-playwright) e in dev è il role `gestionale_app` (post-rotate / init
+// (job `seed-rls-core`) e in dev è il role `gestionale_app` (post-rotate / init
 // docker). Eseguire da packages/db/:  pnpm smoke:rls-core
 //
 // Exit: 0 = tutti PASS; 1 = almeno uno FAIL (gap RLS o regressione policy);
@@ -56,20 +69,22 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // Resolve fixture IDs via system context (bypass RLS, lettura cross-tenant)
   // ---------------------------------------------------------------------------
-  const { demoId, acmeId, acmeUserId } = await withSystemContext(async () => {
-    const demo = await prisma.tenant.findUnique({ where: { slug: 'demo' } });
-    const acme = await prisma.tenant.findUnique({ where: { slug: 'acme' } });
-    if (!demo || !acme) {
+  const { studioId, platformId, platformUserId } = await withSystemContext(async () => {
+    const studio = await prisma.tenant.findUnique({ where: { slug: 'studio-demo' } });
+    const platform = await prisma.tenant.findUnique({ where: { slug: 'oneplatform' } });
+    if (!studio || !platform) {
       throw new Error(
-        "Tenants 'demo' e 'acme' richiesti. Esegui: pnpm --filter @gestionale/db db:seed",
+        "Tenants 'studio-demo' e 'oneplatform' richiesti. Esegui: pnpm --filter @gestionale/db db:seed",
       );
     }
-    const acmeUser = await prisma.user.findFirst({ where: { tenantId: acme.id } });
-    if (!acmeUser) throw new Error("Almeno un user per tenant 'acme' richiesto (db:seed).");
-    return { demoId: demo.id, acmeId: acme.id, acmeUserId: acmeUser.id };
+    const platformUser = await prisma.user.findFirst({ where: { tenantId: platform.id } });
+    if (!platformUser) {
+      throw new Error("Almeno un user per tenant 'oneplatform' richiesto (db:seed).");
+    }
+    return { studioId: studio.id, platformId: platform.id, platformUserId: platformUser.id };
   });
-  console.log(`demoId=${demoId}`);
-  console.log(`acmeId=${acmeId}\n`);
+  console.log(`studioId=${studioId}`);
+  console.log(`platformId=${platformId}\n`);
 
   // ---------------------------------------------------------------------------
   // S0 — Identità connessione (preludio): la query gira FUORI da ogni contesto
@@ -96,69 +111,77 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // S1 — Read isolation (demo): tabelle core ritornano SOLO righe demo
   // ---------------------------------------------------------------------------
-  const demo = await runInTenantContext({ tenantId: demoId, isSuperAdmin: false }, async () => ({
-    tenants: await prisma.tenant.count(),
-    sedi: await prisma.sede.count(),
-    users: await prisma.user.count(),
-    roles: await prisma.role.count(),
-    userRoles: await prisma.userRole.count(),
-  }));
-  // Conteggi attesi = righe possedute dal solo tenant demo. Il tenant demo seeda
-  // 1 sede + 2 utenti (admin@demo.local Super Admin + direzione@demo.local
-  // Direzione, ADR-0064) + 2 ruoli tenant-scoped + 2 user_roles. Un eventuale
-  // leak da acme spingerebbe i conteggi OLTRE questi valori → l'uguaglianza
-  // esatta resta un rilevatore di leak (non solo un check di seed).
+  const studio = await runInTenantContext(
+    { tenantId: studioId, isSuperAdmin: false },
+    async () => ({
+      tenants: await prisma.tenant.count(),
+      sedi: await prisma.sede.count(),
+      users: await prisma.user.count(),
+      roles: await prisma.role.count(),
+      userRoles: await prisma.userRole.count(),
+    }),
+  );
+  // Conteggi attesi = righe possedute dal solo tenant studio-demo, appena
+  // seedato: 1 sede + 3 utenti (admin@studio.local Super Admin,
+  // collaboratore@studio.local Collaboratore, cliente@studio-demo.local Cliente)
+  // + 3 ruoli tenant-scoped + 3 user_roles. Un eventuale leak da un altro tenant
+  // spingerebbe i conteggi OLTRE questi valori → l'uguaglianza esatta resta un
+  // rilevatore di leak, non solo un check di seed.
   record(
     'S1',
-    'read isolation demo: tenants=1/sedi=1/users=2/roles=2, nessun leak acme',
-    demo.tenants === 1 &&
-      demo.sedi === 1 &&
-      demo.users === 2 &&
-      demo.roles === 2 &&
-      demo.userRoles === 2,
-    `demo ctx counts = ${JSON.stringify(demo)} (atteso tenants=1/sedi=1/users=2/roles=2/userRoles=2)`,
+    'read isolation studio-demo: tenants=1/sedi=1/users=3/roles=3, nessun leak',
+    studio.tenants === 1 &&
+      studio.sedi === 1 &&
+      studio.users === 3 &&
+      studio.roles === 3 &&
+      studio.userRoles === 3,
+    `studio-demo ctx counts = ${JSON.stringify(studio)} (atteso tenants=1/sedi=1/users=3/roles=3/userRoles=3)`,
   );
 
   // ---------------------------------------------------------------------------
-  // S2 — Read isolation (acme): speculare
+  // S2 — Read isolation (oneplatform): speculare
   // ---------------------------------------------------------------------------
-  const acme = await runInTenantContext({ tenantId: acmeId, isSuperAdmin: false }, async () => ({
-    tenants: await prisma.tenant.count(),
-    users: await prisma.user.count(),
-  }));
+  const platform = await runInTenantContext(
+    { tenantId: platformId, isSuperAdmin: false },
+    async () => ({
+      tenants: await prisma.tenant.count(),
+      users: await prisma.user.count(),
+    }),
+  );
   record(
     'S2',
-    'read isolation acme: tenants/users == 1',
-    acme.tenants === 1 && acme.users === 1,
-    `acme ctx counts = ${JSON.stringify(acme)} (atteso 1/1)`,
+    'read isolation oneplatform: tenants/users == 1',
+    platform.tenants === 1 && platform.users === 1,
+    `oneplatform ctx counts = ${JSON.stringify(platform)} (atteso 1/1)`,
   );
 
   // ---------------------------------------------------------------------------
-  // S3 — Cross-tenant block (read): demo ctx + UUID acme -> null
+  // S3 — Cross-tenant block (read): studio-demo ctx + id oneplatform -> null
   // ---------------------------------------------------------------------------
-  const cross = await runInTenantContext({ tenantId: demoId, isSuperAdmin: false }, async () => ({
-    user: await prisma.user.findUnique({ where: { id: acmeUserId } }),
-    tenant: await prisma.tenant.findUnique({ where: { id: acmeId } }),
+  const cross = await runInTenantContext({ tenantId: studioId, isSuperAdmin: false }, async () => ({
+    user: await prisma.user.findUnique({ where: { id: platformUserId } }),
+    tenant: await prisma.tenant.findUnique({ where: { id: platformId } }),
   }));
   record(
     'S3',
-    'cross-tenant block (read): demo ctx -> acme user/tenant = null',
+    'cross-tenant block (read): studio-demo ctx -> oneplatform user/tenant = null',
     cross.user === null && cross.tenant === null,
     `user=${cross.user === null ? 'null' : 'LEAK'}, tenant=${cross.tenant === null ? 'null' : 'LEAK'}`,
   );
 
   // ---------------------------------------------------------------------------
-  // S4 — Write-block cross-tenant (users): demo ctx, INSERT tenant_id=acme
-  //   DEVE essere respinto (WITH CHECK). Insert fallito = non persiste.
+  // S4 — Write-block cross-tenant (users): studio-demo ctx, INSERT
+  //   tenant_id=oneplatform DEVE essere respinto (WITH CHECK). Insert fallito =
+  //   non persiste.
   // ---------------------------------------------------------------------------
   let s4Blocked = false;
   let s4Detail = '';
   try {
-    await runInTenantContext({ tenantId: demoId, isSuperAdmin: false }, () =>
+    await runInTenantContext({ tenantId: studioId, isSuperAdmin: false }, () =>
       prisma.user.create({
         data: {
           id: id(),
-          tenantId: acmeId, // cross-tenant: deve violare WITH CHECK
+          tenantId: platformId, // cross-tenant: deve violare WITH CHECK
           email: `rls-writeblock-${Date.now()}@invalid.local`,
           passwordHash: 'x',
           firstName: 'RLS',
@@ -166,14 +189,15 @@ async function main(): Promise<void> {
         },
       }),
     );
-    s4Detail = 'INSERT cross-tenant NON bloccato (riga acme creata da demo ctx) — GAP';
+    s4Detail =
+      'INSERT cross-tenant NON bloccato (riga oneplatform creata da studio-demo ctx) — GAP';
   } catch (err) {
     s4Blocked = true;
     s4Detail = `INSERT respinto come atteso: ${(err as Error).message.split('\n')[0]}`;
   }
   record(
     'S4',
-    'write-block cross-tenant (users): demo ctx + tenant_id=acme respinto',
+    'write-block cross-tenant (users): studio-demo ctx + tenant_id=oneplatform respinto',
     s4Blocked,
     s4Detail,
   );
@@ -185,19 +209,20 @@ async function main(): Promise<void> {
   let s5Blocked = false;
   let s5Detail = '';
   try {
-    await runInTenantContext({ tenantId: demoId, isSuperAdmin: false }, () =>
+    await runInTenantContext({ tenantId: studioId, isSuperAdmin: false }, () =>
       prisma.auditLog.create({
-        data: { id: id(), tenantId: acmeId, action: 'rls.smoke.writeblock' },
+        data: { id: id(), tenantId: platformId, action: 'rls.smoke.writeblock' },
       }),
     );
-    s5Detail = 'INSERT cross-tenant NON bloccato (audit_log acme creato da demo ctx) — GAP';
+    s5Detail =
+      'INSERT cross-tenant NON bloccato (audit_log oneplatform creato da studio-demo ctx) — GAP';
   } catch (err) {
     s5Blocked = true;
     s5Detail = `INSERT respinto come atteso: ${(err as Error).message.split('\n')[0]}`;
   }
   record(
     'S5',
-    'write-block cross-tenant (audit_logs): demo ctx + tenant_id=acme respinto',
+    'write-block cross-tenant (audit_logs): studio-demo ctx + tenant_id=oneplatform respinto',
     s5Blocked,
     s5Detail,
   );
@@ -217,14 +242,21 @@ async function main(): Promise<void> {
   );
 
   // ---------------------------------------------------------------------------
-  // S7 — Super-admin context bypass: demo tenantId + is_super_admin=true -> 2
+  // S7 — Super-admin context bypass: studio-demo tenantId + is_super_admin=true
+  //   DEVE vedere oltre il proprio tenant.
+  //
+  //   L'asserzione è RELATIVA al conteggio di S1, non una soglia fissa: una
+  //   soglia (`>= 2`) sarebbe soddisfatta dai soli utenti di studio-demo anche
+  //   con il bypass rotto — non proverebbe nulla. Il confronto col conteggio
+  //   tenant-scoped invece fallisce se il bypass non scavalca il confine, e non
+  //   va aggiornato quando il seed cambia forma.
   // ---------------------------------------------------------------------------
-  const superAdminUsers = await withSuperAdminContext(demoId, () => prisma.user.count());
+  const superAdminUsers = await withSuperAdminContext(studioId, () => prisma.user.count());
   record(
     'S7',
-    'super-admin context bypass: demo tenantId + super_admin -> users >= 2',
-    superAdminUsers >= 2,
-    `super-admin ctx user.count = ${superAdminUsers} (atteso >= 2)`,
+    'super-admin context bypass: studio-demo tenantId + super_admin -> vede oltre il tenant',
+    superAdminUsers > studio.users,
+    `super-admin ctx user.count = ${superAdminUsers} (atteso > ${studio.users}, cioè oltre i soli utenti di studio-demo)`,
   );
 
   // ---------------------------------------------------------------------------
