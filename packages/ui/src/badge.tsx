@@ -21,8 +21,10 @@ import { cn } from './utils';
 // dal testo GREZZO del file. Un letterale citato in un commento diventa una
 // regola CSS vera nel bundle di entrambe le app — verificato sul diff del build.
 //
-// `size="lg"` è la taglia del KDS, l'unica che divergeva dalla base: la board
-// si legge da lontano.
+// `size="lg"` era la taglia del KDS, l'unica che divergeva dalla base: la board
+// si leggeva da lontano. Il KDS è rimosso con il verticale food, quindi la
+// variante oggi non ha call-site applicativo — resta perché descrive un caso
+// d'uso reale, non perché serva a qualcuno adesso (TD-badge-size-lg-senza-consumer).
 //
 // Server-safe di proposito (nessun `'use client'`): è un `<span>` senza stato
 // né handler, e nessun altro file del barrel porta la direttiva.
