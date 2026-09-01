@@ -18,6 +18,12 @@ letterale e sparso:
   grigio letterale e una volta sul token neutro, pur essendo lo stesso enum di dominio;
 - una taglia fuori scala (il KDS, che si legge da lontano) trattata come eccezione locale.
 
+> ⚠️ **Il KDS è codice rimosso** — viveva in `apps/restaurant-web`, cancellata con il verticale
+> (PR2 della sequenza di rimozione, 2026-09-01). Le citazioni del KDS in questo ADR descrivono il
+> censimento **al momento della decisione** e restano valide come tali: sono la ragione per cui
+> `Badge` ha la forma che ha. Non sono più esempi vivi, e `size="lg"` è oggi senza call-site
+> applicativo (`TD-badge-size-lg-senza-consumer`, [ADR-0088](ADR-0088-design-system-una-app.md)).
+
 Finché il vocabolario vive nei call-site, "cambiare il verde di stato" è un rename su 7 file con 3
 rese diverse — e la legge #1 resta una dichiarazione d'intenti.
 

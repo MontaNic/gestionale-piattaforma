@@ -1,6 +1,13 @@
 # ADR-0083 — Design system: architettura a token e seam per-verticale
 
-- **Stato**: Accettato
+> ⚠️ **Superseduto da [ADR-0088](ADR-0088-design-system-una-app.md)** (2026-09-01), emendamento del
+> 2026-08-24 incluso. Rimosso il verticale restaurant, il seam ha una sponda sola: le **quattro
+> leggi** e i **livelli di cascata** restano validi e sono riportati là (il seam per-verticale vi si
+> chiama «livello per-app»); il **palinsesto A/B/C** decade, perché era definito dal dominio food.
+> Questo documento resta leggibile come storia — è la misura di com'era la divergenza fra due
+> verticali — ma non è più la fonte da citare.
+
+- **Stato**: Superseduto da ADR-0088 il 2026-09-01
 - **Data**: 2026-07-27
 - **Contesto PR**: PR1 dell'iniziativa di restyling (multi-PR). Fasi P2–P4 nominate qui, speccate al proprio turno.
 - **Cross-ref**: estende [ADR-0061](ADR-0061-branding-per-verticale-build-time.md) (branding per-verticale, deliberatamente color-free) · [ADR-0018](ADR-0018-f1-shell-ui-foundation.md) (dark mode) · [ADR-0027](ADR-0027-composizione-core-condiviso.md) §D5 (estrazione `packages/ui`)
