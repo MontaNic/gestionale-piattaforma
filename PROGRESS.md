@@ -3771,6 +3771,72 @@ Pubblicati **da `main`, senza `--no-verify`**: il push è stato esso stesso la v
 
 ---
 
+## [2026-09-02] Rimozione del verticale **restaurant** — 5 PR su 6 ([ADR-0087](docs/architecture/ADR-0087-gate-cross-workspace-invisibile-alla-cache.md) · [ADR-0088](docs/architecture/ADR-0088-design-system-una-app.md) · [ADR-0089](docs/architecture/ADR-0089-riconciliazione-db-catalogo-permessi.md))
+
+**Il verticale restaurant è eliminato.** Resta `accountant` (StudioDesk) come unico verticale, dominio invariato. L'ipotesi alternativa — trasformare l'accountant in un **CRM generico** — è stata discussa e **accantonata**: compete con incumbent senza differenziazione e ha zero consumer esattamente come li aveva il restaurant (Pattern 43). L'unico asset reale è la specificità del dominio: le 67 DDL legacy e il modello mandati/prestazioni non si ricostruiscono in un weekend, un CRM generico sì.
+
+### La sequenza, dal reversibile all'irreversibile
+
+| PR | Cosa | SHA |
+| --- | --- | --- |
+| #206 | CI e infrastruttura — via i 2 job e2e food, nuovo job `seed-rls-core`, `food.` → redirect 301 | `deb6409` |
+| #208 | Emendamento ADR-0086 (il build di verifica è dentro la regola) + ADR-0087 | `e445796` |
+| #207 | `apps/restaurant-api` + `apps/restaurant-web` — 187 file, lockfile rigenerato | `d024655` |
+| #209 | Design system a un'app sola — ADR-0088 supersede ADR-0083 | `dd94652` |
+| #210 | Catalogo permessi 64→44, template 11→7, seed senza tenant food | `53556fd` |
+| #211 | Riconciliazione DB dev e prod — ADR-0089 | `d916bd5` |
+
+**PR6 (schema Prisma + migrazione distruttiva + i 2 tenant food) NON è stata fatta**, deliberatamente: droppa tabelle con dentro dati che nessun seed ricrea, e si annulla solo ripristinando un dump intero — il rimedio costa più del danno. Serve un dump nuovo: `pre-pr5` non può coprire due operazioni diverse.
+
+### Identità (in chiaro, per ricostruibilità)
+
+| | valore |
+| --- | --- |
+| **main a fine sessione** | **`d916bd5`** — CI verde 4/4 |
+| Catalogo RBAC | **44 permessi / 7 template / 154 mapping**, identico in codice, prod e dev |
+| `role_permissions` | prod **182** (era 262) · dev **102** |
+| Gate permessi | ✅ `6/6` su `127.0.0.1:5432` · ✅ `4/4` su `127.0.0.1:55432` |
+| Dump pre-riconciliazione | `gestionale_20260902T204540Z_pre-pr5-riconcilia_53556fd.dump` (289 484 B, `PGDMP`, `0600`, sha256 `b0f94bd7…22c5c5c1`) — verificato con `pg_restore --list`: 525 voci di TOC, 49 `TABLE DATA` |
+| Immagini di rollback | 4 × `rollback-pre-design-*` + 2 × `rollback-pre-pr2-cf0e521` — **nessun prune** |
+| Produzione | ancora `cf0e521`: **nessun deploy in questa sessione** |
+
+⚠️ **Il dump `pre-pr5` è l'ultima copia completa che contiene il dominio food.** Dopo PR6 nulla lo conterrà più: se un giorno esisterà una rotazione automatica dei backup, quel file non deve finirci dentro.
+
+### I due rossi aperti di proposito
+
+Il primo (**PR2 → PR3**, gate di contrasto sulla coppia `seam restaurant` orfana) si è chiuso **con una PR di codice**. Il secondo (**PR4 → PR5**, catalogo a 44 permessi contro i 64 in DB) **non si chiudeva con codice**: solo con una scrittura su produzione — ed è stato chiuso lo stesso giorno.
+
+Conseguenza del primo da ricordare: con `needs: [checks]` i tre job a valle sono rimasti `skipping` per due merge, quindi la **finestra di attribuzione** di un eventuale rosso era larga due merge. La regola è stata scritta prima che servisse.
+
+### Tre stati aperti a fine sessione
+
+1. **Il DB di produzione è più nuovo del codice deployato** — i container girano su `cf0e521`, che conosce i 64 permessi vecchi. Verificato che regge: login 201, `/me` → **40 permessi effettivi, zero food**, endpoint gated a 200. Si chiude al prossimo deploy.
+2. **La config Caddy col redirect `food.` non è mai stata applicata** — in repo da PR1, il proxy serve ancora la precedente.
+3. **`demo` e `acme` sono ancora in prod** con 11 tavoli, 10 articoli, 2 menu: vanno con PR6.
+
+### Lezioni
+
+`HANDOFF.md` riscritto per intero. **Non duplico qui il suo contenuto**: le cinque trappole della sessione, i presidi con la loro prova e il filo che le unisce stanno in [HANDOFF](docs/handoff/HANDOFF.md), sezione «Le lezioni della sessione».
+
+Le due che cambiano il modo di lavorare, e vale la pena nominarle anche qui:
+
+- **La sesta istanza del falso verde, e la più insidiosa.** `pnpm test` ha dato 14/14 verde su un albero da cui erano spariti 187 file, con `13 cached`: il gate di contrasto legge i fogli di token **fuori dal proprio workspace**, turbo hasha i file del solo pacchetto, quindi l'hash non è cambiato e turbo ha **riprodotto un verde precedente**. Corollario: `Cached: N` è parte del riepilogo da leggere, e che la CI non abbia remote cache è **una fortuna, non un presidio** (`TD-turbo-cache-gate-cross-workspace`, ADR-0087).
+- **Una transazione autoverificante asserisce lo stato finale, non solo il delta.** Un delta corretto su uno stato di partenza sbagliato produce comunque un risultato sbagliato: in PR5 le due asserzioni erano 20/4/80 sul delta **e** 44/7/154 sul risultato, dentro la transazione prima del `COMMIT` (ADR-0089).
+
+### TD
+
+**Chiuso:** `TD-bootstrap-verticale` — per costruzione, un verticale solo. Con riserva scritta: la causa-radice (nessuna dimensione `verticale` nei dati) è intatta, è il **sintomo** ad essere decaduto; se torna un secondo verticale va **riaperto, non riscoperto**.
+
+**Nuovi:** `TD-compose-image-tag-immutabile` · `TD-turbo-cache-gate-cross-workspace` · `TD-badge-size-lg-senza-consumer` · `TD-dns-wildcard-accountant`.
+
+**Decaduti col verticale** (trigger che non può più scattare, non risolti): `TD-conti-list-amounts` · `TD-dashboard-service-day` · `TD-cassa-resto-drawer` · `TD-cassa-chiusura-giornaliera` · `TD-rbac-tavolo-write-subset`.
+
+**Primo in coda:** `TD-ci-e2e-accountant-api`. Da oggi nessun job CI apre un browser vero contro un backend vero; `accountant-api` ha **25 spec e2e di cui solo 2 CI-gated** — il recupero non richiede scrivere test, richiede cablare quelli che esistono.
+
+**`P3a è decaduta`**: era la palette food. **P3b** passa da 46 pagine a 32.
+
+---
+
 ## 📝 Prompt operativo prossimo task — da definire
 
 > B2a completato (email notification security + login-pin per-tenant rate-limit + TD-B verify empirico, [ADR-0014](docs/architecture/ADR-0014-auth-e2e-hardening-b2a.md)). Prossimo macro-task da concordare nella prossima sessione (candidate priorizzate in sezione "🚧 In corso", con B2b in cima).
