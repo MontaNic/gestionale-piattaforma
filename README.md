@@ -53,6 +53,42 @@ Tooling: **pnpm workspaces** + **Turborepo**.
 - pnpm `9.15.x` (vedi `packageManager` in `package.json` — abilita con `corepack enable`)
 - Docker Engine ≥ 24 con Compose v2
 
+## Avvio rapido
+
+Sequenza verificata su clone pulito (Node 20.18.1, pnpm 9.15, Docker Compose v2):
+
+```bash
+# 1. Dipendenze del monorepo (lo script "prepare" attiva gli hook Husky)
+pnpm install
+
+# 2. File ambiente locale (la prima volta)
+cp .env.example .env
+
+# 3. Stack completo: DB dev isolato + client Prisma + migrations + seed
+pnpm devdb:setup
+```
+
+`pnpm devdb:setup` avvia un Postgres dedicato su `127.0.0.1:55432` (isolato da
+un'eventuale istanza di produzione, credenziali dev in chiaro in
+`docker-compose.devdb.yml`), genera il client Prisma, applica le 34 migrations e
+carica i dati demo.
+
+Al termine il seed stampa i tenant di sviluppo e le relative credenziali — sono
+**credenziali demo pubbliche**, valide solo su un database locale:
+
+| Tenant        | Utente                         | Password            | Ruolo                      |
+| ------------- | ------------------------------ | ------------------- | -------------------------- |
+| `studio-demo` | `admin@studio.local`           | `Studio123!`        | amministratore studio      |
+| `studio-demo` | `collaboratore@studio.local`   | `Collaboratore123!` | collaboratore              |
+| `studio-demo` | `cliente@studio-demo.local`    | `Cliente123!`       | portale cliente            |
+| `oneplatform` | `superadmin@oneplatform.local` | `Superadmin123!`    | super admin di piattaforma |
+
+Per azzerare e ripartire da capo:
+
+```bash
+docker compose -f docker-compose.devdb.yml down -v && pnpm devdb:setup
+```
+
 ## Sviluppo locale
 
 ```bash
