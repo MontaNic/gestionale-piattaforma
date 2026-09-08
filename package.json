@@ -24,7 +24,8 @@
     "devdb:down": "docker compose -f docker-compose.devdb.yml down",
     "devdb:migrate": "pnpm --filter @gestionale/db devdb:migrate",
     "devdb:seed": "pnpm --filter @gestionale/db devdb:seed",
-    "devdb:setup": "pnpm devdb:up && pnpm devdb:migrate && pnpm devdb:seed",
+    "devdb:generate": "pnpm --filter @gestionale/db prisma:generate",
+    "devdb:setup": "pnpm devdb:up && pnpm devdb:generate && pnpm devdb:migrate && pnpm devdb:seed",
     "prepare": "husky"
   },
   "devDependencies": {
